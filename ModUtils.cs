@@ -106,11 +106,15 @@ namespace UADRealism
                 }
 
                 if (!needBounds)
-                    hierarchy += ": " + goBounds.size + " @ " + goBounds.center;
+                    hierarchy += ": " + goBounds.min + "-" + goBounds.max;
+
+                hierarchy += $" {go.transform.position}x{go.transform.localScale}";
 
                 int rCount = go.GetComponents<Renderer>().Length;
                 int mCount = go.GetComponents<MeshFilter>().Length;
-                hierarchy += $". R={rCount}, M={mCount}";
+                if (rCount > 0 || mCount > 0)
+                    hierarchy += ". R.";
+                //hierarchy += $". R={rCount}, M={mCount}";
 
                 ++depth;
                 for (int i = 0; i < go.transform.childCount; ++i)
@@ -127,6 +131,17 @@ namespace UADRealism
             }
 
             return hierarchy;
+        }
+    }
+
+    [RegisterTypeInIl2Cpp]
+    public class LogMB : MonoBehaviour
+    {
+        public LogMB(IntPtr ptr) : base(ptr) { }
+
+        public void OnDestroy()
+        {
+            Debug.Log($"$$$$ Destroying {gameObject.name}. Stack trace:\n{Environment.StackTrace}");
         }
     }
 }

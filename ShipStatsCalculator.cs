@@ -43,8 +43,14 @@ namespace UADRealism
     {
         private static bool _isRenderingHulls = false;
         public static bool _IsRenderingHulls => _isRenderingHulls;
+        
+        private static bool _LoadingDone = false;
+        public static bool LoadingDone => _LoadingDone;
 
         private static readonly Dictionary<string, HullData> _HullModelData = new Dictionary<string, HullData>();
+
+        public static readonly Dictionary<string, string> _DestroyerVariants = new Dictionary<string, string>();
+        public static readonly HashSet<string> _WrittenModels = new HashSet<string>();
 
         public static HullData GetData(Ship ship) => GetData(ship.hull.data);
 
@@ -87,13 +93,106 @@ namespace UADRealism
             return key;
         }
 
+        public static System.Collections.IEnumerator ProcessGameData()
+        {
+            var __instance = G.GameData;
+            Il2CppSystem.Diagnostics.Stopwatch sw = new Il2CppSystem.Diagnostics.Stopwatch();
+            sw.Start();
+            Melon<UADRealismMod>.Logger.Msg("Processing Hulls in GameData");
+
+            // Pass 1: Figure out the min and max sections used for each model.
+            // (and deal with beam/draught coefficients)
+            foreach (var kvp in __instance.parts)
+            {
+                var data = kvp.Value;
+                if (data.type != "hull")
+                    continue;
+
+                // Just apply beam delta to tonnage directly since we're going to use length/beam ratios
+                data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef);
+                data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef);
+
+                data.beamCoef = 0f;
+
+                // Draught is a linear scale to displacement at a given length/beam
+                // TODO: Do we want to allow implicitly different block coefficients based on draught, as would
+                // be true in reality?
+                data.draughtCoef = 1f;
+
+
+                // Now get var/section data
+                var hData = ShipStats.GetData(data);
+                if (hData == null)
+                {
+                    hData = ShipStats.RegisterData(data);
+                }
+                else
+                {
+                    hData._sectionsMin = Math.Min(hData._sectionsMin, data.sectionsMin);
+                    hData._sectionsMax = Math.Max(hData._sectionsMax, data.sectionsMax);
+                }
+                if (data.shipType.name == "dd" || data.shipType.name == "tb")
+                    hData._isDDHull = true;
+            }
+
+            // Pass 2: Spawn and render the hull models, calculating stats
+            yield return CalculateHullData();
+
+            // Pass 3: Set starting scales for all hull parts
+            //Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,Kn,SHP");
+            int num = 1;
+            foreach (var kvp in __instance.parts)
+            {
+                var data = kvp.Value;
+                if (data.type != "hull")
+                    continue;
+
+                var hData = ShipStats.GetData(data);
+                if (hData == null)
+                {
+                    Melon<UADRealismMod>.Logger.BigError($"Unable to find data for partdata {data.name} of model {data.model} with key {hData._key}");
+                    continue;
+                }
+                var modelName = ShipStats.GetHullModelKey(data);
+                for (int i = 0; i < 3; ++i)
+                {
+                    float tVal = i > 0 ? 0.25f : 0;
+                    float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
+                    GetSectionsAndBeamForLB(i == 1 ? data.beamMin : 0, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out var beamScale, out var sections);
+                    if (i == 0)
+                        sections = 0;
+                    var stats = GetScaledStats(hData, tng, i == 0 ? data.beamMin : beamScale, 0, sections);
+                    float shp = GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false);
+                    //Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{data.speedLimiter:F1},{shp:F0}");
+                    ++num;
+                }
+            }
+
+            foreach (var kvp in _DestroyerVariants)
+            {
+                Debug.Log(kvp.Value);
+            }
+
+            foreach (var kvp in __instance.parts)
+            {
+                if (kvp.value.model == "atlanta_hull_b_var")
+                    kvp.value.sectionsMin = 0;
+            }
+
+            var time = sw.Elapsed;
+            Melon<UADRealismMod>.Logger.Msg($"Total time: {time}");
+
+            _LoadingDone = true;
+            G.ui.CompleteLoadingScreen();
+        }
+
         public static void GetSectionsAndBeamForLB(float beam, int minSec, int maxSec, float minBeam, float maxBeam, HullData hData, out float beamScale, out int sections)
         {
-            if (minSec == maxSec)
+            if (minSec == maxSec || hData == null)
             {
                 beamScale = beam;
                 sections = minSec;
-                Melon<UADRealismMod>.Logger.Msg($"For {hData._data.model}, sections always {minSec}");
+                //Melon<UADRealismMod>.Logger.Msg($"For {hData._data.model}, sections always {minSec}");
                 return;
             }
 
@@ -374,12 +473,12 @@ namespace UADRealism
             return (float)(Ps / 745.7d);
         }
 
-        public static void CalculateHullData()
+        public static System.Collections.IEnumerator CalculateHullData()
         {
             _isRenderingHulls = true;
             foreach (var kvp in _HullModelData)
             {
-                ShipStatsCalculator.Instance.ProcessHullData(kvp.Value);
+                yield return ShipStatsCalculator.ProcessHullData(kvp.Value);
             }
             _isRenderingHulls = false;
         }
@@ -419,8 +518,8 @@ namespace UADRealism
                 _ambientProbe = UnityEngine.RenderSettings.ambientProbe;
 
                 UnityEngine.RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-                UnityEngine.RenderSettings.ambientIntensity = 3f;
-                UnityEngine.RenderSettings.ambientLight = new Color(3f, 3f, 3f);
+                UnityEngine.RenderSettings.ambientIntensity = 1f;
+                UnityEngine.RenderSettings.ambientLight = new Color(1f, 1f, 1f);
 
                 var okRenderers = Part.GetVisualRenderers(hullModel);
 
@@ -469,7 +568,11 @@ namespace UADRealism
                         if (!child.activeSelf)
                             continue;
 
-                        if (child.name.StartsWith("Decor") || child.name.StartsWith("Mount") || child.name == "Deck")
+                        if (child.name.StartsWith("Decor")
+                            || child.name.StartsWith("Mount")
+                            || child.name == "Deck"
+                            || child.name.StartsWith("DeckSize")
+                            || child.name.StartsWith("DeckWall"))
                         {
                             _decor.Add(child);
                             child.active = false;
@@ -645,19 +748,14 @@ namespace UADRealism
 
             RenderSetup.SetForRender(obj);
 
-            var p = obj.GetParent().GetComponent<Part>();
-            if (p != null)
-            {
-                //if (p.data.model == "atlanta_hull_b_var")
+            //var p = obj.GetParent().GetComponent<Part>();
+            //if (p != null)
+            //{
+            //    //if (p.data.model == "atlanta_hull_b_var")
 
-                //if (!Patch_GameData._WrittenModels.Contains(ShipStats.GetHullModelKey(p.data) + "_"))
-                {
-                    //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
-                    string hierarchy = ShipStats.GetHullModelKey(p.data) + ": " + ModUtils.DumpHierarchy(obj);
-
-                    Debug.Log("---------\n" + hierarchy);
-                }
-            }
+            //    //if (!Patch_GameData._WrittenModels.Contains(ShipStats.GetHullModelKey(p.data) + "_"))
+                
+            //}
 
             float Awp = 0f;
             float Vd = 0f;
@@ -797,7 +895,7 @@ namespace UADRealism
 
                         //if (obj.name.Contains("borodino_hull_a"))
                         //{
-                        //    string filePath = "C:\\temp\\112\\screenshot_";
+                        //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\screenshot_";
                         //    filePath += obj.name + "_" + view.ToString() + ".png";
 
                         //    var bytes = ImageConversion.EncodeToPNG(_texture);
@@ -865,38 +963,101 @@ namespace UADRealism
                         }
 
                         // Detect transom
-                        sternCol = _ResSideFront - sternRow - 1;
-                        float delta = Mathf.Tan(Mathf.Deg2Rad * 77.5f) * 2f; // doubled because we're comparing to beam, not half-beam
-                        // start 2 cols after stern to avoid detecting tiny transoms
-                        for (int col = 2; col < _ResSideFront * 1 / 5; ++col)
+                        int minTransomWidth = Mathf.RoundToInt(stats.beamBulge / sizePerPixel * 0.25f); // otherwise can detect cruiser stern
+
+                        bool ok = true;
+                        for (int col = -1; ok && col < _ResSideFront * 1 / 5; ++col)
                         {
                             int curCol = sternCol + col;
-                            if (_beamPixelCounts[curCol] >= delta * (col + 1))
+                            int curPx = curCol < 0 ? 0 : _beamPixelCounts[curCol];
+                            const float angleDelta = 45f;
+                            const int yDelta = 3;
+                            //for (int yDelta = 2; yDelta < 5; ++yDelta)
+                            //{
+                                int nextCol = curCol + yDelta;
+                                int farCol = nextCol + yDelta;
+                                float angle1 = Mathf.Atan2(yDelta * 2, _beamPixelCounts[nextCol] - curPx);
+                                float angle2 = Mathf.Atan2(yDelta * 2, _beamPixelCounts[farCol] - _beamPixelCounts[nextCol]);
+                                if (angle2 - angle1 > Mathf.Deg2Rad * angleDelta && _beamPixelCounts[nextCol] > minTransomWidth)
+                                {
+                                    if (transomCol < nextCol)
+                                    {
+                                        bool isProp = false;
+                                        for (int i = nextCol + 1; i < nextCol + 5; ++i)
+                                            if (_beamPixelCounts[i] < _beamPixelCounts[nextCol])
+                                                isProp = true;
+                                        if (!isProp)
+                                            transomCol = nextCol;
+                                    }
+                                }
+                                // angle too large
+                                else if (_beamPixelCounts[farCol] - _beamPixelCounts[nextCol] < yDelta)
+                                {
+                                    ok = false;
+                                    break;
+                                }
+                                //else if (angle1 > 72f * Mathf.Deg2Rad)
+                                //{
+                                //    ok = false;
+                                //    break;
+                                //}
+                                //else if (transomCol < 0 ? angle1 > (90f - angleDelta + 5f) * Mathf.Deg2Rad : curCol > transomCol + 20)
+                                //{
+                                //    ok = false;
+                                //    break;
+                                //}
+                                else if (curCol > Math.Max(sternCol, transomCol) + 20)
+                                {
+                                    ok = false;
+                                    break;
+                                }
+                            //}
+                        }
+                        //for (int col = 0; col < _ResSideFront * 1 / 4; ++col)
+                        //{
+                        //    const int yDelta = 4;
+                        //    int curCol = sternCol + col;
+                        //    int nextCol = curCol + yDelta;
+                        //    float angle = Mathf.Atan2(yDelta * 2, _beamPixelCounts[nextCol] - _beamPixelCounts[curCol]);
+                        //    if (angle > (90 - 24f) * Mathf.Deg2Rad && _beamPixelCounts[curCol] > minTransomWidth)
+                        //    {
+                        //        const float maxTransomAngle = 30f * Mathf.Deg2Rad;
+                        //        if (col == 0 || Mathf.Atan2(col * 2, _beamPixelCounts[curCol]) < maxTransomAngle)
+                        //            transomCol = curCol;
+
+                        //        break;
+                        //    }
+                        //}
+
+                        var part = obj.GetParent().GetComponent<Part>();
+                        int sec = part == null || part.middles == null ? 0 : part.middles.Count;
+                        bool detectBlock = false;
+                        for (int i = sternCol + 1; i < _ResSideFront - 10; ++i)
+                        {
+                            if (_beamPixelCounts[i] > _beamPixelCounts[i - 1] + 5 && _beamPixelCounts[i + 10] == _beamPixelCounts[i])
                             {
-                                transomCol = curCol;
-                            }
-                            // give up after 5 rows
-                            else if (transomCol < 0 ? col > 5 : transomCol < curCol - 5)
+                                string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
+                                Debug.Log("---------\n" + hierarchy);
+                                detectBlock = true;
                                 break;
+                            }
                         }
 
-                        // Avoid detecting tiny transoms that are probably just the flat bits of a cruiser stern
-                        if (transomCol >= 0 && _beamPixelCounts[transomCol] < (stats.beamBulge / sizePerPixel) * 0.25f)
-                            transomCol = -1;
-
-                        if (transomCol >= 0)
+                        if (true || transomCol >= 0 )
                         {
-                            var part = obj.GetParent().GetComponent<Part>();
-                            int sec = 0;
-                            if (part != null)
-                                sec = part.middles.Count;
-                            string filePath = "C:\\temp\\112\\";
+                            //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
+                            //string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
+                            //Debug.Log("---------\n" + hierarchy);
+                            string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
                             int bbPx = Mathf.RoundToInt(stats.beamBulge / sizePerPixel);
-                            filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_t{transomCol}-{_beamPixelCounts[Math.Max(0,transomCol)]}_s{sternCol}_b{maxBeamPx}_f{bbPx}.png";
+                            if (detectBlock)
+                                filePath += "zzz";
+                            filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_t{transomCol}-{_beamPixelCounts[Math.Max(0, transomCol)]}_s{sternCol}_b{maxBeamPx}_f{bbPx}.png";
 
                             var bytes = ImageConversion.EncodeToPNG(_texture);
                             Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
                         }
+
                         break;
 
                     default:
@@ -1008,7 +1169,7 @@ namespace UADRealism
 
                 //if (pics++ < 3)
                 //{
-                //    string filePath = "C:\\temp\\112\\screenshot_";
+                //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\screenshot_";
                 //    if (Patch_GameData._IsProcessing)
                 //        filePath += "p_";
                 //    filePath += obj.name + "_" + view.ToString() + ".png";
@@ -1051,10 +1212,12 @@ namespace UADRealism
             return stats;
         }
 
-        public void ProcessHullData(HullData hData)
+        public static System.Collections.IEnumerator ProcessHullData(HullData hData)
         {
             var data = hData._data;
-            var part = SpawnPart(data);
+            var part = Instance.SpawnPart(data);
+            //part.gameObject.AddComponent<LogMB>();
+            part.enabled = false;
 
             int count = hData._sectionsMax + 1;
             hData._statsSet = new HullStats[count];
@@ -1066,16 +1229,16 @@ namespace UADRealism
                     secCount = hData._sectionsMin;
 
                 // Ship.RefreshHull (only the bits we need)
-                CreateMiddles(part, secCount);
+                Instance.CreateMiddles(part, secCount);
                 // It's annoying to rerun this every time, but it's not exactly expensive.
-                ApplyVariations(part);
+                Instance.ApplyVariations(part);
 
-                PositionSections(part);
+                Instance.PositionSections(part);
 
                 // Calc the stats for this layout. Note that scaling dimensions will only
                 // linearly change stats, it won't require a recalc.
-                var shipBounds = GetShipBounds(part.model.gameObject);
-                var stats = GetStats(part.model.gameObject, shipBounds, hData._isDDHull);
+                var shipBounds = Instance.GetShipBounds(part.model.gameObject);
+                var stats = Instance.GetStats(part.model.gameObject, shipBounds, hData._isDDHull);
 
                 if (stats.Vd == 0f)
                     stats.Vd = 1f;
@@ -1085,12 +1248,13 @@ namespace UADRealism
                 if (stats.beamBulge != stats.B)
                     beam += $"({stats.beamBulge:F2})";
 
-                Melon<UADRealismMod>.Logger.Msg($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{beam}x{(stats.T):F2} ({(stats.Lwl/stats.B):F2},{(stats.B/stats.T):F2}), LCB={stats.lcbPct:P2}, {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}, Catr={stats.Catr:F3}, Cv={stats.Cv:F3}");
+                //Debug.Log($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{beam}x{(stats.T):F2} ({(stats.Lwl/stats.B):F2},{(stats.B/stats.T):F2}), LCB={stats.lcbPct:P2}, {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}, Catr={stats.Catr:F3}, Cv={stats.Cv:F3}");
+                yield return null;
             }
 
             if (hData._isDDHull)
             {
-                if (!Patch_GameData._DestroyerVariants.ContainsKey(hData._data.model))
+                if (!ShipStats._DestroyerVariants.ContainsKey(hData._data.model))
                 {
                     var varComps = part.model.gameObject.GetComponentsInChildren<Variation>(true);
                     List<string> vars = new List<string>();
@@ -1108,18 +1272,18 @@ namespace UADRealism
                         str += $"variants: {string.Join(", ", vars)}";
                     else
                         str += "no variants";
-                    Patch_GameData._DestroyerVariants[hData._data.model] = str;
+                    ShipStats._DestroyerVariants[hData._data.model] = str;
                 }
             }
 
             string varStr = hData._key.Substring(data.model.Length);
             if (varStr != string.Empty)
                 varStr = $"({varStr.Substring(1)}) ";
-            Melon<UADRealismMod>.Logger.Msg($"Calculated stats for {data.model} {varStr}for {hData._sectionsMin} to {hData._sectionsMax} sections");
+            //Melon<UADRealismMod>.Logger.Msg($"Calculated stats for {data.model} {varStr}for {hData._sectionsMin} to {hData._sectionsMax} sections");
 
             //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}");
-
             GameObject.Destroy(part.gameObject);
+            yield return null;
             Part.CleanPartsStorage();
         }
 
@@ -1147,7 +1311,10 @@ namespace UADRealism
             middles.Sort((a, b) => a.name.CompareTo(b.name));
             part.middlesBase = new Il2CppSystem.Collections.Generic.List<GameObject>();
             foreach (var m in middles)
+            {
                 part.middlesBase.Add(m);
+                m.active = false;
+            }
 
             part.middles = new Il2CppSystem.Collections.Generic.List<GameObject>();
             part.hullInfo = part.model.GetComponent<HullInfo>();
@@ -1192,6 +1359,11 @@ namespace UADRealism
                 var mPrefab = part.middlesBase[i % part.middlesBase._size];
                 var cloned = Util.CloneGameObject(mPrefab);
                 part.middles.Add(cloned);
+                //if (cloned.transform.parent != part.bow.transform.parent)
+                //{
+                //    Debug.LogError($"New middle {cloned.name} has parent {cloned.transform.parent.gameObject.name} not {part.bow.transform.parent.gameObject.name}! Reparenting.");
+                //    cloned.transform.parent = part.bow.transform.parent;
+                //}
                 Util.SetActiveX(cloned, true);
             }
         }
@@ -1298,7 +1470,17 @@ namespace UADRealism
             }
 
             // Calculate bounds for all sections
+            if (part.bow == null)
+            {
+                Debug.LogError($"Part {part.name}@{part.middles.Count}: bow null!");
+                return;
+            }
             var sectionsGO = Util.GetParent(part.bow);
+            if (sectionsGO == null)
+            {
+                Debug.LogError($"Part {part.name}@{part.middles.Count}: Sections null!");
+                return;
+            }
             var sectionsTrf = sectionsGO.transform;
             float shipLength = 0f;
 
@@ -1342,10 +1524,17 @@ namespace UADRealism
                 var invBounds = Util.InverseTransformBounds(space, meshBounds);
 
                 if (foundBounds)
+                {
                     secBounds.Encapsulate(invBounds);
+                }
                 else
+                {
+                    foundBounds = true;
                     secBounds = invBounds;
+                }
             }
+            secBounds = Util.InverseTransformBounds(space, secBounds);
+
             var secInfo = sec.GetComponent<SectionInfo>() ?? sec.GetComponentInChildren<SectionInfo>();
             if (secInfo != null)
             {
