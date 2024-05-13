@@ -94,7 +94,8 @@ namespace UADRealism
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                     mr.receiveShadows = false;
 
-                    // TODO: Change material?
+                    // TODO: Change material -- it'd be great to render to depth.
+                    // That would allow for much better detection of things.
                 }
             }
 
@@ -178,18 +179,12 @@ namespace UADRealism
 
         private static readonly int _CameraLayerInt = LayerMask.NameToLayer("VisibilityFog_unused");
         private const int _ResSideFront = 512;
-        //private const int _ResFrame = 128;
-        //private const int _FrameSteps = 256;
 
         private Camera _camera;
         //private Light _light;
-        private RenderTexture _sideFrontRT;
-        private Texture2D _sideFrontTex;
-        //private RenderTexture _frameRT;
-        //private Texture2D _frameTex;
-        //private float[] _areas = new float[_FrameSteps];
-        //private float[] _beams = new float[_FrameSteps];
-        private short[] _beamsPx = new short[_ResSideFront];
+        private RenderTexture _renderTexture;
+        private Texture2D _texture;
+        private short[] _beamPixelCounts = new short[_ResSideFront];
 
         public ShipStatsCalculator(IntPtr ptr) : base(ptr) { }
 
@@ -198,11 +193,8 @@ namespace UADRealism
             if (_Instance != null)
                 Destroy(_Instance);
 
-            _sideFrontRT = new RenderTexture(_ResSideFront, _ResSideFront, 16, RenderTextureFormat.ARGB32);
-            _sideFrontTex = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
-
-            //_frameRT = new RenderTexture(_ResFrame, _ResFrame, 16, RenderTextureFormat.ARGB32);
-            //_frameTex = new Texture2D(_ResFrame, _ResFrame, TextureFormat.Alpha8, false);
+            _renderTexture = new RenderTexture(_ResSideFront, _ResSideFront, 16, RenderTextureFormat.ARGB32);
+            _texture = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
 
             _camera = gameObject.AddComponent<Camera>();
             _camera.clearFlags = CameraClearFlags.SolidColor;
@@ -214,28 +206,14 @@ namespace UADRealism
             _camera.farClipPlane = 500f;
             _camera.enabled = false;
             _camera.cullingMask = 1 << _CameraLayerInt;
-            _camera.targetTexture = _sideFrontRT;
-
-            //if (Patch_PartData._ModelStats.Count == 0)
-            //{
-            //    var lightGO = new GameObject("StatsCalcLight");
-            //    lightGO.SetParent(gameObject);
-            //    lightGO.transform.localPosition = new Vector3(0f, 0f, -300f);
-            //    _light = lightGO.AddComponent<Light>();
-            //    //_light.renderingLayerMask = 1 << _CameraLayerInt;
-            //    _light.type = LightType.Point;
-            //    _light.intensity = 10f;
-            //    _light.color = Color.white;
-            //}
-            //Melon<UADRealismMod>.Logger.Msg("Created self");
+            _camera.targetTexture = _renderTexture;
 
             _Instance = this;
         }
 
         public void OnDestroy()
         {
-            _sideFrontRT.Release();
-            //_frameRT.Release();
+            _renderTexture.Release();
         }
 
         enum ShipViewDir
@@ -251,7 +229,7 @@ namespace UADRealism
         {
             public float Lwl;
             public float B;
-            public float D;
+            public float T;
             public float beamBulge;
             public float bulgeDepth;
             public float Awp;
@@ -264,55 +242,21 @@ namespace UADRealism
             public float Cvp;
         }
 
-        private int pics = 0;
-        public ShipStats GetStats(GameObject obj, Bounds hullBounds, float scaleFactor)
+        public ShipStats GetStats(GameObject obj, Bounds bounds)
         {
             var stats = new ShipStats();
 
             RenderSetup.SetForRender(obj);
-            //Melon<UADRealismMod>.Logger.Msg("Set for render");
 
-            Bounds bounds = new Bounds();
-            bool boundsSet = false;
-
-            Renderer[] rs = obj.GetComponentsInChildren<Renderer>();
-            foreach(var r in rs)
-            {
-                if (!r.enabled)
-                    continue;
-                if (boundsSet)
-                {
-                    bounds.Encapsulate(r.bounds);
-                }
-                else
-                {
-                    bounds = r.bounds;
-                    boundsSet = true;
-                }
-            }
-            //Debug.Log($"Passed bounds: {hullBounds}, calc: {bounds}");
-            if (hullBounds.size == Vector3.zero)
-                hullBounds = bounds;
-
-            if (!Patch_GameData._IsProcessing || scaleFactor == 0f)
-            {
-                pics = 0;
-                scaleFactor = 1f;
-            }
-
-            //Melon<UADRealismMod>.Logger.Msg("Got bounds");
             float Awp = 0f;
             float Vd = 0f;
 
-            float draught = -hullBounds.min.y; //-ship.hullSize.min.y;
-            stats.D = draught;
-            _camera.targetTexture = _sideFrontRT;
-            //float bowMidpoint = 0f;
-            //float sternMidpoint = bounds.size.z;
-            RenderTexture.active = _sideFrontRT;
+            float draught = -bounds.min.y;
+            stats.T = draught;
+            _camera.targetTexture = _renderTexture;
+            RenderTexture.active = _renderTexture;
             for (ShipViewDir view = (ShipViewDir)0; view < ShipViewDir.MAX; ++view)
             {
-                //Melon<UADRealismMod>.Logger.Msg("Rendering " + view.ToString());
                 float size;
                 float depth;
                 Vector3 dir;
@@ -347,12 +291,12 @@ namespace UADRealism
                 _camera.farClipPlane = depth + 1f;
 
                 _camera.Render();
-                _sideFrontTex.ReadPixels(new Rect(0, 0, _ResSideFront, _ResSideFront), 0, 0);
+                _texture.ReadPixels(new Rect(0, 0, _ResSideFront, _ResSideFront), 0, 0);
 
                 // It would be very nice to not alloc a full mb here. But
                 // il2cpp/harmony doesn't support GetRawTextureData<>,
                 // only GetRawTextureData (and that copies as well).
-                Color32[] pixels = _sideFrontTex.GetPixels32();
+                Color32[] pixels = _texture.GetPixels32();
                 int waterlinePixels = 0;
                 int row;
 
@@ -382,7 +326,7 @@ namespace UADRealism
                         for (int col = 0; col < _ResSideFront; ++col)
                         {
                             int rowBegin = -1;
-                            float dispPerPx = _beamsPx[col] * volFactor;
+                            float dispPerPx = _beamPixelCounts[col] * volFactor;
                             for (int r = 0; r < _ResSideFront; ++r)
                             {
                                 if (pixels[r * _ResSideFront + col].a == 0)
@@ -463,7 +407,6 @@ namespace UADRealism
                         if (waterlinePixels == 0)
                             stats.Cm = 0f;
                         else
-                            // This maybe needs to be beamBulgePixels not waterlinePixels to ensure Cm <= 1
                             stats.Cm = ((float)totalMidshipsPixels) / (beamBulgePixels * (firstRow - lastRow + 1));
 
                         stats.Am = totalMidshipsPixels * sizePerPixel * sizePerPixel;
@@ -473,8 +416,6 @@ namespace UADRealism
                         // This will detect the midpoints _counting the bulge_
                         // but that should be ok.
                         // We'll also record the number of beam pixels at each row.
-                        //int bowMidpointPx = 0;
-                        //int sternMidpointPx = _ResSideFront - 1;
                         int minInset = _ResSideFront / 2 + 1;
                         const int stopPoint = _ResSideFront / 2 - 1;
                         for (row = 0; row < _ResSideFront; ++row)
@@ -494,144 +435,28 @@ namespace UADRealism
                                 if(col < minInset)
                                 {
                                     minInset = col;
-                                    //bowMidpointPx = row;
-                                    //sternMidpointPx = row;
                                 }
-                                //else if (col == minInset)
-                                //{
-                                //    sternMidpointPx = row;
-                                //}
                             }
                             numPx *= 2;
-                            _beamsPx[_ResSideFront - row - 1] = numPx;
+                            _beamPixelCounts[_ResSideFront - row - 1] = numPx;
                             Awp += numPx;
                         }
                         Awp *= sizePerPixel * sizePerPixel;
-                        //bowMidpoint = bowMidpointPx * sizePerPixel; // treat the midpoint as at the forward end of the pixel
-                        //sternMidpoint = (sternMidpointPx + 1) * sizePerPixel; // treat the midpoint as at the sternward end of the pixel
                         break;
                 }
 
-                //Melon<UADRealismMod>.Logger.Msg($"For direction {view.ToString()}, pixel count at row {row} is {pxCount} so dimension = {dimension:F2}");
-                if (pics++ < 3)
-                {
-                    string filePath = "C:\\temp\\112\\screenshot_";
-                    if (Patch_GameData._IsProcessing)
-                        filePath += "p_";
-                    filePath += obj.name + "_" + view.ToString() + ".png";
+                //if (pics++ < 3)
+                //{
+                //    string filePath = "C:\\temp\\112\\screenshot_";
+                //    if (Patch_GameData._IsProcessing)
+                //        filePath += "p_";
+                //    filePath += obj.name + "_" + view.ToString() + ".png";
 
-                    var bytes = ImageConversion.EncodeToPNG(_sideFrontTex);
-                    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
-                }
+                //    var bytes = ImageConversion.EncodeToPNG(_texture);
+                //    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
+                //}
             }
             RenderTexture.active = null;
-
-            //_camera.targetTexture = _frameRT;
-            //float lenPerStep = bounds.size.z / (_FrameSteps - 1);
-            //float dimension = Mathf.Max(draught, bounds.size.x);
-            //float orthoSize = dimension * 0.5f;
-            //float lenPerPixel = dimension / _ResFrame;
-            //float areaPerPixel = lenPerPixel * lenPerPixel;
-            //_camera.orthographicSize = orthoSize;
-
-            //_camera.nearClipPlane = 0.1f;
-            //int mpIndex = -1;
-            //RenderTexture.active = _frameRT;
-            //for (int frame = 0; frame < _FrameSteps; ++frame)
-            //{
-            //    float frameStart = frame * lenPerStep;
-            //    if (frameStart >= bowMidpoint && frameStart <= sternMidpoint)
-            //    {
-            //        if (mpIndex >= 0)
-            //        {
-            //            _beams[frame] = _beams[mpIndex];
-            //            _areas[frame] = _areas[mpIndex];
-            //            continue;
-            //        }
-            //        mpIndex = frame;
-            //    }
-            //    else if (frameStart > sternMidpoint)
-            //    {
-            //        frameStart = (_FrameSteps - frame - 1) * lenPerStep;
-            //        _camera.transform.position = new Vector3(bounds.center.x, -orthoSize, bounds.min.z - 1f);
-            //        _camera.transform.rotation = Quaternion.LookRotation(Vector3.forward);
-            //    }
-            //    else
-            //    {
-            //        _camera.transform.position = new Vector3(bounds.center.x, -orthoSize, bounds.max.z + 1f);
-            //        _camera.transform.rotation = Quaternion.LookRotation(Vector3.back);
-            //    }
-
-            //    _camera.farClipPlane = frameStart + 1f;
-
-            //    _camera.Render();
-            //    _frameTex.ReadPixels(new Rect(0, 0, _ResFrame, _ResFrame), 0, 0);
-
-            //    // It would be very nice to not alloc a full mb here. But
-            //    // il2cpp/harmony doesn't support GetRawTextureData<>,
-            //    // only GetRawTextureData (and that copies as well).
-            //    //Color32[] pixels = _frameTex.GetPixels32();
-            //    var bytes = _frameTex.GetRawTextureData();
-            //    int waterlinePixels = 0;
-            //    int totalPx = 0;
-            //    for (int row = _ResFrame - 1; row >= 0; --row)
-            //    {
-            //        int pxCount = 0;
-            //        for (int col = 0; col < _ResFrame; ++col)
-            //        {
-            //            //if (pixels[row * _ResFrame + col].a == 0)
-            //            //if (_frameTex.GetPixel(col, row).a == 0f)
-            //            if (bytes[row * _ResFrame + col] == 0)
-            //                continue;
-
-            //            ++pxCount;
-            //        }
-            //        totalPx += pxCount;
-
-            //        if (waterlinePixels == 0)
-            //            waterlinePixels = pxCount;
-            //    }
-            //    _beams[frame] = waterlinePixels * lenPerPixel;
-            //    _areas[frame] = totalPx * areaPerPixel;
-
-            //    //if (ship.shipType.name == "cl")
-            //    //{
-            //    //    string filePath = "C:\\temp\\112\\screenshot_" + obj.name + "_frame_" + frame + "_" + totalPx + ".png";
-
-            //    //    var bytes = ImageConversion.EncodeToPNG(_sideFrontTex);
-            //    //    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
-            //    //}
-            //}
-            //RenderTexture.active = null;
-
-            //float altAWP = 0f;
-            //float altVd = 0f;
-            //lenPerStep = bounds.size.z / _FrameSteps; // now it's all steps, not one less step.
-            //for (int i = 1; i < _FrameSteps; ++i)
-            //{
-            //    // we'll assume some curvature to the hull, which means
-            //    // that we more heavily weight the wider portion.
-            //    int min = i, max = i;
-            //    if (_beams[i] > _beams[i - 1])
-            //        --min;
-            //    else
-            //        --max;
-
-            //    altAWP += (_beams[min] * 0.4f + _beams[max] * 0.6f) * lenPerStep;
-
-            //    // We could probably assume that beam and area are ordered the same
-            //    // but we'll double-check.
-            //    min = i;
-            //    max = i;
-            //    if (_areas[i] > _areas[i - 1])
-            //        --min;
-            //    else
-            //        --max;
-
-            //    altVd += (_areas[min] * 0.4f + _areas[max] * 0.6f) * lenPerStep;
-            //}
-
-            //Melon<UADRealismMod>.Logger.Msg($"Alt AWP: {altAWP2:F2} ({(altAWP2 / altAWP):P0}), alt Vd {altDisp2:F0}t ({(altDisp2 / altVd):P0}");
 
             // Corrections based on inexact detection
             // First, apply the regardless-of-bulge correftions.
@@ -645,30 +470,15 @@ namespace UADRealism
                 Vd *= Util.Remap(beamRatio, 0.85f, 1f, 0.9f, 1f, true);
             }
 
-
+            // Set the stats struct.
             stats.Awp = Awp;
             stats.Vd = Vd;
-            stats.Cb = Vd / (stats.Lwl * stats.beamBulge * stats.D);
+            stats.Cb = Vd / (stats.Lwl * stats.beamBulge * stats.T);
             stats.Cwp = Awp / (stats.Lwl * stats.beamBulge);
             stats.Cp = Vd / (stats.Am * stats.Lwl);
             stats.Cvp = Vd / (Awp * draught);
 
-            if (scaleFactor != 1f)
-            {
-                float recip = 1f / scaleFactor;
-                stats.Am *= recip * recip;
-                stats.Awp *= recip * recip;
-                stats.B *= recip;
-                stats.beamBulge *= recip;
-                stats.bulgeDepth *= recip;
-                stats.D *= recip;
-                stats.Lwl *= recip;
-                stats.Vd *= recip * recip * recip;
-            }
-            //Melon<UADRealismMod>.Logger.Msg("got stats");
-
             RenderSetup.Restore(obj);
-            //Melon<UADRealismMod>.Logger.Msg("Restored");
 
             return stats;
         }

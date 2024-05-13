@@ -125,7 +125,7 @@ namespace UADRealism
             {
                 _BoundsMax = __instance.hullSize.max;
                 _BoundsMin = __instance.hullSize.min;
-                _CachedStats = ShipStatsCalculator.Instance.GetStats(__instance.hull.hullInfo.gameObject, __instance.hullSize, 1f);
+                _CachedStats = ShipStatsCalculator.Instance.GetStats(__instance.hull.hullInfo.gameObject, __instance.hullSize);
             }
 
             string beamStr = _CachedStats.B.ToString("F2");
@@ -134,7 +134,7 @@ namespace UADRealism
                 beamStr += $" ({_CachedStats.beamBulge:F2} at {_CachedStats.bulgeDepth:F2})";
             }
 
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {_CachedStats.Lwl:F2}x{beamStr}x{_CachedStats.D:F2}, {_CachedStats.Vd}t. Cb={_CachedStats.Cb:F3}, Cm={_CachedStats.Cm:F3}, Cwp={_CachedStats.Cwp:F3}, Cp={_CachedStats.Cp:F3}, Cvp={_CachedStats.Cvp:F3}. Awp={_CachedStats.Awp:F1}, Am={_CachedStats.Am:F2}");
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {_CachedStats.Lwl:F2}x{beamStr}x{_CachedStats.T:F2}, {_CachedStats.Vd}t. Cb={_CachedStats.Cb:F3}, Cm={_CachedStats.Cm:F3}, Cwp={_CachedStats.Cwp:F3}, Cp={_CachedStats.Cp:F3}, Cvp={_CachedStats.Cvp:F3}. Awp={_CachedStats.Awp:F1}, Am={_CachedStats.Am:F2}");
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
