@@ -16,6 +16,7 @@ namespace UADRealism
 
         internal struct RefreshHullData
         {
+            public float _draught;
             public float _tonnage;
             public float _yPosScaling;
             public bool _valuesSet;
@@ -75,6 +76,7 @@ namespace UADRealism
             _IsRefreshPatched = true;
 
             __state._tonnage = __instance.tonnage;
+            __state._draught = __instance.draught;
 
             int secsToUse = Mathf.RoundToInt(Mathf.Lerp(data.sectionsMin, data.sectionsMax, 1f - __instance.hullPartSizeZ * 0.01f));
 
@@ -94,18 +96,16 @@ namespace UADRealism
             }
 
             float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd) / __instance.hull.model.transform.localScale.z;
-#if LOGSHIP
+//#if LOGSHIP
             Debug.Log($"{hData._key}: tonnage desired: {__instance.tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
-#endif
-            //__instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
+//#endif
+            __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
             __instance.tonnage = Mathf.Lerp(data.tonnageMin, data.tonnageMax, slider);
-            //Debug.Log($"Refresh hull: Tonnage was {__state._tonnage:F0}, secs {data.sectionsMin}-{data.sectionsMax}, desired {secsToUse}, slider val {slider:F2}, temp tonnage {__instance.tonnage:F0}");
-            //float bmMult = 1f + __instance.beam * 0.01f;
-            //float drMult = bmMult * (1f + __instance.draught * 0.01f);
-            //__instance.draught = -(drMult - 1f) * 100f;
-            //__instance.beam = -__instance.beam;
+            float bmMult = 1f + __instance.beam * 0.01f;
+            float drMult = bmMult * (1f + __instance.draught * 0.01f);
+            __instance.draught = (drMult - 1f) * 100f;
             __state._yPosScaling = 1f + __instance.draught * 0.01f;
             __state._valuesSet = true;
         }
@@ -119,6 +119,7 @@ namespace UADRealism
             if (!_IsRefreshPatched || !__state._valuesSet)
                 return;
 
+            __instance.draught = __state._draught;
             __instance.tonnage = __state._tonnage;
 
             var hData = ShipStats.GetData(__instance.hull.data);
@@ -250,6 +251,8 @@ namespace UADRealism
 #if LOGSHIP
             Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} ({ShipStats.GetHullFormSHPMult(__instance):F2}x{ihpMult:F2}) for {(__instance.speedMax/0.5144444f):F1}kn");
 #endif
+            Patch_Ui._ShipForEnginePower = __instance;
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} Cb={stats.Cb:F3}/Cwp={stats.Cwp:F3}/Cp={stats.Cp:F3}, {Ui.FormatEnginePower(SHP * ihpMult)}");
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
@@ -386,6 +389,24 @@ namespace UADRealism
         internal static void Postfix_CheckHullSizeMaxMin(Ship __instance, float __state)
         {
             __instance.hullPartSizeZ = __state;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.GetDamagePlanTooltipText))]
+        internal static void Prefix_GetDamagePlanTooltipText(Ship __instance)
+        {
+            Patch_Ui._ShipForEnginePower = __instance;
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.EnginePower))]
+        internal static void Postfix_EnginePower(Ship __instance, ref float __result)
+        {
+            float SHP = ShipStats.GetSHPRequired(__instance);
+            float ihpMult = ShipStats.GetEngineIHPMult(__instance);
+            float hp = SHP * ihpMult;
+            //Debug.Log($"SHP calc for {__instance.GetNameUI()}: {hp:N0} {(ihpMult == 1f ? "SHP" : "IHP")}, stock {__result:N0}");
+            __result = hp;
         }
     }
 

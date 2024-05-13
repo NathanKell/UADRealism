@@ -14,8 +14,11 @@ namespace UADRealism
         private static GameObject _Fineness = null;
         private static Text _BeamText = null;
         private static Text _DraughtText = null;
-        private static Il2CppSystem.Nullable<Color> _ColorNumber = new Il2CppSystem.Nullable<Color>(new Color(0.667f, 0.8f, 0.8f, 1f));
+        private static Color _ColorNumber = new Color(0.667f, 0.8f, 0.8f, 1f);
+        private static Il2CppSystem.Nullable<Color> _ColorNumberN = new Il2CppSystem.Nullable<Color>(_ColorNumber);
         private static Il2CppSystem.Object[] _LocArray = new Il2CppSystem.Object[2];
+
+        internal static Ship _ShipForEnginePower = null;
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ui.CompleteLoadingScreen))]
@@ -28,6 +31,14 @@ namespace UADRealism
             }
 
             return true;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ui.RefreshConstructorInfo))]
+        internal static void Prefix_RefreshConstructorInfo()
+        {
+            if (PlayerController.Instance != null)
+                _ShipForEnginePower = PlayerController.Instance.Ship;
         }
 
         [HarmonyPostfix]
@@ -49,7 +60,7 @@ namespace UADRealism
             if (_Fineness == null)
                 _Fineness = __instance.gameObject.FindDeepChild("Fineness");
 
-            if(_Fineness == null)
+            if (_Fineness == null)
             {
                 _BeamText = __instance.gameObject.FindDeepChild("Beam").GetComponentInChildren<Text>();
                 _DraughtText = __instance.gameObject.FindDeepChild("Draught").GetComponentInChildren<Text>();
@@ -202,19 +213,78 @@ namespace UADRealism
                 }
             }
 
-
-            _LocArray[0] = Ui.Colorize(_ColorNumber, slider.value.ToString("F0"), false);
+            _ColorNumberN.value = _ColorNumber;
+            _ColorNumberN.has_value = true;
+            _LocArray[0] = Ui.Colorize(_ColorNumberN, slider.value.ToString("F0"), false);
             // TODO track change
-            _LocArray[1] = Ui.Colorize(_ColorNumber, "*", false);
+            _LocArray[1] = Ui.Colorize(_ColorNumberN, "*", false);
             text.text = LocalizeManager.Localize("$Ui_Constr_FinenessDP01", _LocArray);
 
-            _LocArray[0] = Ui.Colorize(_ColorNumber, LdivB.ToString("F2"), false);
+            _LocArray[0] = Ui.Colorize(_ColorNumberN, LdivB.ToString("F2"), false);
             _LocArray[1] = G.ui.beamWasChanged ? "*" : string.Empty;
             _BeamText.text = LocalizeManager.Localize("$Ui_Constr_BeamDP0Per1", _LocArray);
 
-            _LocArray[0] = Ui.Colorize(_ColorNumber, BdivT.ToString("F2"), false);
+            _LocArray[0] = Ui.Colorize(_ColorNumberN, BdivT.ToString("F2"), false);
             _LocArray[1] = G.ui.draughtWasChanged ? "*" : string.Empty;
             _DraughtText.text = LocalizeManager.Localize("$Ui_Constr_DraughtDP0Per1", _LocArray);
+        }
+
+        // Engine
+
+        [HarmonyPatch(nameof(Ui.GetShipDetailInfo))]
+        [HarmonyPrefix]
+        internal static void Prefix_GetShipDetailInfo(Ship ship)
+        {
+            _ShipForEnginePower = ship;
+        }
+
+        [HarmonyPatch(nameof(Ui.GetShipInfoText))]
+        [HarmonyPrefix]
+        internal static void Prefix_GetShipInfoText(Ship ship)
+        {
+            _ShipForEnginePower = ship;
+        }
+
+        [HarmonyPatch(nameof(Ui.RefreshShipInfo))]
+        [HarmonyPrefix]
+        internal static void Prefix_RefreshShipInfo(Ui __instance)
+        {
+            _ShipForEnginePower = GetRefreshShipInfoShip(__instance);
+        }
+
+        private static Ship GetRefreshShipInfoShip(Ui ui)
+        {
+            if (ui.hoveredShips != null && ui.hoveredShips.Count > 0)
+                return ui.hoveredShips[0];
+
+            if (ui.selectedShipMain != null)
+                return ui.selectedShipMain;
+
+            if (ui.selectedShips != null && ui.selectedShips.Count > 0)
+                return ui.selectedShips[0];
+
+            return null;
+        }
+
+        [HarmonyPatch(nameof(Ui.FormatEnginePower))]
+        [HarmonyPrefix]
+        internal static bool Prefix_FormatEnginePower(float hp, bool compact, bool isKnots, ref string __result)
+        {
+            string locstr;
+            bool isI = _ShipForEnginePower == null ? false : (ShipStats.GetEngineIHPMult(_ShipForEnginePower) == 1f ? false : true);
+            if (compact)
+            {
+                hp *= 0.001f;
+                locstr = isI ? "$Ui_EnginePower_kIHP" : "$Ui_EnginePower_kSHP";
+            }
+            else
+            {
+                locstr = isI ? "$Ui_EnginePower_IHP" : "$Ui_EnginePower_SHP";
+            }
+            locstr = LocalizeManager.Localize(locstr);
+            __result = $"{hp:N0} {locstr}";
+
+            return false;
         }
     }
 

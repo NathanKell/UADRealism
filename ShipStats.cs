@@ -437,14 +437,14 @@ namespace UADRealism
 
             double Pe = Rt * msVel;
             double Ps = Pe / (eta_R * eta_shaft * eta_o * (1 - t) / (1 - w));
-#if LOGSHP
+//#if LOGSHP
             if (log)
             {
                 Debug.Log($"c1={c1:F3}, c2={c2:F3}, c3={c3:F3}, c5={c5:F3}, c6={c6:F3}, c7={c7:F3}, c12={c12:F3}, c14={c14:F3}, c15={c15:F3}, c16={c16:F3}, c17={c17:F3}, lcb={lcb:F1}, sharp={coSharp:F3}, sLerp={sharpLerp:F2}, LR={LRperL:F1}, iE={iE:F1}, "
                     + $"Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
                     + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}.");
             }
-#endif
+//#endif
 
             return (float)(Ps / 745.7d);
         }
