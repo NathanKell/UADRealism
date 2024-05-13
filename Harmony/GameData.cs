@@ -9,7 +9,10 @@ namespace UADRealism
 {
     [HarmonyPatch(typeof(GameData))]
     internal class Patch_GameData
-    {        
+    {
+        public static readonly Dictionary<string, string> _DestroyerVariants = new Dictionary<string, string>();
+        public static readonly HashSet<string> _WrittenModels = new HashSet<string>();
+
         [HarmonyPostfix]
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Postfix_PostProcessAll(GameData __instance)
@@ -48,13 +51,16 @@ namespace UADRealism
                     hData._sectionsMin = Math.Min(hData._sectionsMin, data.sectionsMin);
                     hData._sectionsMax = Math.Max(hData._sectionsMax, data.sectionsMax);
                 }
+                if (data.shipType.name == "dd" || data.shipType.name == "tb")
+                    hData._isDDHull = true;
             }
 
             // Pass 2: Spawn and render the hull models, calculating stats
             ShipStats.CalculateHullData();
 
             // Pass 3: Set starting scales for all hull parts
-            Melon<UADRealismMod>.Logger.Msg("time,name,model,sections,oldScale,tonnageMin,scaleMaxPct,oldScaleVd,newScale,Lwl,Beam,Bulge,Draught,Cb,Cm,Cwp,Cp,Cvp");
+            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,Kn,SHP");
+            int num = 1;
             foreach (var kvp in __instance.parts)
             {
                 var data = kvp.Value;
@@ -67,24 +73,30 @@ namespace UADRealism
                     Melon<UADRealismMod>.Logger.BigError($"Unable to find data for partdata {data.name} of model {data.model} with key {hData._key}");
                     continue;
                 }
-
-                int secNominal = (data.sectionsMin + data.sectionsMax) / 2;
-                float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, 0.25f);
-                if (secNominal < hData._sectionsMin || secNominal > hData._sectionsMax)
+                var modelName = ShipStats.GetHullModelKey(data);
+                for (int i = 0; i < 3; ++i)
                 {
-                    Melon<UADRealismMod>.Logger.BigError($"Unable to find section data for partdata {data.name} of model {data.model} with key {hData._key}, at section count {secNominal}");
-                    continue;
+                    float tVal = i > 0 ? 0.25f : 0;
+                    float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
+                    ShipStats.GetSectionsAndBeamForLB(i == 1 ? data.beamMin : 0, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out var beamScale, out var sections);
+                    if (i == 0)
+                        sections = 0;
+                    var stats = ShipStats.GetScaledStats(hData, tng, i == 0 ? data.beamMin : beamScale, 0, sections);
+                    float shp = ShipStats.GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false);
+                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{data.speedLimiter:F1},{shp:F0}");
+                    ++num;
                 }
-                var stats = hData._statsSet[secNominal];
-                float oldScale = data.scale;
-                float oldCube = oldScale * oldScale * oldScale;
-                float ratio = tng / (stats.Vd * ShipStats.TonnesToCubicMetersWater);
-                float newScale = Mathf.Pow(ratio, 1f / 3f);
-                data.scale = newScale;
-                Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{secNominal},{oldScale:F3}x,{tng:F0}t,{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{(stats.Vd * oldCube * ShipStats.TonnesToCubicMetersWater):F0}t,{newScale:F3}x,L={(stats.Lwl * newScale):F2},B={(stats.B * newScale):F2},BB={(stats.beamBulge * newScale):F2},T={(stats.T * newScale):F2},Cb={stats.Cb:F3},Cm={stats.Cm:F3},Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3},Cvp={stats.Cvp:F3}");
-                //double S_hm = stats.Lwl * (stats.beamBulge + 2d * stats.T) * Math.Sqrt(stats.Cm) * (0.453d + 0.4425d * stats.Cb - 0.2862d * stats.Cm + 0.003467d * stats.beamBulge / stats.T + 0.3696d * stats.Cwp);// + 19.65 * A_bulb_at_stem / Cb
-                //double S_dm = 1.7d * stats.Lwl * stats.T + stats.Vd / stats.T;
-                //Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{data.nameUi},{S_hm:F0},{S_dm:F0},{(S_hm/S_dm):P0}");
+            }
+
+            foreach (var kvp in _DestroyerVariants)
+            {
+                Debug.Log(kvp.Value);
+            }
+
+            foreach (var kvp in __instance.parts)
+            {
+                if (kvp.value.model == "atlanta_hull_b_var")
+                    kvp.value.sectionsMin = 0;
             }
 
             var time = sw.Elapsed;
