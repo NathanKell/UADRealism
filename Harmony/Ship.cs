@@ -207,13 +207,15 @@ namespace UADRealism
 
             var stats = ShipStats.GetScaledStats(__instance);
             float SHP = ShipStats.GetSHPRequired(__instance);
+            float ihpMult = ShipStats.GetEngineIHPMult(__instance);
             string beamStr = stats.B.ToString("F2");
             if (stats.beamBulge != stats.B)
             {
                 beamStr += $" ({stats.beamBulge:F2} at {stats.bulgeDepth:F2})";
             }
+            string hp = ihpMult == 1f ? $"{SHP:N0} SHP" : $"{(SHP * ihpMult):N0} IHP";
 
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {SHP:N0} SHP for {(__instance.speedMax/0.5144444f):F1}kn");
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} for {(__instance.speedMax/0.5144444f):F1}kn");
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)

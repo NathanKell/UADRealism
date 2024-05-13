@@ -151,7 +151,7 @@ namespace UADRealism
             yield return CalculateHullData();
 
             // Pass 3: Set starting scales for all hull parts
-            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP");
+            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
             int num = 1;
             foreach (var kvp in gameData.parts)
             {
@@ -175,8 +175,9 @@ namespace UADRealism
                     float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
                     int sections = i;
                     var stats = GetScaledStats(hData, tng, 0, 0, sections);
-                    float shp = GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false);
-                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0}");
+                    float shpMult = GetHullFormSHPMult(data);
+                    float shp = GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false) * shpMult;
+                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{shpMult:F2}");
                     ++num;
                 }
             }
@@ -237,8 +238,48 @@ namespace UADRealism
         public const float TonnesToCubicMetersWater = (float)(1d / (WaterDensity * 0.001d));
         public const double WaterKinematicViscosity = 1.1892e-6d;
 
+        public static float GetEngineIHPMult(Ship ship)
+        {
+            foreach (var kvp in ship.components)
+            {
+                if (kvp.key.name == "engine")
+                {
+                    return GetEngineIHPMult(kvp.value);
+                }
+            }
+            return 1f;
+        }
+
+        public static float GetEngineIHPMult(ComponentData comp)
+        {
+            switch (comp.name)
+            {
+                case "main_engine_1": return 1f / 0.8f;         // basic
+                case "main_engine_2": return 1f / 0.88f;        // Triple Exp
+                case "main_engine_3": return 1f / 0.905f;        // Quad Exp
+                case "main_engine_3_adv": return 1f / 0.92f;    // Adv Quad
+                default: return 1f;
+            }
+        }
+
+        public static float GetHullFormSHPMult(Ship ship) => GetHullFormSHPMult(ship.hull.data);
+
+        public static float GetHullFormSHPMult(PartData data)
+        {
+            if (!G.GameData.stats.TryGetValue("hull_form", out var sd))
+                return 1f;
+            if (!data.statsx.TryGetValue(sd, out var hullForm))
+                return 1f;
+
+            float influence = Mathf.InverseLerp(80f, 20f, hullForm);
+            return Mathf.Lerp(1f, Util.Remap(hullForm, 20f, 80f, 1.35f, 1f, true), influence * influence);
+        }
+
         public static float GetSHPRequired(Ship ship)
-            => GetSHPRequired(GetScaledStats(ship), ship.speedMax);
+        {
+            float shp = GetSHPRequired(GetScaledStats(ship), ship.speedMax);
+            return shp * GetHullFormSHPMult(ship);
+        }
 
         public static float GetSHPRequired(HullStats stats, float speedMS, bool log = true)
         {

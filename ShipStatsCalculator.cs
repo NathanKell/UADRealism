@@ -829,6 +829,9 @@ namespace UADRealism
             hData._statsSet = new HullStats[count];
 
             // do 0 sections in addition to all others.
+            float sec0Draught = 1f;
+            float sec0Beam = 1f;
+            float sec0BulgeDepth = 1f;
             for (int secCount = 0 /*hData._sectionsMin*/; secCount < count; ++secCount)
             {
                 if (secCount == 1 && secCount < hData._sectionsMin)
@@ -904,19 +907,22 @@ namespace UADRealism
                     {
                         stats.Cm = Mathf.Pow(stats.Cm, powCm);
                     }
+                    sec0Draught = stats.T;
+                    sec0Beam = stats.B;
+                    sec0BulgeDepth = stats.bulgeDepth;
                 }
                 else
                 {
-                    stats.Cb = stats.Vd / (stats.Lwl * hData._statsSet[0].B * hData._statsSet[0].T);
+                    stats.Cb = stats.Vd / (stats.Lwl * sec0Beam * sec0Draught);
                     stats.Cm = hData._statsSet[0].Cm;
-                    stats.Cwp *= stats.B / hData._statsSet[0].B;
+                    stats.Cwp *= stats.B / sec0Beam;
                     stats.Cp = stats.Cb / stats.Cm;
                     stats.Cvp = stats.Cb / stats.Cwp;
                     stats.Catr = hData._statsSet[0].Catr;
-                    stats.B = hData._statsSet[0].B;
-                    stats.T = hData._statsSet[0].T;
+                    stats.B = sec0Beam;
+                    stats.T = sec0Draught;
                     stats.beamBulge = hData._statsSet[0].beamBulge;
-                    stats.bulgeDepth = hData._statsSet[0].bulgeDepth;
+                    stats.bulgeDepth = sec0BulgeDepth;
                     stats.LrPct = hData._statsSet[0].LrPct * hData._statsSet[0].Lwl / stats.Lwl;
                     stats.iE = hData._statsSet[0].iE;
                     stats.bowLength = hData._statsSet[0].bowLength;
@@ -924,10 +930,14 @@ namespace UADRealism
 
                 if (hData._isDDHull)
                 {
+                    float oldCb = stats.Cb;
                     stats.Cb = Mathf.Pow(stats.Cb, powCb);
                     stats.Cwp = Mathf.Pow(stats.Cwp, powCwp);
                     stats.Cp = stats.Cb / stats.Cm;
                     stats.Cvp = stats.Cb / stats.Cwp;
+                    float vMult = stats.Cb / oldCb;
+                    stats.Vd *= vMult;
+                    stats.Cv *= vMult;
                 }
 
                 // Correct for really weird high-draught hull models
