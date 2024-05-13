@@ -10,87 +10,139 @@ namespace UADRealism
     [HarmonyPatch(typeof(GameData))]
     internal class Patch_GameData
     {
-        internal struct HullData
-        {
-            public ShipStatsCalculator.ShipStats _stats;
-            public int _sectionsForStats;
-            public List<float> _sectionLengths;
-        }
+        internal static bool _IsRenderingHulls = false;
+        internal static Dictionary<string, HullData> _HullModelData = new Dictionary<string, HullData>();
 
-        internal static Dictionary<string, HullData> _ModelStats = new Dictionary<string, HullData>();
-        internal static bool _IsProcessing = false;
-
-        // To avoid allocs
+        // To avoid allocs. Compared to instantiation though it's probably not worth it.
         private static List<string> _foundVars = new List<string>();
         private static List<string> _matchedVars = new List<string>();
         private static Dictionary<GameObject, Bounds> _sectionBounds = new Dictionary<GameObject, Bounds>();
 
-        private static void FindChildrenStartsWith(GameObject obj, string str, List<GameObject> list)
-        {
-            if (obj.name.StartsWith(str))
-                list.Add(obj);
-            for (int i = 0; i < obj.transform.childCount; ++i)
-                FindChildrenStartsWith(obj.transform.GetChild(i).gameObject, str, list);
-        }
-
-        internal static int SectionsUsed(int secMin, int secMax) => (secMin + secMax) / 2;
-
+                
         [HarmonyPostfix]
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Postfix_PostProcessAll(GameData __instance)
         {
-            _IsProcessing = true;
+            Il2CppSystem.Diagnostics.Stopwatch sw = new Il2CppSystem.Diagnostics.Stopwatch();
+            sw.Start();
 
-            Melon<UADRealismMod>.Logger.Msg("time,name,model,sections,oldScale,tonnageMin,scaleMaxPct,oldScaleVd,newScale,Lwl,Beam,Bulge,Draught,Cb,Cm,Cwp,Cp,Cvp");
-
-            var centralGO = new GameObject("calculator");
-            centralGO.active = true;
+            // Pass 1: Figure out the min and max sections used for each model.
+            // (and deal with beam/draught coefficients)
             foreach (var kvp in __instance.parts)
             {
                 var data = kvp.Value;
                 if (data.type != "hull")
                     continue;
 
-                data.draughtCoef = 0f;
+                // Just apply beam delta to tonnage directly since we're going to use length/beam ratios
+                data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef);
+                data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef);
+
                 data.beamCoef = 0f;
 
-                int sectionsUsed = SectionsUsed(data.sectionsMin, data.sectionsMax);
-                string key = data.model + "$" + sectionsUsed;
-                if (!_ModelStats.TryGetValue(key, out var hData))
+                // Draught is a linear scale to displacement at a given length/beam
+                // TODO: Do we want to allow implicitly different block coefficients based on draught, as would
+                // be true in reality?
+                data.draughtCoef = 1f;
+
+
+                // Now get var/section data
+                string key = ModUtils.GetHullModelKey(data);
+                if (!_HullModelData.TryGetValue(key, out var hData))
                 {
-                    var part = SpawnPart(data, key, centralGO);
+                    hData = new HullData() {
+                        _data = data,
+                        _sectionsMin = data.sectionsMin,
+                        _sectionsMax = data.sectionsMax
+                    };
+                    _HullModelData[key] = hData;
+                }
+                else
+                {
+                    hData._sectionsMin = Math.Min(hData._sectionsMin, data.sectionsMin);
+                    hData._sectionsMax = Math.Max(hData._sectionsMax, data.sectionsMax);
+                }
+            }
+
+            // Pass 2: Calculate stats
+            _IsRenderingHulls = true;
+            var centralGO = new GameObject("calculator");
+            centralGO.active = true;
+            foreach (var kvp in _HullModelData)
+            {
+                var hData = kvp.Value;
+                var data = kvp.Value._data;
+
+                var part = SpawnPart(data, centralGO);
+
+                int count = hData._sectionsMax + 1;
+                hData._statsSet = new ShipStatsCalculator.ShipStats[count];
+
+                for (int secCount = hData._sectionsMin; secCount < count; ++secCount)
+                {
+                    // Ship.RefreshHull (only the bits we need)
+                    CreateMiddles(part, secCount);
+                    // It's annoying to rerun this every time, but it's not exactly expensive.
+                    ApplyVariations(part);
+
+                    PositionSections(part);
+
+                    // Calc the stats for this layout. Note that scaling dimensions will only
+                    // linearly change stats, it won't require a recalc.
                     var shipBounds = GetShipBounds(part.model.gameObject);
                     var stats = ShipStatsCalculator.Instance.GetStats(part.model.gameObject, shipBounds);
 
                     if (stats.Vd == 0f)
                         stats.Vd = 1f;
 
-                    hData = new HullData()
-                    {
-                        _stats = stats,
-                        _sectionsForStats = sectionsUsed,
-                        _sectionLengths = GetSectionLengths(part)
-                    };
-                    _ModelStats[key] = hData;
-
-                    //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp * scaleFactor * scaleFactor):F1}, Am={(stats.Am * scaleFactor * scaleFactor):F2}");
-
-                    GameObject.DestroyImmediate(part.gameObject);
-                    Part.CleanPartsStorage();
+                    hData._statsSet[secCount] = stats;
+                    Melon<UADRealismMod>.Logger.Msg($"{kvp.Key}@{secCount}: {(stats.Lwl):F2}x{stats.beamBulge:F2}x{(stats.T):F2}, {(stats.Vd)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp):F1}, Am={stats.Am:F1}");
                 }
-                // Log regardless
-                {
-                    var stats = hData._stats;
-                    float oldScale = data.scale;
-                    float oldCube = oldScale * oldScale * oldScale;
-                    float ratio = data.tonnageMin / hData._stats.Vd;
-                    float newScale = Mathf.Pow(ratio, 1f / 3f);
-                    data.scale = newScale;
-                    Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{sectionsUsed},{oldScale:F3}x,{data.tonnageMin:F0}t,{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{(stats.Vd * oldCube):F0}t,{newScale:F3}x,L={(stats.Lwl * newScale):F2},B={(stats.B * newScale):F2},BB={(stats.beamBulge * newScale):F2},T={(stats.T * newScale):F2},Cb={stats.Cb:F3},Cm={stats.Cm:F3},Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3},Cvp={stats.Cvp:F3}");
-                }
+                string varStr = kvp.Key.Substring(data.model.Length);
+                if (varStr != string.Empty)
+                    varStr = $"({varStr.Substring(1)}) ";
+                Melon<UADRealismMod>.Logger.Msg($"Calculated stats for {data.model} {varStr}for {hData._sectionsMin} to {hData._sectionsMax} sections");
+
+                //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp * scaleFactor * scaleFactor):F1}, Am={(stats.Am * scaleFactor * scaleFactor):F2}");
+
+                GameObject.Destroy(part.gameObject);
+                Part.CleanPartsStorage();
             }
+            _IsRenderingHulls = false;
             GameObject.Destroy(centralGO);
-            _IsProcessing = false;
+
+            // Pass 3: Set starting scales for all partdata
+            Melon<UADRealismMod>.Logger.Msg("time,name,model,sections,oldScale,tonnageMin,scaleMaxPct,oldScaleVd,newScale,Lwl,Beam,Bulge,Draught,Cb,Cm,Cwp,Cp,Cvp");
+            foreach (var kvp in __instance.parts)
+            {
+                var data = kvp.Value;
+                if (data.type != "hull")
+                    continue;
+
+                string key = ModUtils.GetHullModelKey(data);
+                if (!_HullModelData.TryGetValue(key, out var hData))
+                {
+                    Melon<UADRealismMod>.Logger.BigError($"Unable to find data for partdata {data.name} of model {data.model} with key {key}");
+                    continue;
+                }
+
+                int secNominal = (data.sectionsMin + data.sectionsMax) / 2;
+                float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, 0.25f);
+                if (secNominal < hData._sectionsMin || secNominal > hData._sectionsMax)
+                {
+                    Melon<UADRealismMod>.Logger.BigError($"Unable to find section data for partdata {data.name} of model {data.model} with key {key}, at section count {secNominal}");
+                    continue;
+                }
+                var stats = hData._statsSet[secNominal];
+                float oldScale = data.scale;
+                float oldCube = oldScale * oldScale * oldScale;
+                float ratio = tng / stats.Vd;
+                float newScale = Mathf.Pow(ratio, 1f / 3f);
+                data.scale = newScale;
+                Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{secNominal},{oldScale:F3}x,{tng:F0}t,{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{(stats.Vd * oldCube):F0}t,{newScale:F3}x,L={(stats.Lwl * newScale):F2},B={(stats.B * newScale):F2},BB={(stats.beamBulge * newScale):F2},T={(stats.T * newScale):F2},Cb={stats.Cb:F3},Cm={stats.Cm:F3},Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3},Cvp={stats.Cvp:F3}");
+            }
+            var time = sw.Elapsed;
+            Melon<UADRealismMod>.Logger.Msg($"Total time: {time}");
         }
 
         internal static Bounds GetShipBounds(GameObject obj)
@@ -117,12 +169,10 @@ namespace UADRealism
             return shipBounds;
         }
 
-        internal static void CreateMiddles(Part part, int startIdx, int numTotal)
+        internal static void CreateMiddles(Part part, int numTotal)
         {
             // Spawn middle sections
-            foreach (var go in part.middlesBase)
-                Util.SetActiveX(go, false);
-            for (int i = startIdx; i < numTotal; ++i)
+            for (int i = part.middles.Count; i < numTotal; ++i)
             {
                 var mPrefab = part.middlesBase[i % part.middlesBase._size];
                 var cloned = Util.CloneGameObject(mPrefab);
@@ -296,27 +346,9 @@ namespace UADRealism
             return secBounds;
         }
 
-        internal static List<float> GetSectionLengths(Part part)
+        internal static Part SpawnPart(PartData data, GameObject parent)
         {
-            CreateMiddles(part, SectionsUsed(part.data.sectionsMin, part.data.sectionsMax), part.middlesBase._size);
-            ApplyVariations(part);
-            var lst = new List<float>();
-            var sections = new Il2CppSystem.Collections.Generic.List<GameObject>();
-            sections.AddRange(part.hullSections);
-            var sectionsGO = Util.GetParent(part.bow);
-            var sectionsTrf = sectionsGO.transform;
-
-            for(int i = 0; i < part.middles.Count; ++i)
-            {
-                var sec = part.middles[i];
-                lst.Add(GetSectionBounds(sec, sectionsTrf).size.z);
-            }
-            return lst;
-        }
-
-        internal static Part SpawnPart(PartData data, string name, GameObject parent)
-        {
-            var partGO = new GameObject(name);
+            var partGO = new GameObject(data.name);
             partGO.SetParent(parent, true);
             var part = partGO.AddComponent<Part>();
             part.data = data;
@@ -335,7 +367,7 @@ namespace UADRealism
             part.bow = sections.GetChild("Bow", false);
             part.stern = sections.GetChild("Stern", false);
             var middles = new List<GameObject>();
-            FindChildrenStartsWith(sections, "Middle", middles);
+            ModUtils.FindChildrenStartsWith(sections, "Middle", middles);
             middles.Sort((a, b) => a.name.CompareTo(b.name));
             part.middlesBase = new Il2CppSystem.Collections.Generic.List<GameObject>();
             foreach (var m in middles)
@@ -346,11 +378,8 @@ namespace UADRealism
             //part.RegrabDeckSizes(true);
             //part.RecalcVisualSize();
 
-            // Start Ship.RefreshHull (only the bits we need)
-
-            CreateMiddles(part, 0, SectionsUsed(data.sectionsMin, data.sectionsMax));
-            ApplyVariations(part);
-            PositionSections(part);
+            foreach (var go in part.middlesBase)
+                Util.SetActiveX(go, false);
 
             return part;
         }

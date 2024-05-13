@@ -7,6 +7,14 @@ using Il2Cpp;
 
 namespace UADRealism
 {
+    public class HullData
+    {
+        public PartData _data;
+        public int _sectionsMin;
+        public int _sectionsMax;
+        public ShipStatsCalculator.ShipStats[] _statsSet;
+    }
+
     [RegisterTypeInIl2Cpp]
     public class ShipStatsCalculator : MonoBehaviour
     {

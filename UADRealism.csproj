@@ -82,6 +82,7 @@
     <Compile Include="Harmony\Part.cs" />
     <Compile Include="Harmony\GunData.cs" />
     <Compile Include="ShipStatsCalculator.cs" />
+    <Compile Include="ModUtils.cs" />
     <Compile Include="UADRealismMod.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
