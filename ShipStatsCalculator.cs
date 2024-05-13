@@ -10,11 +10,12 @@ namespace UADRealism
     public class HullData
     {
         public string _key;
-        public PartData _data;
+        public List<PartData> _hulls;
         public int _sectionsMin;
         public int _sectionsMax;
         public HullStats[] _statsSet;
         public bool _isDDHull = false;
+        public float _year;
     }
 
     public struct HullStats
@@ -49,8 +50,8 @@ namespace UADRealism
 
         private static readonly Dictionary<string, HullData> _HullModelData = new Dictionary<string, HullData>();
 
-        public static readonly Dictionary<string, string> _DestroyerVariants = new Dictionary<string, string>();
-        public static readonly HashSet<string> _WrittenModels = new HashSet<string>();
+        //public static readonly HashSet<string> _WrittenModels = new HashSet<string>();
+        private static List<string> _DestoyerHullsPerModel = new List<string>();
 
         public static HullData GetData(Ship ship) => GetData(ship.hull.data);
 
@@ -71,7 +72,7 @@ namespace UADRealism
             var hData = new HullData()
             {
                 _key = key,
-                _data = data,
+                _hulls = new List<PartData>() { data },
                 _sectionsMin = data.sectionsMin,
                 _sectionsMax = data.sectionsMax,
                 _isDDHull = data.shipType.name == "dd" || data.shipType.name == "tb"
@@ -98,14 +99,14 @@ namespace UADRealism
 
         public static System.Collections.IEnumerator ProcessGameData()
         {
-            var __instance = G.GameData;
+            var gameData = G.GameData;
             Il2CppSystem.Diagnostics.Stopwatch sw = new Il2CppSystem.Diagnostics.Stopwatch();
             sw.Start();
             Melon<UADRealismMod>.Logger.Msg("Processing Hulls in GameData");
 
             // Pass 1: Figure out the min and max sections used for each model.
             // (and deal with beam/draught coefficients)
-            foreach (var kvp in __instance.parts)
+            foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
                 if (data.type != "hull")
@@ -118,9 +119,9 @@ namespace UADRealism
                 //data.sectionsMin = (int)(data.sectionsMin * 0.75f);
                 data.sectionsMin = 0;
                 data.beamMin = -50f;
-                data.beamMax = 30f;
-                data.draughtMin = -50f;
-                data.draughtMax = 30f;
+                data.beamMax = 50f;
+                data.draughtMin = -75f;
+                data.draughtMax = 50f;
 
                 data.beamCoef = 0f;
 
@@ -140,6 +141,7 @@ namespace UADRealism
                 {
                     hData._sectionsMin = Math.Min(hData._sectionsMin, data.sectionsMin);
                     hData._sectionsMax = Math.Max(hData._sectionsMax, data.sectionsMax);
+                    hData._hulls.Add(data);
                 }
             }
 
@@ -147,9 +149,9 @@ namespace UADRealism
             yield return CalculateHullData();
 
             // Pass 3: Set starting scales for all hull parts
-            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP");
+            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP");
             int num = 1;
-            foreach (var kvp in __instance.parts)
+            foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
                 if (data.type != "hull")
@@ -176,20 +178,28 @@ namespace UADRealism
                     int sections = i;
                     var stats = GetScaledStats(hData, tng, 0, 0, sections);
                     float shp = GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false);
-                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0}");
+                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0}");
                     ++num;
                 }
             }
 
-            foreach (var kvp in _DestroyerVariants)
+            foreach (var kvp in _HullModelData)
             {
-                Debug.Log(kvp.Value);
-            }
+                if (!kvp.Value._isDDHull)
+                    continue;
 
-            foreach (var kvp in __instance.parts)
-            {
-                if (kvp.value.model == "atlanta_hull_b_var")
-                    kvp.value.sectionsMin = 0;
+                foreach (var kvpData in gameData.parts)
+                {
+                    if (kvpData.value.type != "hull")
+                        continue;
+
+                    if (GetHullModelKey(kvpData.value) == kvp.Key)
+                    {
+                        _DestoyerHullsPerModel.Add(kvpData.Key);
+                    }
+                }
+                Debug.Log($"Model {kvp.Key} used by: {string.Join(", ", _DestoyerHullsPerModel)}");
+                _DestoyerHullsPerModel.Clear();
             }
 
             var time = sw.Elapsed;
@@ -302,7 +312,9 @@ namespace UADRealism
             newStats.bulgeDepth *= drMult * linearScale;
             newStats.Lwl *= linearScale;
             newStats.T *= drMult * linearScale;
-            newStats.Vd *= drMult * bmMult * linearScale * linearScale * linearScale; // should be the same as ship.Tonnage() * TonnesToCubicMetersWaters
+            float volMult = drMult * bmMult * linearScale * linearScale * linearScale; // should be the same as ship.Tonnage() * TonnesToCubicMetersWaters 
+            newStats.Vd *= volMult;
+            newStats.Cv *= volMult;
             newStats.bowLength *= linearScale;
             newStats.scaleFactor = linearScale;
 
@@ -345,8 +357,8 @@ namespace UADRealism
             double Cm = stats.Cm;
             double Cw = stats.Cwp;
             double Vd = stats.Vd;
-            double VolCoeff = 0.01d * stats.Cv;
-            double L3V = 1d / VolCoeff;
+            double VolCoeff = Vd / (L * L * L);
+            double L3V = L * L * L / Vd;
             double Catr = stats.Catr;
             double V13 = Math.Pow(Vd, 1d / 3d);
             double msVel = speedMS;
@@ -401,7 +413,7 @@ namespace UADRealism
 
             // recalc 
             double formFactor = 0.93 + 0.487118 * c14 * Math.Pow(BdivL, 1.06806) * Math.Pow(TdivL, 0.46106) * Math.Pow(L / (LRperL * L), 0.121563) * Math.Pow(L3V, 0.36486) * Math.Pow(1 - Cp, -0.604247);
-            double S = L * (B + 2d * T) * Math.Sqrt(Cm) * (0.453d + 0.4425d * Cb - 0.2862d * Cm + 0.003467d * BT + 0.3696d * Cw);// + 19.65 * A_bulb_at_stem / Cb
+            double S = L * (B + 2d * T) * Math.Sqrt(Cm) * (0.453d + 0.4425d * Cb - 0.2862d * Cm - 0.003467d * BT + 0.3696d * Cw);// + 19.65 * A_bulb_at_stem / Cb
             double dynPres = 0.5d * WaterDensity * msVel * msVel;
             double Rf = Cf * formFactor * dynPres * S;
 
@@ -483,7 +495,7 @@ namespace UADRealism
             {
                 Debug.Log($"c1={c1:F3}, c2={c2:F3}, c3={c3:F3}, c5={c5:F3}, c6={c6:F3}, c7={c7:F3}, c12={c12:F3}, c14={c14:F3}, c15={c15:F3}, c16={c16:F3}, c17={c17:F3}, lcb={lcb:F1}, sharp={coSharp:F3}, sLerp={sharpLerp:F2}, LR={LRperL:F1}, iE={iE:F1}, "
                     + $"Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
-                    + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}");
+                    + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}.");
             }
 
             return (float)(Ps / 745.7d);
@@ -1013,13 +1025,13 @@ namespace UADRealism
                                     else
                                     {
                                         numPx = predictedPx;
-
-                                        int pxStart = (_ResSideFront - numPx) / 2;
-                                        int pxEnd = pxStart + numPx - 1;
-                                        for (int i = 0; i < _ResSideFront; ++i)
-                                        {
-                                            pixels[row * _ResSideFront + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
-                                        }
+                                        // handle output
+                                        //int pxStart = (_ResSideFront - numPx) / 2;
+                                        //int pxEnd = pxStart + numPx - 1;
+                                        //for (int i = 0; i < _ResSideFront; ++i)
+                                        //{
+                                        //    pixels[row * _ResSideFront + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
+                                        //}
                                     }
                                 }
                             }
@@ -1204,8 +1216,8 @@ namespace UADRealism
                                             lastDepth = r + 1;
 
                                         // handle output
-                                        for (int r2 = r; r2 >= 0; --r2)
-                                            pixels[r2 * _ResSideFront + col].a = 0;
+                                        //for (int r2 = r; r2 >= 0; --r2)
+                                        //    pixels[r2 * _ResSideFront + col].a = 0;
 
                                         break;
                                     }
@@ -1217,7 +1229,8 @@ namespace UADRealism
                                     continue;
 
                                 hasPx = true;
-                                startRow = r;
+                                if (startRow < 0)
+                                    startRow = r;
                                 int curDepth = _ResSideFront - r;
                                 if (curDepth > maxDepthPx)
                                     maxDepthPx = curDepth;
@@ -1261,23 +1274,23 @@ namespace UADRealism
                         break;
                 }
 
-                if(view != ShipViewDir.Front || sec == 0)
-                {
-                    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
-                    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}";
-                    if (view == ShipViewDir.Bottom && firstPropCol > 0)
-                        filePath += $"ps{firstPropCol}_pe{firstEndPropCol}";
+                //if(view != ShipViewDir.Front || sec == 0)
+                //{
+                //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
+                //    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}";
+                //    if (view == ShipViewDir.Bottom && firstPropCol > 0)
+                //        filePath += $"ps{firstPropCol}_pe{firstEndPropCol}";
 
-                    var bytes = ImageConversion.EncodeToPNG(_texture);
-                    Il2CppSystem.IO.File.WriteAllBytes(filePath + ".png", bytes);
+                //    var bytes = ImageConversion.EncodeToPNG(_texture);
+                //    Il2CppSystem.IO.File.WriteAllBytes(filePath + ".png", bytes);
 
-                    if (view == ShipViewDir.Side)
-                    {
-                        _texture.SetPixels32(pixels);
-                        bytes = ImageConversion.EncodeToPNG(_texture);
-                        Il2CppSystem.IO.File.WriteAllBytes(filePath + "_out.png", bytes);
-                    }
-                }
+                //    if (view == ShipViewDir.Side)
+                //    {
+                //        _texture.SetPixels32(pixels);
+                //        bytes = ImageConversion.EncodeToPNG(_texture);
+                //        Il2CppSystem.IO.File.WriteAllBytes(filePath + "_out.png", bytes);
+                //    }
+                //}
             }
             RenderTexture.active = null;
 
@@ -1316,7 +1329,7 @@ namespace UADRealism
 
         public static System.Collections.IEnumerator ProcessHullData(HullData hData)
         {
-            var data = hData._data;
+            var data = hData._hulls[0];
             var part = Instance.SpawnPart(data);
             //part.gameObject.AddComponent<LogMB>();
             part.enabled = false;
@@ -1345,8 +1358,63 @@ namespace UADRealism
                 if (stats.Vd == 0f)
                     stats.Vd = 1f;
 
-                // Recompute based on sec0 which has best resolution for beam/draught/Cm/etc
-                if (secCount != 0)
+                float powCm = 1f;
+                float powCwp = 1f;
+                float powCb = 1f;
+                if (hData._isDDHull)
+                {
+                    float year = 0f;
+                    float divisor = 0f;
+                    foreach (var hull in hData._hulls)
+                    {
+                        bool found = false;
+                        foreach (var tech in G.GameData.technologies)
+                        {
+                            if (!tech.Value.effects.TryGetValue("unlock", out var eff))
+                                continue;
+
+                            foreach (var lst in eff)
+                            {
+                                foreach (var item in lst)
+                                {
+                                    if (item == hull.name)
+                                    {
+                                        year += tech.value.year;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (found)
+                                    break;
+                            }
+                            if (found)
+                                break;
+                        }
+                        if (found)
+                            ++divisor;
+                    }
+                    if (divisor > 0)
+                        year /= divisor;
+                    else
+                        year = 1915f;
+
+                    powCm = Util.Remap(year, 1900, 1925, 1f, 0.7f, true);
+                    powCb = Util.Remap(year, 1900, 1925, 1.5f, 1f, true);
+                    powCwp = Util.Remap(year, 1890, 1930, 2f, 1.3f, true);
+
+                    hData._year = year;
+                }
+
+                // Recompute. For zero-section case, check if destroyer and fudge numbers.
+                // If not, reset based on sec0 which has best resolution for beam/draught/Cm/etc
+                if (secCount == 0)
+                {
+                    if (hData._isDDHull)
+                    {
+                        stats.Cm = Mathf.Pow(stats.Cm, powCm);
+                    }
+                }
+                else
                 {
                     stats.Cb = stats.Vd / (stats.Lwl * hData._statsSet[0].B * hData._statsSet[0].T);
                     stats.Cm = hData._statsSet[0].Cm;
@@ -1361,6 +1429,14 @@ namespace UADRealism
                     stats.LrPct = hData._statsSet[0].LrPct * hData._statsSet[0].Lwl / stats.Lwl;
                     stats.iE = hData._statsSet[0].iE;
                     stats.bowLength = hData._statsSet[0].bowLength;
+                }
+
+                if (hData._isDDHull)
+                {
+                    stats.Cb = Mathf.Pow(stats.Cb, powCb);
+                    stats.Cwp = Mathf.Pow(stats.Cwp, powCwp);
+                    stats.Cp = stats.Cb / stats.Cm;
+                    stats.Cvp = stats.Cb / stats.Cwp;
                 }
 
                 hData._statsSet[secCount] = stats;
