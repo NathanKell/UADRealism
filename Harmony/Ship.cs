@@ -51,7 +51,6 @@ namespace UADRealism
         {
 
             __state = new RefreshHullData();
-            Debug.Log("Calling RefreshHull");
 
             if (_IsChangeHull || __instance == null || __instance.hull == null)
                 return;
@@ -74,7 +73,9 @@ namespace UADRealism
                 updateSections = true;
 
             float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd) / __instance.hull.model.transform.localScale.z;
+#if LOGSHIP
             Debug.Log($"{hData._key}: tonnage desired: {__instance.tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
+#endif
             __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
@@ -230,8 +231,9 @@ namespace UADRealism
                 beamStr += $" ({stats.beamBulge:F2} at {stats.bulgeDepth:F2})";
             }
             string hp = ihpMult == 1f ? $"{SHP:N0} SHP" : $"{(SHP * ihpMult):N0} IHP";
-
+#if LOGSHIP
             Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} ({ShipStats.GetHullFormSHPMult(__instance):F2}x{ihpMult:F2}) for {(__instance.speedMax/0.5144444f):F1}kn");
+#endif
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)

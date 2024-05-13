@@ -965,10 +965,12 @@ namespace UADRealism
                 }
 
                 hData._statsSet[secCount] = stats;
+#if LOGSTATS
                 string beam = stats.B.ToString("F2");
                 if (stats.beamBulge != stats.B)
                     beam += $"({stats.beamBulge:F2})";
                 Debug.Log($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{beam}x{(stats.T):F2} ({(stats.Lwl/stats.B):F2},{(stats.B/stats.T):F2}), LCB={stats.lcbPct:P2}, {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}, Catr={stats.Catr:F3}, Cv={stats.Cv:F3}, DD={(hData._isDDHull)}");
+#endif
                 yield return null;
             }
 
