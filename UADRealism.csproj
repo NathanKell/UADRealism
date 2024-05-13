@@ -77,10 +77,11 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Harmony\PartData.cs" />
+    <Compile Include="Harmony\GameData.cs" />
     <Compile Include="Harmony\Ship.cs" />
     <Compile Include="Harmony\Part.cs" />
     <Compile Include="Harmony\GunData.cs" />
+    <Compile Include="ShipStatsCalculator.cs" />
     <Compile Include="UADRealismMod.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

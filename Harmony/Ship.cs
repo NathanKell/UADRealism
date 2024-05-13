@@ -103,7 +103,7 @@ namespace UADRealism
 
         private static Vector3 _BoundsMin = new Vector3(float.MinValue, float.MinValue, float.MinValue);
         private static Vector3 _BoundsMax = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
-        private static Vector3 _CachedDimensions = new Vector3(1f, 1f, 1f);
+        private static ShipStatsCalculator.ShipStats _CachedStats = new ShipStatsCalculator.ShipStats();
 
         private static List<float> oldTurretArmors = new List<float>();
 
@@ -111,26 +111,38 @@ namespace UADRealism
         [HarmonyPatch(nameof(Ship.CalcInstability))]
         internal static void Postfix_CalcInstability(Ship __instance)
         {
-            if (__instance == null)
+            if (Patch_GameData._IsProcessing || __instance == null)
                 return;
 
-            float Cb = CalcBlockCoefficient(__instance);
-            GetLengthBeam(__instance, out float lwl, out float beam);
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: Block Coefficient: {Cb:F3} for {__instance.hullSize.size.z:F2}x{__instance.hullSize.size.x:F2}x{__instance.hullSize.min.y:F2}. Calc {lwl:F2}x{beam:F2}");
-            //string[] layers = Enumerable.Range(0, 31).Select(index => LayerMask.LayerToName(index)).Where(l => !string.IsNullOrEmpty(l)).ToArray();
-            //Melon<UADRealismMod>.Logger.Msg("Layers: " + string.Join(", ", layers));
-            //  Layers: Default, TransparentFX, Ignore Raycast, Water, UI, Navmesh, MapSelectable, PartCamera, Deck, Part, DeckBorder, PartSelect,
-            //  Ship, Torpedo, ShipSelect, MapSelect, DeckWall, SectionDamage, Decor, Suimono_Water, Suimono_Depth, Suimono_Screen, Part2, Sky,
-            //  water_surface, water_foam, VisibilityFog_unused, Scheme, DeckHeight, CountryHighlight
-
-            if (Cb <= 0f)
+            if (__instance.hullSize == null
+                || __instance.hullSize.size.x == 0f
+                || __instance.hullSize.size.y == 0f
+                || __instance.hullSize.size.z == 0f
+                || __instance.hullSize.min.y == 0f)
                 return;
 
-            for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
+            if (_BoundsMax != __instance.hullSize.max || _BoundsMin != __instance.hullSize.min)
             {
-                oldTurretArmors.Add(__instance.shipTurretArmor[i].barbetteArmor);
-                __instance.shipTurretArmor[i].barbetteArmor = 0f;
+                _BoundsMax = __instance.hullSize.max;
+                _BoundsMin = __instance.hullSize.min;
+                _CachedStats = ShipStatsCalculator.Instance.GetStats(__instance.hull.hullInfo.gameObject, __instance.hullSize, 1f);
             }
+
+            string beamStr = _CachedStats.B.ToString("F2");
+            if (_CachedStats.beamBulge != _CachedStats.B)
+            {
+                beamStr += $" ({_CachedStats.beamBulge:F2} at {_CachedStats.bulgeDepth:F2})";
+            }
+            var secList = new Il2CppSystem.Collections.Generic.List<GameObject>();
+            secList.AddRange(__instance.hull.hullSections);
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {_CachedStats.Lwl:F2}x{beamStr}x{_CachedStats.D:F2}, {secList.Count - 2}s, {_CachedStats.Vd}t. Cb={_CachedStats.Cb:F3}, Cm={_CachedStats.Cm:F3}, Cwp={_CachedStats.Cwp:F3}, Cp={_CachedStats.Cp:F3}, Cvp={_CachedStats.Cvp:F3}. Awp={_CachedStats.Awp:F1}, Am={_CachedStats.Am:F2}");
+
+
+            //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
+            //{
+            //    oldTurretArmors.Add(__instance.shipTurretArmor[i].barbetteArmor);
+            //    __instance.shipTurretArmor[i].barbetteArmor = 0f;
+            //}
 
             //float topweight = 0f;
             //foreach (var p in __instance.parts)
@@ -185,10 +197,10 @@ namespace UADRealism
             //rollPeriod = (float)(0.42 * (double)hull.beamBulges / Math.Sqrt(metacentre));
 
 
-            for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
-                __instance.shipTurretArmor[i].barbetteArmor = oldTurretArmors[i];
+            //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
+            //    __instance.shipTurretArmor[i].barbetteArmor = oldTurretArmors[i];
 
-            oldTurretArmors.Clear();
+            //oldTurretArmors.Clear();
         }
 
         private static float[] turretBarrelCountWeightMults = new float[5];
@@ -246,174 +258,6 @@ namespace UADRealism
             float tech = ship.TechR("armor");
             float weight = armorData.barbetteArmor * thickLerp / 25.4f * weightParam * GetTurretBaseWeight(ship, data) * tech;
             return weight;
-        }
-
-        private static Camera _Camera;
-
-        private static void SetLayerRecursive(GameObject obj, int layer)
-        {
-            obj.SetLayer(layer);
-            for (int i = 0; i < obj.transform.childCount; ++i)
-                SetLayerRecursive(obj.transform.GetChild(i).gameObject, layer);
-        }
-
-        enum ShipViewDir
-        {
-            Side,
-            Front
-        }
-
-        const int _TextureRes = 512;
-        private static void GetLengthBeam(Ship ship, out float lwl, out float beam)
-        {
-            lwl = -1f;
-            beam = -1f;
-
-            if (ship == null || ship.hull == null || ship.hull.hullInfo == null)
-                return;
-
-            var cameraLayerInt = LayerMask.NameToLayer("VisibilityFog_unused");
-
-            if (_Camera == null)
-            {
-                var camGO = new GameObject("OrthoCamera");
-                _Camera = camGO.AddComponent<Camera>();
-                UnityEngine.Object.DontDestroyOnLoad(camGO);
-
-                _Camera.clearFlags = CameraClearFlags.SolidColor;
-                _Camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
-                _Camera.orthographic = true;
-                _Camera.orthographicSize = 1f;
-                _Camera.aspect = 1f;
-                _Camera.nearClipPlane = 0.1f;
-                _Camera.farClipPlane = 500f;
-                _Camera.enabled = false;
-
-                _Camera.cullingMask = 1 << cameraLayerInt;
-            }
-
-            var renderTexture = RenderTexture.GetTemporary(_TextureRes, _TextureRes, 16, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default);
-            var tempTex = new Texture2D(_TextureRes, _TextureRes, TextureFormat.ARGB32, false);
-            _Camera.targetTexture = renderTexture;
-
-            var newShipHullInfo = (HullInfo)GameObject.Instantiate(ship.hull.hullInfo, Vector3.zero, Quaternion.identity);
-            var newGO = newShipHullInfo.gameObject;
-            newGO.name += "dimension getter";
-
-            foreach (var mb in newGO.GetComponentsInChildren<MonoBehaviour>())
-                mb.enabled = false;
-            foreach (var coll in newGO.GetComponentsInChildren<Collider>())
-                coll.enabled = false;
-
-            SetLayerRecursive(newGO, cameraLayerInt);
-            var children = newGO.GetChildren();
-            for (int i = children.Count; i-- > 0;)
-            {
-                if (children[i] == null)
-                    continue;
-                if (children[i].name.Contains("Decor"))
-                    GameObject.Destroy(children[i]);
-            }
-
-            Bounds bounds = new Bounds();
-            bool boundsSet = false;
-
-            Renderer[] rs = newGO.GetComponentsInChildren<Renderer>();
-            for (int i = rs.Length; i-- > 0;)
-            {
-                Renderer mr = rs[i];
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                mr.receiveShadows = false;
-
-                // TODO: Change material?
-
-                if (boundsSet)
-                {
-                    bounds.Encapsulate(mr.bounds);
-                }
-                else
-                {
-                    bounds = mr.bounds;
-                    boundsSet = true;
-                }
-            }
-
-            float ySize = ship.hullSize.min.y;
-            for (ShipViewDir view = ShipViewDir.Side; view <= ShipViewDir.Front; view++)
-            {
-                // updates the aero camera to part bounds
-                float size = Mathf.Max(-ySize, view == ShipViewDir.Side ? bounds.size.z : bounds.size.x);
-                float depth = view == ShipViewDir.Side ? bounds.size.x : bounds.size.z;
-                Vector3 dir = view == ShipViewDir.Side ? Vector3.left : Vector3.back;
-                float yPos = -size * 0.5f;
-                _Camera.transform.position = view == ShipViewDir.Side ? new Vector3(bounds.max.x + 1f, yPos, bounds.center.z) : new Vector3(bounds.center.x, yPos, bounds.max.z + 1f);
-                _Camera.transform.rotation = Quaternion.LookRotation(dir);
-                _Camera.orthographicSize = size * 0.5f;
-                _Camera.nearClipPlane = 0f;
-                _Camera.farClipPlane = depth + 1f;
-
-                _Camera.Render();
-                RenderTexture.active = renderTexture;
-                tempTex.ReadPixels(new Rect(0, 0, _TextureRes, _TextureRes), 0, 0);
-                tempTex.Apply(false, false);
-                RenderTexture.active = null;
-                //byte[] bytes = tempTex.EncodeToPNG();
-                //System.IO.File.WriteAllBytes("DragTextures/" + partPrefab.partInfo.name + "_" + positionNames[j] + "_" + ((DragCube.DragFace)i).ToString() + ".png", bytes);
-
-                Color32[] pixels = tempTex.GetPixels32();
-                int pxCount = 0;
-                int row = 0;
-                for (row = _TextureRes - 1; row >= 0; --row)
-                {
-                    for (int i = 0; i < _TextureRes; ++i)
-                    {
-                        if (pixels[row * _TextureRes + i].a != 0f)
-                            ++pxCount;
-                    }
-                    // Sanity check, just in case there's some garbage here
-                    if (pxCount > _TextureRes / 4)
-                        break;
-                }
-                float dimension = pxCount * (size / _TextureRes);
-                if (view == ShipViewDir.Front)
-                    beam = dimension;
-                else
-                    lwl = dimension;
-
-                //Melon<UADRealismMod>.Logger.Msg($"For direction {view.ToString()}, pixel count at row {row} is {pxCount} so dimension = {dimension:F2}");
-
-                //string filePath = "C:\\temp\\112\\screenshot_" + newGO.name + "_" + view.ToString() + ".png";
-                //var bytes = ImageConversion.EncodeToPNG(tempTex);
-                //Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
-            }
-
-            GameObject.Destroy(tempTex);
-            GameObject.Destroy(newGO);
-            RenderTexture.ReleaseTemporary(renderTexture);
-        }
-
-        private static float CalcBlockCoefficient(Ship ship)
-        {
-            if (ship.hullSize == null
-                || ship.hullSize.size.x == 0f
-                || ship.hullSize.size.y == 0f
-                || ship.hullSize.size.z == 0f
-                || ship.hullSize.min.y == 0f)
-                return -1f;
-
-
-            if (_BoundsMax != ship.hullSize.max || _BoundsMin != ship.hullSize.min)
-            {
-                GetLengthBeam(ship, out _CachedDimensions.z, out _CachedDimensions.x);
-                _CachedDimensions.y = -ship.hullSize.min.y;
-            }
-
-            float displacement = ship.tonnage;
-
-            float volumeBlock = _CachedDimensions.z * _CachedDimensions.x * _CachedDimensions.y;
-            float Cb = displacement / (volumeBlock * 1.024f); // assuem 1024kg/m^3 for salt water
-
-            return Cb;
         }
 
         [HarmonyPostfix]
