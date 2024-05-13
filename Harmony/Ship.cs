@@ -64,18 +64,15 @@ namespace UADRealism
             __state.beam = __instance.beam;
             __state.tonnage = __instance.tonnage;
 
-            //ShipStats.GetSectionsAndBeamForLB(__instance.beam, data, out float newBeam, out int secsToUse);
-            //__instance.beam = newBeam;
-            float newBeam = __instance.beam;
+            // TODO: Add a new bar
             int secsToUse = Mathf.RoundToInt(Mathf.Lerp(data.sectionsMin, data.sectionsMax, __instance.CrewTrainingAmount * 0.01f));
 
             if (secsToUse != __instance.hull.middles.Count)
                 updateSections = true;
 
             //use unscaled tonnage; draught change applies to both sides of ratio
-            float tonnage = Mathf.Clamp(__instance.tonnage, data.tonnageMin, data.tonnageMax);
-            float scaleFactor = ShipStats.GetHullScaleFactor(tonnage, hData._statsSet[secsToUse].Vd, newBeam) / __instance.hull.model.transform.localScale.z;
-            Debug.Log($"{hData._key}: tonnage desired: {tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). New beam {newBeam:F2}. Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
+            float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd) / __instance.hull.model.transform.localScale.z;
+            Debug.Log($"{hData._key}: tonnage desired: {__instance.tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
             __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);

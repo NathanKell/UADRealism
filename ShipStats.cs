@@ -99,6 +99,11 @@ namespace UADRealism
 
         public static System.Collections.IEnumerator ProcessGameData()
         {
+            // Wait to get past regular loading
+            yield return null;
+            yield return null;
+            yield return null;
+
             var gameData = G.GameData;
             Il2CppSystem.Diagnostics.Stopwatch sw = new Il2CppSystem.Diagnostics.Stopwatch();
             sw.Start();
@@ -115,6 +120,7 @@ namespace UADRealism
                 // Just apply beam delta to tonnage directly since we're going to use length/beam ratios
                 data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef);
                 data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef) * 1.2f;
+                // Don't bother to change based on draught, though we will do likewise.
 
                 //data.sectionsMin = (int)(data.sectionsMin * 0.75f);
                 data.sectionsMin = 0;
@@ -124,11 +130,7 @@ namespace UADRealism
                 data.draughtMax = 50f;
 
                 data.beamCoef = 0f;
-
-                // Draught is a linear scale to displacement at a given length/beam
-                // TODO: Do we want to allow implicitly different block coefficients based on draught, as would
-                // be true in reality?
-                data.draughtCoef = 1f;
+                data.draughtCoef = 0f;
 
 
                 // Now get var/section data
@@ -160,7 +162,7 @@ namespace UADRealism
                 var hData = GetData(data);
                 if (hData == null)
                 {
-                    Melon<UADRealismMod>.Logger.BigError($"Unable to find data for partdata {data.name} of model {data.model} with key {hData._key}");
+                    //Melon<UADRealismMod>.Logger.BigError($"Unable to find data for partdata {data.name} of model {data.model} with key {hData._key}");
                     continue;
                 }
                 var modelName = GetHullModelKey(data);
@@ -171,35 +173,12 @@ namespace UADRealism
 
                     float tVal = i > 0 ? 0.25f : 0;
                     float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
-                    //GetSectionsAndBeamForLB(i == 1 ? data.beamMin : 0, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out var beamScale, out var sections);
-                    //if (i == 0)
-                    //    sections = 0;
-                    //var stats = GetScaledStats(hData, tng, i == 0 ? data.beamMin : beamScale, 0, sections);
                     int sections = i;
                     var stats = GetScaledStats(hData, tng, 0, 0, sections);
                     float shp = GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false);
                     Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0}");
                     ++num;
                 }
-            }
-
-            foreach (var kvp in _HullModelData)
-            {
-                if (!kvp.Value._isDDHull)
-                    continue;
-
-                foreach (var kvpData in gameData.parts)
-                {
-                    if (kvpData.value.type != "hull")
-                        continue;
-
-                    if (GetHullModelKey(kvpData.value) == kvp.Key)
-                    {
-                        _DestoyerHullsPerModel.Add(kvpData.Key);
-                    }
-                }
-                Debug.Log($"Model {kvp.Key} used by: {string.Join(", ", _DestoyerHullsPerModel)}");
-                _DestoyerHullsPerModel.Clear();
             }
 
             var time = sw.Elapsed;
@@ -209,111 +188,31 @@ namespace UADRealism
             G.ui.CompleteLoadingScreen();
         }
 
-        public static void GetSectionsAndBeamForLB(float beam, int minSec, int maxSec, float minBeam, float maxBeam, HullData hData, out float beamScale, out int sections)
-        {
-            if (minSec == maxSec || hData == null)
-            {
-                beamScale = beam;
-                sections = minSec;
-                //Melon<UADRealismMod>.Logger.Msg($"For {hData._data.model}, sections always {minSec}");
-                return;
-            }
-
-            float minSecLB = hData._statsSet[minSec].Lwl / hData._statsSet[minSec].B;
-            float maxSecLB = hData._statsSet[maxSec].Lwl / hData._statsSet[maxSec].B;
-            float minLB = minSecLB / (maxBeam * 0.01f + 1f);
-            float maxLB = maxSecLB / (minBeam * 0.01f + 1f);
-
-            float lbT = Mathf.InverseLerp(maxBeam, minBeam, beam);
-            float lb = Mathf.Lerp(minLB, maxLB, lbT);
-            if (lb <= minSecLB)
-            {
-                sections = minSec;
-            }
-            else if (lb >= maxSecLB)
-            {
-                sections = maxSec;
-            }
-            else
-            {
-                // Estimate the section to use
-                sections = Mathf.RoundToInt(Util.Remap(lbT, minSecLB, maxSecLB, minSec, maxSec, true));
-                float lwlDesired = hData._statsSet[sections].B * lb;
-
-                // now find section
-                sections = minSec;
-                while (sections != maxSec && lwlDesired > hData._statsSet[sections].Lwl)
-                    ++sections;
-                float ratio = lwlDesired / hData._statsSet[sections].Lwl;
-
-                // see if the bordering options are closer to 0 beam change
-                if (ratio > 1f)
-                {
-                    if (sections < maxSec)
-                    {
-                        if (hData._statsSet[sections + 1].Lwl / lwlDesired < ratio)
-                            ++sections;
-                    }
-                }
-                else
-                {
-                    if (sections > minSec)
-                    {
-                        if (hData._statsSet[sections - 1].Lwl / lwlDesired > ratio)
-                            --sections;
-                    }
-                }
-            }
-
-            float lbAtSec = hData._statsSet[sections].Lwl / hData._statsSet[sections].B;
-            beamScale = (lbAtSec / lb - 1f) * 100f;
-
-            //float lwl = hData._statsSet[sections].Lwl;
-            //float bb = hData._statsSet[sections].B * (beamScale * 0.01f + 1f);
-            //float calcLB = lwl / bb;
-            //Melon<UADRealismMod>.Logger.Msg($"For {hData._data.model}, input {beam:F2} ({lbT:F2}). LB {minSecLB:F2}->{maxSecLB:F2}/{minLB:F2}->{maxLB:F2}.\nDesired {lb:F2}. B={beamScale:F2} S={sections} -> {calcLB:F2}");
-        }
-
-        public static HullData GetSectionsAndBeamForLB(float beam, PartData data, out float beamScale, out int sections)
-        {
-            var hData = GetData(data);
-            if (hData == null)
-            {
-                beamScale = beam;
-                sections = (data.sectionsMin + data.sectionsMax) / 2;
-                return null;
-            }
-
-            GetSectionsAndBeamForLB(beam, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out beamScale, out sections);
-            return hData;
-        }
-
         public static HullStats GetScaledStats(Ship ship)
         {
-            var hData = GetData(ship); //GetSectionsAndBeamForLB(ship.beam, ship.hull.data, out float beamScale, out int sections);
+            var hData = GetData(ship);
             if (hData == null)
                 return new HullStats();
 
-            //return GetScaledStats(hData, ship.tonnage, beamScale, ship.draught, sections);
             int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.CrewTrainingAmount * 0.01f));
             return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, sec);
         }
 
-        public static HullStats GetScaledStats(HullData hData, float tonnage, float beamScale, float draught, int sections)
+        public static HullStats GetScaledStats(HullData hData, float tonnage, float beamPct, float draughtPct, int sections)
         {
             var newStats = hData._statsSet[sections];
             //Melon<UADRealismMod>.Logger.Msg($"Pre: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t.");
 
-            float drMult = draught * 0.01f + 1f;
-            float bmMult = beamScale * 0.01f + 1f;
-            float linearScale = GetHullScaleFactor(tonnage, newStats.Vd, beamScale);
+            float drMult = draughtPct * 0.01f + 1f;
+            float bmMult = beamPct * 0.01f + 1f;
+            float linearScale = GetHullScaleFactor(tonnage, newStats.Vd, beamPct, draughtPct);
             newStats.B *= bmMult * linearScale;
             newStats.beamBulge *= bmMult * linearScale;
             newStats.bulgeDepth *= drMult * linearScale;
             newStats.Lwl *= linearScale;
             newStats.T *= drMult * linearScale;
-            float volMult = drMult * bmMult * linearScale * linearScale * linearScale; // should be the same as ship.Tonnage() * TonnesToCubicMetersWaters 
-            newStats.Vd *= volMult;
+            float volMult = drMult * bmMult * linearScale * linearScale * linearScale;
+            newStats.Vd *= volMult; // Vd should be the same as ship.Tonnage() * TonnesToCubicMetersWater
             newStats.Cv *= volMult;
             newStats.bowLength *= linearScale;
             newStats.scaleFactor = linearScale;
@@ -323,14 +222,14 @@ namespace UADRealism
             return newStats;
         }
 
-        public static float GetHullScaleFactor(Ship ship, float Vd, float beamScale)
+        public static float GetHullScaleFactor(Ship ship, float Vd)
         {
-            return GetHullScaleFactor(ship.tonnage, Vd, beamScale);
+            return GetHullScaleFactor(ship.tonnage, Vd, ship.beam, ship.draught);
         }
-        public static float GetHullScaleFactor(float tonnage, float Vd, float beamScale)
+        public static float GetHullScaleFactor(float tonnage, float Vd, float beamPct, float draughtPct)
         {
             float desiredVol = tonnage * TonnesToCubicMetersWater;
-            return Mathf.Pow(desiredVol / (Vd * (beamScale * 0.01f + 1f)), 1f / 3f);
+            return Mathf.Pow(desiredVol / (Vd * (1f + beamPct * 0.01f) * (1f + draughtPct * 0.01f)), 1f / 3f);
         }
 
         // water at 15C, standard salinity

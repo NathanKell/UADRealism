@@ -240,13 +240,13 @@ namespace UADRealism
         private static readonly List<Bounds> _sectionBounds = new List<Bounds>();
 
         private static readonly int _CameraLayerInt = LayerMask.NameToLayer("VisibilityFog_unused");
-        private const int _ResSideFront = 512;
+        private const int _TextureRes = 512;
 
         private Camera _camera;
         private RenderTexture _renderTexture;
         private Texture2D _texture;
-        private short[] _beamPixelCounts = new short[_ResSideFront];
-        private float[] _displacementsPerPx = new float[_ResSideFront];
+        private short[] _beamPixelCounts = new short[_TextureRes];
+        private float[] _displacementsPerPx = new float[_TextureRes];
 
         public ShipStatsCalculator(IntPtr ptr) : base(ptr) { }
 
@@ -255,8 +255,8 @@ namespace UADRealism
             if (_Instance != null)
                 Destroy(_Instance);
 
-            _renderTexture = new RenderTexture(_ResSideFront, _ResSideFront, 16, RenderTextureFormat.ARGB32);
-            _texture = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
+            _renderTexture = new RenderTexture(_TextureRes, _TextureRes, 16, RenderTextureFormat.ARGB32);
+            _texture = new Texture2D(_TextureRes, _TextureRes, TextureFormat.ARGB32, false);
 
             _camera = gameObject.AddComponent<Camera>();
             _camera.clearFlags = CameraClearFlags.SolidColor;
@@ -298,21 +298,12 @@ namespace UADRealism
 
             RenderSetup.SetForRender(obj);
 
-            //var p = obj.GetParent().GetComponent<Part>();
-            //if (p != null)
-            //{
-            //    //if (p.data.model == "atlanta_hull_b_var")
-
-            //    //if (!Patch_GameData._WrittenModels.Contains(ShipStats.GetHullModelKey(p.data) + "_"))
-                
-            //}
-
             float Awp = 0f;
             float Vd = 0f;
             int maxBeamPx = 0;
-            int midFwd = _ResSideFront;
+            int midFwd = _TextureRes;
             int midAft = 0;
-            int bowRow = _ResSideFront;
+            int bowRow = _TextureRes;
             int sternRow = 0;
             bool hasBulge = false;
             int sternCol = 0;
@@ -323,7 +314,6 @@ namespace UADRealism
             int sec = part == null || part.middles == null ? 0 : part.middles.Count;
 
             float draught = -bounds.min.y;
-            stats.T = draught;
             _camera.targetTexture = _renderTexture;
             RenderTexture.active = _renderTexture;
             for (ShipViewDir view = (ShipViewDir)0; view < ShipViewDir.MAX; ++view)
@@ -334,14 +324,6 @@ namespace UADRealism
 
                 switch (view)
                 {
-                    default:
-                    case ShipViewDir.Side:
-                        size = Mathf.Max(draught, bounds.size.z);
-                        depth = bounds.size.x * 0.5f;
-                        dir = Vector3.left;
-                        _camera.transform.position = new Vector3(bounds.max.x + 1f, -size * 0.5f, bounds.center.z);
-                        break;
-
                     case ShipViewDir.Front:
                         size = Mathf.Max(draught, bounds.size.x);
                         //depth = bounds.size.z - GetSectionBounds(part.stern, null).size.z + 5f;
@@ -356,6 +338,14 @@ namespace UADRealism
                         depth = draught;
                         _camera.transform.position = new Vector3(bounds.center.x, bounds.min.y - 1f, bounds.center.z);
                         break;
+
+                    default:
+                    case ShipViewDir.Side:
+                        size = Mathf.Max(draught, bounds.size.z);
+                        depth = bounds.size.x * 0.5f;
+                        dir = Vector3.left;
+                        _camera.transform.position = new Vector3(bounds.max.x + 1f, -size * 0.5f, bounds.center.z);
+                        break;
                 }
                 _camera.transform.rotation = Quaternion.LookRotation(dir);
                 _camera.orthographicSize = size * 0.5f;
@@ -365,7 +355,7 @@ namespace UADRealism
                 RenderSettings.fogEndDistance = depth;
 
                 _camera.Render();
-                _texture.ReadPixels(new Rect(0, 0, _ResSideFront, _ResSideFront), 0, 0);
+                _texture.ReadPixels(new Rect(0, 0, _TextureRes, _TextureRes), 0, 0);
 
                 // It would be very nice to not alloc a full mb here. But
                 // il2cpp/harmony doesn't support GetRawTextureData<>,
@@ -374,17 +364,17 @@ namespace UADRealism
                 int waterlinePixels = 0;
                 int row;
 
-                float sizePerPixel = size / _ResSideFront;
+                float sizePerPixel = size / _TextureRes;
                 switch (view)
                 {
                     case ShipViewDir.Front:
-                        int firstRow = _ResSideFront - 1;
+                        int firstRow = _TextureRes - 1;
                         for (row = firstRow; row >= 0; --row)
                         {
                             waterlinePixels = 0;
-                            for (int col = 0; col < _ResSideFront; ++col)
+                            for (int col = 0; col < _TextureRes; ++col)
                             {
-                                if (pixels[row * _ResSideFront + col].a == 0)
+                                if (pixels[row * _TextureRes + col].a == 0)
                                     continue;
 
                                 ++waterlinePixels;
@@ -401,18 +391,18 @@ namespace UADRealism
 
                         int maxWidthRow = row;
                         int beamBulgePixels = waterlinePixels;
-                        const int midPoint = _ResSideFront / 2 + 1;
+                        const int midPoint = _TextureRes / 2 + 1;
                         int lastRow = row;
                         for (row = firstRow - 1; row >= 0; --row)
                         {
                             int pixelsInCurrentRow = 0;
-                            for (int col = 0; col < _ResSideFront; ++col)
+                            for (int col = 0; col < _TextureRes; ++col)
                             {
                                 // Check if we're below hull bottom
                                 if (col > midPoint && pixelsInCurrentRow == 0)
                                     break;
 
-                                if (pixels[row * _ResSideFront + col].a == 0)
+                                if (pixels[row * _TextureRes + col].a == 0)
                                     continue;
 
                                 ++pixelsInCurrentRow;
@@ -432,8 +422,14 @@ namespace UADRealism
                             }
                         }
                         stats.beamBulge = beamBulgePixels * sizePerPixel;
-                        stats.bulgeDepth = (_ResSideFront - (maxWidthRow + 1)) * sizePerPixel;
-                        //float Tcalc = (firstRow - lastRow + 1) * sizePerPixel;
+                        stats.bulgeDepth = (_TextureRes - (maxWidthRow + 1)) * sizePerPixel;
+                        // Verify draught. It's possible something might have messed up the bounds (like the props).
+                        float draughtCalc = (firstRow - lastRow + 1) * sizePerPixel;
+                        if (draughtCalc < 0.99f * draught || draughtCalc > 1.01f * draught)
+                            draught = draughtCalc;
+
+                        stats.T = draught;
+
                         float Am = totalMidshipsPixels * sizePerPixel * sizePerPixel;
 
                         // Midship coefficient
@@ -459,18 +455,18 @@ namespace UADRealism
                         // We'll also record the number of beam pixels at each row.
                         int lastNonPropCol = -1;
                         
-                        for (row = 0; row < _ResSideFront; ++row)
+                        for (row = 0; row < _TextureRes; ++row)
                         {
                             short numPx = 0;
-                            int sideCol = _ResSideFront - row - 1;
-                            for (int col = 0; col < _ResSideFront; ++col)
+                            int sideCol = _TextureRes - row - 1;
+                            for (int col = 0; col < _TextureRes; ++col)
                             {
-                                if (pixels[row * _ResSideFront + col].a == 0)
+                                if (pixels[row * _TextureRes + col].a == 0)
                                 {
                                     // Account for the case where there's prop shafts
                                     // outside the hull. Discard pixels if on left side and
                                     // we hit a gap; stop when we hit a gap if on right side.
-                                    if (col < _ResSideFront / 2 - 1)
+                                    if (col < _TextureRes / 2 - 1)
                                     {
                                         if (numPx > 0)
                                             numPx = 0;
@@ -487,7 +483,7 @@ namespace UADRealism
                             }
 
                             // Prop detection
-                            if (row > _ResSideFront * 3 / 4)
+                            if (row > _TextureRes * 3 / 4)
                             {
                                 int lastSideCol = sideCol + 1;
                                 short lastPx = _beamPixelCounts[lastSideCol];
@@ -570,9 +566,9 @@ namespace UADRealism
 
                         // Detect transom
                         float minTransomWidth = stats.beamBulge * 0.25f; // otherwise can detect small cruiser sterns
-                        sternCol = _ResSideFront - sternRow - 1;
+                        sternCol = _TextureRes - sternRow - 1;
 
-                        for (int col = -1; col < _ResSideFront * 1 / 5; ++col)
+                        for (int col = -1; col < _TextureRes * 1 / 5; ++col)
                         {
                             int curCol = sternCol + col;
                             int curPx = curCol < 0 ? 0 : _beamPixelCounts[curCol];
@@ -633,13 +629,13 @@ namespace UADRealism
                         // below-waterline aft extensions, so we
                         // need to re-find these.
                         int bowCol = 0;
-                        sternCol = _ResSideFront;
-                        for (row = _ResSideFront - 1; row >= 0; --row)
+                        sternCol = _TextureRes;
+                        for (row = _TextureRes - 1; row >= 0; --row)
                         {
                             waterlinePixels = 0;
-                            for (int col = 0; col < _ResSideFront; ++col)
+                            for (int col = 0; col < _TextureRes; ++col)
                             {
-                                if (pixels[row * _ResSideFront + col].a == 0)
+                                if (pixels[row * _TextureRes + col].a == 0)
                                     continue;
 
                                 ++waterlinePixels;
@@ -658,8 +654,8 @@ namespace UADRealism
                         float bowCm = Mathf.Min(0.55f, stats.Cm);
                         int startCol = -1;
                         int lastCol = -1;
-                        midFwd = _ResSideFront - midFwd - 1;
-                        midAft = _ResSideFront - midAft - 1;
+                        midFwd = _TextureRes - midFwd - 1;
+                        midAft = _TextureRes - midAft - 1;
                         int maxDepthPx = 0;
 
                         int bulgeFirst = Math.Min(midAft, Mathf.RoundToInt(waterlinePixels * 0.333f));
@@ -667,7 +663,7 @@ namespace UADRealism
                         float nonBulgeMult = hasBulge ? stats.B / stats.beamBulge : 1f;
                         int lastDepth = 0;
                         // go bow->stern
-                        for (int col = _ResSideFront - 1; col >= 0; --col)
+                        for (int col = _TextureRes - 1; col >= 0; --col)
                         {
                             bool hasPx = false;
                             float bowT = bowCol == midFwd ? (col == bowCol ? 0f : 1f) : ((float)(bowCol - col) / (bowCol - midFwd));
@@ -677,23 +673,23 @@ namespace UADRealism
                             if (hasBulge && col >= bulgeFirst && col <= bulgeLast)
                                 dispPerPx *= nonBulgeMult;
 
-                            bool firstRowFog = IsFogged(pixels[(_ResSideFront - 1) * _ResSideFront + col]);
+                            bool firstRowFog = IsFogged(pixels[(_TextureRes - 1) * _TextureRes + col]);
                             int numFog = 0;
                             int startRow = -1;
                             // Note: we don't have to cover the case where we don't hit an empty pixel
                             // before the end of the column, because we know the ship is going to be longer
                             // (wider in columns) than it is deep (tall in rows), and this is a square ortho
                             // projection.
-                            for (int r = _ResSideFront - 1; r >= 0; --r)
+                            for (int r = _TextureRes - 1; r >= 0; --r)
                             {
-                                var px = pixels[r * _ResSideFront + col];
+                                var px = pixels[r * _TextureRes + col];
                                 if (hasPx)
                                 {
                                     // Stop when we hit a gap (no holes in the hull! Otherwise we'll count
                                     // prop shafts). If we're aft of midships, we also keep track of the last depth
                                     // and stop if we go beyond it. This is to try not to count rudders. Note we can't
                                     // just use pure midships, since the max depth might be slightly aft of that.
-                                    bool depthLimit = col < _ResSideFront * 2 / 3 && r < lastDepth;
+                                    bool depthLimit = col < _TextureRes * 2 / 3 && r < lastDepth;
 
                                     bool isFogged = IsFogged(px);
                                     // If we're going back deeper and we're aft, or it's an empty pixel (a hole, or below the hull),
@@ -704,7 +700,7 @@ namespace UADRealism
                                     // TODO: Do the same thing for rudders we do for props in bottom view: if we go below last depth,
                                     // instead of just continuing at last depth, continue the _slope_.
                                     //if (depthLimit || px.a == 0 || (!firstRowRed && col < _ResSideFront / 2 && IsFogged(px) && (r == 0 || pixels[(r - 1) * _ResSideFront + col].a > 0)))
-                                    if (depthLimit || px.a == 0 || (!firstRowFog && col < _ResSideFront / 2 && numFog > 0))
+                                    if (depthLimit || px.a == 0 || (!firstRowFog && col < _TextureRes / 2 && numFog > 0))
                                     {
                                         Vd += (startRow - r) * dispPerPx;
                                         if (!depthLimit)
@@ -726,7 +722,7 @@ namespace UADRealism
                                 hasPx = true;
                                 if (startRow < 0)
                                     startRow = r;
-                                int curDepth = _ResSideFront - r;
+                                int curDepth = _TextureRes - r;
                                 if (curDepth > maxDepthPx)
                                     maxDepthPx = curDepth;
                             }
@@ -743,7 +739,7 @@ namespace UADRealism
                             // Handle transom
                             if (col == transomCol)
                             {
-                                stats.Catr = hasPx ? (_beamPixelCounts[col] * (_ResSideFront - lastDepth)) / (float)(maxBeamPx * maxDepthPx) : 0;
+                                stats.Catr = hasPx ? (_beamPixelCounts[col] * (_TextureRes - lastDepth)) / (float)(maxBeamPx * maxDepthPx) : 0;
                                 //Debug.Log($"Transom col {transomCol}, {_beamPixelCounts[col]}x{(_ResSideFront - lastDepth)} / midships {maxBeamPx}x{maxDepthPx} = {stats.Catr:F3}");
                             }
                         }
@@ -932,6 +928,29 @@ namespace UADRealism
                     stats.Cwp = Mathf.Pow(stats.Cwp, powCwp);
                     stats.Cp = stats.Cb / stats.Cm;
                     stats.Cvp = stats.Cb / stats.Cwp;
+                }
+
+                // Correct for really weird high-draught hull models
+                // (and, in Monitor's case, too low draught)
+                float BdivT = stats.B / stats.T;
+                float tMult = 1f;
+                if (BdivT < 2.25f)
+                {
+                    if (BdivT < 1.6f)
+                        tMult = (1f / 2f);
+                    else
+                        tMult = (1f / 1.5f);
+                }
+                else if(BdivT > 4f)
+                {
+                    tMult = (1f / 0.8f);
+                }
+                if (tMult != 1f)
+                {
+                    stats.bulgeDepth *= tMult;
+                    stats.Cv *= tMult;
+                    stats.T *= tMult;
+                    stats.Vd *= tMult;
                 }
 
                 hData._statsSet[secCount] = stats;
