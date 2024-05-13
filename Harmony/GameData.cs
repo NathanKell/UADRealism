@@ -78,10 +78,10 @@ namespace UADRealism
                 var stats = hData._statsSet[secNominal];
                 float oldScale = data.scale;
                 float oldCube = oldScale * oldScale * oldScale;
-                float ratio = tng / stats.Vd;
+                float ratio = tng / (stats.Vd * ShipStats.TonnesToCubicMetersWater);
                 float newScale = Mathf.Pow(ratio, 1f / 3f);
                 data.scale = newScale;
-                Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{secNominal},{oldScale:F3}x,{tng:F0}t,{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{(stats.Vd * oldCube):F0}t,{newScale:F3}x,L={(stats.Lwl * newScale):F2},B={(stats.B * newScale):F2},BB={(stats.beamBulge * newScale):F2},T={(stats.T * newScale):F2},Cb={stats.Cb:F3},Cm={stats.Cm:F3},Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3},Cvp={stats.Cvp:F3}");
+                Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{secNominal},{oldScale:F3}x,{tng:F0}t,{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{(stats.Vd * oldCube * ShipStats.TonnesToCubicMetersWater):F0}t,{newScale:F3}x,L={(stats.Lwl * newScale):F2},B={(stats.B * newScale):F2},BB={(stats.beamBulge * newScale):F2},T={(stats.T * newScale):F2},Cb={stats.Cb:F3},Cm={stats.Cm:F3},Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3},Cvp={stats.Cvp:F3}");
                 //double S_hm = stats.Lwl * (stats.beamBulge + 2d * stats.T) * Math.Sqrt(stats.Cm) * (0.453d + 0.4425d * stats.Cb - 0.2862d * stats.Cm + 0.003467d * stats.beamBulge / stats.T + 0.3696d * stats.Cwp);// + 19.65 * A_bulb_at_stem / Cb
                 //double S_dm = 1.7d * stats.Lwl * stats.T + stats.Vd / stats.T;
                 //Melon<UADRealismMod>.Logger.Msg($",{data.name},{data.model},{data.nameUi},{S_hm:F0},{S_dm:F0},{(S_hm/S_dm):P0}");

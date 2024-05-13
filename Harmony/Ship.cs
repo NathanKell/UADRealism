@@ -69,7 +69,7 @@ namespace UADRealism
 
             //use unscaled tonnage; draught change applies to both sides of ratio
             float tonnage = Mathf.Clamp(__instance.tonnage, data.tonnageMin, data.tonnageMax);
-            float scaleFactor = ShipStats.GetHullScaleFactor(__instance, (hData._statsSet[secsToUse].Vd), newBeam) / __instance.hull.model.transform.localScale.z;
+            float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd, newBeam) / __instance.hull.model.transform.localScale.z;
             Debug.Log($"{hData._key}: tonnage desired: {tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). New beam {newBeam:F2}. Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
             __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
@@ -211,7 +211,7 @@ namespace UADRealism
                 beamStr += $" ({stats.beamBulge:F2} at {stats.bulgeDepth:F2})";
             }
 
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}({coSharp:F3}), Cvp={stats.Cvp:F3}. Awp={stats.Awp:F1}, Am={stats.Am:F2}. {SHP:N0}SHP (or {springSharpSHP:N0}) for {(__instance.speedMax/0.5144444f):F1}kn");
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.TonnesToCubicMetersWater):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}({coSharp:F3}), Cvp={stats.Cvp:F3}. {SHP:N0}SHP (or {springSharpSHP:N0}) for {(__instance.speedMax/0.5144444f):F1}kn");
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)

@@ -23,8 +23,6 @@ namespace UADRealism
         public float T;
         public float beamBulge;
         public float bulgeDepth;
-        public float Awp;
-        public float Am;
         public float Vd;
         public float Cb;
         public float Cm;
@@ -32,9 +30,9 @@ namespace UADRealism
         public float Cp;
         public float Cvp;
         public float iE;
-        public float LR;
+        public float LrPct;
         public float bowLength;
-        public float LCB;
+        public float lcbPct;
         public float Catr;
     }
 
@@ -172,40 +170,39 @@ namespace UADRealism
                 return new HullStats();
 
             var newStats = hData._statsSet[sections];
-            //Melon<UADRealismMod>.Logger.Msg($"Pre: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t. Awp={newStats.Awp:F1}, Am={newStats.Am:F2}");
+            //Melon<UADRealismMod>.Logger.Msg($"Pre: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t.");
 
             float drMult = ship.draught * 0.01f + 1f;
             float bmMult = beamScale * 0.01f + 1f;
             float linearScale = GetHullScaleFactor(ship, newStats.Vd, beamScale);
-            newStats.Am *= drMult * bmMult * linearScale * linearScale;
-            newStats.Awp *= bmMult * linearScale * linearScale;
             newStats.B *= bmMult * linearScale;
             newStats.beamBulge *= bmMult * linearScale;
             newStats.bulgeDepth *= drMult * linearScale;
             newStats.Lwl *= linearScale;
             newStats.T *= drMult * linearScale;
-            newStats.Vd *= drMult * bmMult * linearScale * linearScale * linearScale; // should be the same as ship.Tonnage()
+            newStats.Vd *= drMult * bmMult * linearScale * linearScale * linearScale; // should be the same as ship.Tonnage() * TonnesToCubicMetersWaters
 
-            //Melon<UADRealismMod>.Logger.Msg($"Post with {linearScale:F3}x, B={bmMult:F3},T={drMult:F3}: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t. Awp={newStats.Awp:F1}, Am={newStats.Am:F2}");
+            //Melon<UADRealismMod>.Logger.Msg($"Post with {linearScale:F3}x, B={bmMult:F3},T={drMult:F3}: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t.");
 
             return newStats;
         }
 
         public static float GetHullScaleFactor(Ship ship, float Vd, float beamScale)
         {
-            float tonnage = Mathf.Clamp(ship.tonnage, ship.hull.data.tonnageMin, ship.hull.data.tonnageMax);
-            return Mathf.Pow(tonnage / (Vd * (beamScale * 0.01f + 1f)), 1f / 3f);
+            float desiredVol = Mathf.Clamp(ship.tonnage, ship.hull.data.tonnageMin, ship.hull.data.tonnageMax) * TonnesToCubicMetersWater;
+            return Mathf.Pow(desiredVol / (Vd * (beamScale * 0.01f + 1f)), 1f / 3f);
         }
+
+        // water at 15C, standard salinity
+        public const double WaterDensity = 1026;
+        public const float TonnesToCubicMetersWater = (float)(1d / (WaterDensity * 0.001d));
+        public const double WaterKinematicViscosity = 1.1892e-6d;
 
         public static float GetSHPRequired(Ship ship, out float springsharpSHP, out double coSharp)
             => GetSHPRequired(GetScaledStats(ship), ship.speedMax, out springsharpSHP, out coSharp);
 
         public static float GetSHPRequired(HullStats stats, float speedMS, out float springsharpSHP, out double coSharp)
         {
-            // water at 15C, standard salinity
-            const double waterDensity = 1026;
-            const double waterKinematicViscosity = 1.1892e-6d;
-
             double L = stats.Lwl;
             double B = stats.B;
             double T = stats.T;
@@ -222,7 +219,7 @@ namespace UADRealism
             double knVel = msVel / 0.514444444d;
 
             // Rf
-            double Re = msVel * L / waterKinematicViscosity;
+            double Re = msVel * L / WaterKinematicViscosity;
             // ITTC-57 line
             double log10Re = Math.Log10(Re);
             double denom = log10Re - 2d;
@@ -242,11 +239,11 @@ namespace UADRealism
             else
                 c12 = 48.2d * Math.Pow(TdivL - 0.02d, 2.078d) + 0.479948d;
 
-            double lcb = (stats.LCB - L * 0.5d) * 100d / L;
+            double lcb = stats.lcbPct * 100d;
             double LR = L * (1d - Cp + 0.06d * Cp * lcb / (4d * Cp - 1d));
             double formFactor = 0.93 + 0.487118 * c14 * Math.Pow(1d / LB, 1.06806) * Math.Pow(TdivL, 0.46106) * Math.Pow(LR / L, 0.121563) * Math.Pow(1d / VolCoeff, 0.36486) * Math.Pow(1 - Cp, -0.604247);
             double S = L * (B + 2d * T) * Math.Sqrt(Cm) * (0.453d + 0.4425d * Cb - 0.2862d * Cm + 0.003467d * BT + 0.3696d * Cw);// + 19.65 * A_bulb_at_stem / Cb
-            double dynPres = 0.5d * waterDensity * msVel * msVel;
+            double dynPres = 0.5d * WaterDensity * msVel * msVel;
             double Rf = Cf * formFactor * dynPres * S;
 
             double c3 = 0d; // 0.56 * Abt^1.5/(B*T*(0.31*sqrt(Abt)+Tp-hB)) where Tp is draught and hB is elevation of center of bulb above keel
@@ -302,14 +299,15 @@ namespace UADRealism
             const double FrBCube = FrBStart * FrBStart * FrBStart;
             double FrA = Math.Min(Fr, FrAEnd);
             double FrB = Math.Max(Fr, FrBStart);
-            double c5_mul_weight = c5 * Vd * waterDensity * 9.80665d;
+            double c5_mul_weight = c5 * Vd * WaterDensity * 9.80665d;
             double RwA = c1 * c2 * c5_mul_weight * Math.Exp(m1 * Math.Pow(FrA, -0.9d) + m4 * Math.Cos(lambda / (FrA * FrA)));
             double RwB = c17 * c2 * c5_mul_weight * Math.Exp(m3 * Math.Pow(FrB, -0.9) + m4 * Math.Cos(lambda / (FrB * FrB)));
             double Rw = ModUtils.Lerp(RwA, RwB, ModUtils.InverseLerp(FrAEnd, FrBStart, Fr));
             // Additional tweaks past Holtrop-Mennen
-            Rw *= (1d + 200d * (VolCoeff - 0.0025d)) * Math.Max(0.1d, ModUtils.InverseLerp(0.25d, 0.4d, Fr));
-            Rw *= Math.Pow(FrB, 3d) / FrBCube;
-            Rw *= 1d + (1.8d * Cm - 1) * ModUtils.InverseLerp(0.25d, 0.3d, Fr);
+            double rwmultVolCoeff = (1d + 200d * (VolCoeff - 0.0025d)) * Math.Max(0.1d, ModUtils.InverseLerp(0.25d, 0.4d, Fr));
+            double rwmultFr = Math.Pow(FrB, 3d) / FrBCube;
+            double rwmultCm = 1d + (1.8d * Cm - 1) * ModUtils.InverseLerp(0.25d, 0.3d, Fr);
+            Rw *= rwmultVolCoeff * rwmultFr * rwmultCm;
 
             double Rt = Rf + Rw + Rtr + Ra;
 
@@ -325,6 +323,10 @@ namespace UADRealism
 
             double Pe = Rt * msVel;
             double Ps = Pe / (eta_R * eta_shaft * eta_o * (1 - t) / (1 - w));
+
+            Debug.Log($"c1={c1:F3}, c2={c2:F3}, c3={c3:F3}, c5={c5:F3}, c6={c6:F3}, c7={c7:F3}, c12={c12:F3}, c14={c14:F3}, c15={c15:F3}, c16={c16:F3}, c17={c17:F3}, lcb={lcb:F1}, LR={LR:F1}, iE={iE:F1}, "
+                + $"Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
+                + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}");
 
             //double S_dm = 1.7d * L * T + Vd / T;
             //double S_hm = S;
@@ -604,6 +606,7 @@ namespace UADRealism
             float Vd = 0f;
             int firstMid = _ResSideFront;
             int bowRow = _ResSideFront;
+            bool hasBulge = false;
 
             float draught = -bounds.min.y;
             stats.T = draught;
@@ -660,7 +663,6 @@ namespace UADRealism
                     default:
                     case ShipViewDir.Side:
                         int bowCol = 0;
-                        int sternCol = -1;
                         for (row = _ResSideFront - 1; row >= 0; --row)
                         {
                             waterlinePixels = 0;
@@ -671,8 +673,6 @@ namespace UADRealism
 
                                 ++waterlinePixels;
                                 bowCol = col;
-                                if (sternCol < 0)
-                                    sternCol = col;
                             }
                             // Sanity check, just in case there's some garbage here
                             if (waterlinePixels > _ResSideFront / 4)
@@ -689,6 +689,7 @@ namespace UADRealism
                         bowRow = _ResSideFront - bowRow - 1;
                         int bulgeFirst = Mathf.RoundToInt(waterlinePixels * 0.333f);
                         int bulgeLast = Mathf.RoundToInt(waterlinePixels * 0.667f);
+                        float bulgeMult = hasBulge ? stats.B / stats.beamBulge : 1f;
                         for (int col = 0; col < _ResSideFront; ++col)
                         {
                             int rowBegin = -1;
@@ -697,7 +698,7 @@ namespace UADRealism
                             // Assume bulge is along 2/3 of the length, so correct beam in re: Cm
                             // (don't worry about the bulge slowly increasing or decreasing in width)
                             if (!(col < bulgeFirst || col > bulgeLast))
-                                dispPerPx *= stats.B / stats.beamBulge;
+                                dispPerPx *= bulgeMult;
 
                             for (int r = 0; r < _ResSideFront; ++r)
                             {
@@ -710,11 +711,11 @@ namespace UADRealism
                                     }
                                     continue;
                                 }
+                                hasPx = true;
 
                                 if (rowBegin < 0)
                                 {
                                     rowBegin = r;
-                                    hasPx = true;
                                 }
                             }
 
@@ -730,20 +731,22 @@ namespace UADRealism
                             }
                             _displacementsPerPx[col] = Vd;
                         }
-                        ++lastCol;
+
                         float halfDisp = Vd * 0.5f;
-                        for (int col = startCol; col < lastCol; ++col)
+                        stats.lcbPct = stats.Lwl * 0.5f;
+                        for (int col = startCol; col <= lastCol; ++col)
                         {
                             float dispAtColEnd = _displacementsPerPx[col];
                             if (dispAtColEnd > halfDisp)
                             {
-                                float sternToCB = col * sizePerPixel;
-                                if (col == 0)
-                                    sternToCB += halfDisp / dispAtColEnd * sizePerPixel;
+                                float sternToCB = col - startCol;
+                                // assume linear change in transverse area, which will be wrong if draught is changing too
+                                if (col == startCol)
+                                    sternToCB += halfDisp / dispAtColEnd;
                                 else
-                                    sternToCB += Mathf.InverseLerp(_displacementsPerPx[col - 1], dispAtColEnd, halfDisp) * sizePerPixel;
+                                    sternToCB += Mathf.InverseLerp(_displacementsPerPx[col - 1], dispAtColEnd, halfDisp);
 
-                                stats.LCB = sternToCB;
+                                stats.lcbPct = (sternToCB * sizePerPixel) / stats.Lwl - 0.5f;
                                 break;
                             }
                         }
@@ -805,30 +808,24 @@ namespace UADRealism
                         stats.beamBulge = beamBulgePixels * sizePerPixel;
                         stats.bulgeDepth = (_ResSideFront - (maxWidthRow + 1)) * sizePerPixel;
 
-                        stats.Am = totalMidshipsPixels * sizePerPixel * sizePerPixel;
-
-                        int draughtPixels = (firstRow - lastRow + 1);
-                        float draughtCalc = draughtPixels * sizePerPixel;
-                        // correct for resolution
-                        float corrective = draughtCalc / draught;
-                        stats.Am *= corrective * corrective;
+                        float Am = totalMidshipsPixels * sizePerPixel * sizePerPixel;
 
                         // Midship coefficient
                         // Using wl beam, not bulge beam
                         if (waterlinePixels == 0)
                             stats.Cm = 0f;
                         else
-                            stats.Cm = stats.Am / (stats.beamBulge * draught);
+                            stats.Cm = Am / (stats.beamBulge * draught);
 
                         if (beamBulgePixels != waterlinePixels)
                         {
+                            hasBulge = true;
+
                             // Correct Cm - take average of beam and bulge cm, then take sqrt
-                            stats.Cm = (float)Math.Sqrt(stats.Cm * (stats.beamBulge / stats.B) * 0.67 + stats.Cm * 0.33);
-                            // deal with the game models just being wrong about bulges
-                            stats.Am = stats.Cm * stats.B * draught;
+                            stats.Cm = (float)Math.Sqrt(Am / (stats.B * draught) * 0.67 + stats.Cm * 0.33);
                         }
 
-                        //if (obj.name.Contains("iowa"))
+                        //if (obj.name.Contains("borodino_hull_a"))
                         //{
                         //    string filePath = "C:\\temp\\112\\screenshot_";
                         //    filePath += obj.name + "_" + view.ToString() + ".png";
@@ -887,7 +884,7 @@ namespace UADRealism
                         stats.bowLength = (firstMid - bowRow + 1) * sizePerPixel;
                         float beamMidHalf = _beamPixelCounts[firstMid] * 0.5f;
                         stats.iE = Mathf.Atan2(beamMidHalf, stats.bowLength) * Mathf.Rad2Deg;
-                        stats.LR = (sternRow - lastMid + 1) * sizePerPixel;
+                        stats.LrPct = (sternRow - lastMid + 1) * sizePerPixel;
                         break;
                 }
 
@@ -909,9 +906,10 @@ namespace UADRealism
             Awp *= 0.98f;
             Vd *= Util.Remap(stats.Lwl / stats.B, 3f, 10f, 0.82f, 0.88f, true); // this is bad because of rudder/props, and overestimating bow/stern fullness
             // Bulge case:
-            float beamRatio = stats.B / stats.beamBulge;
-            if (beamRatio != 1f)
+            
+            if (hasBulge)
             {
+                float beamRatio = stats.B / stats.beamBulge;
                 Vd *= Util.Remap(beamRatio, 0.85f, 1f, 0.95f, 1f, true); // we assume there's only a bit of missing volume,
                 // considering that fore and aft of the bulge the hull does extend all the way out, and even along the bulge there's
                 // not that much missing.
@@ -921,14 +919,11 @@ namespace UADRealism
                 Awp *= (0.333f + 0.667f * beamRatio);
             }
 
-            float beam = stats.beamBulge;
-
             // Set the remaining stats
-            stats.Awp = Awp;
             stats.Vd = Vd;
-            stats.Cb = Vd / (stats.Lwl * beam * draught);
-            stats.Cwp = Awp / (stats.Lwl * beam);
-            stats.Cp = Vd / (stats.Lwl * stats.Cm * beam * draught);
+            stats.Cb = Vd / (stats.Lwl * stats.B * draught);
+            stats.Cwp = Awp / (stats.Lwl * stats.B);
+            stats.Cp = Vd / (stats.Lwl * stats.Cm * stats.B * draught);
             stats.Cvp = Vd / (Awp * draught);
 
             RenderSetup.Restore(obj);
@@ -944,6 +939,7 @@ namespace UADRealism
             int count = hData._sectionsMax + 1;
             hData._statsSet = new HullStats[count];
 
+            // do 0 sections in addition to all others.
             for (int secCount = hData._sectionsMin; secCount < count; ++secCount)
             {
                 // Ship.RefreshHull (only the bits we need)
@@ -966,14 +962,14 @@ namespace UADRealism
                 if (stats.beamBulge != stats.B)
                     beam += $"({stats.beamBulge:F2})";
 
-                Melon<UADRealismMod>.Logger.Msg($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{beam}x{(stats.T):F2}, {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp):F1}, Am={stats.Am:F1}");
+                Melon<UADRealismMod>.Logger.Msg($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{beam}x{(stats.T):F2} ({(stats.Lwl/stats.B):F2},{(stats.B/stats.T):F2}), LCB={stats.lcbPct:P2}, {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}");
             }
             string varStr = hData._key.Substring(data.model.Length);
             if (varStr != string.Empty)
                 varStr = $"({varStr.Substring(1)}) ";
             Melon<UADRealismMod>.Logger.Msg($"Calculated stats for {data.model} {varStr}for {hData._sectionsMin} to {hData._sectionsMax} sections");
 
-            //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp * scaleFactor * scaleFactor):F1}, Am={(stats.Am * scaleFactor * scaleFactor):F2}");
+            //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}");
 
             GameObject.Destroy(part.gameObject);
             Part.CleanPartsStorage();
