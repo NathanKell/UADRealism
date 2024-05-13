@@ -29,6 +29,8 @@ namespace UADRealism
 
             public static void SetForRender(GameObject hullModel)
             {
+                var okRenderers = Part.GetVisualRenderers(hullModel);
+
                 StoreLayerRecursive(hullModel);
                 SetLayerRecursive(hullModel, _CameraLayerInt);
 
@@ -76,19 +78,18 @@ namespace UADRealism
                 }
 
                 Renderer[] rs = hullModel.GetComponentsInChildren<Renderer>();
-                //var okRenderers = Part.GetVisualRenderers(hullModel);
 
                 foreach (var mr in rs)
                 {
-                    //if (!okRenderers.Contains(mr))
-                    //{
-                    //    if (mr.enabled)
-                    //    {
-                    //        _renderersDisabled.Add(mr);
-                    //        mr.enabled = false;
-                    //    }
-                    //    continue;
-                    //}
+                    if (!okRenderers.Contains(mr))
+                    {
+                        if (mr.enabled)
+                        {
+                            _renderersDisabled.Add(mr);
+                            mr.enabled = false;
+                        }
+                        continue;
+                    }
                     _renderers[mr] = new ShadowInfo() { _mode = mr.shadowCastingMode, _receiveShadows = mr.receiveShadows };
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                     mr.receiveShadows = false;
@@ -126,6 +127,7 @@ namespace UADRealism
 
                 foreach (var r in _renderersDisabled)
                     r.enabled = true;
+                _renderersDisabled.Clear();
 
                 hullModel.transform.localPosition = _pos;
                 hullModel.transform.localRotation = _rot;
@@ -274,18 +276,21 @@ namespace UADRealism
             bool boundsSet = false;
 
             Renderer[] rs = obj.GetComponentsInChildren<Renderer>();
-            for (int i = rs.Length; i-- > 0;)
+            foreach(var r in rs)
             {
+                if (!r.enabled)
+                    continue;
                 if (boundsSet)
                 {
-                    bounds.Encapsulate(rs[i].bounds);
+                    bounds.Encapsulate(r.bounds);
                 }
                 else
                 {
-                    bounds = rs[i].bounds;
+                    bounds = r.bounds;
                     boundsSet = true;
                 }
             }
+            //Debug.Log($"Passed bounds: {hullBounds}, calc: {bounds}");
             if (hullBounds.size == Vector3.zero)
                 hullBounds = bounds;
 
@@ -510,7 +515,10 @@ namespace UADRealism
                 //Melon<UADRealismMod>.Logger.Msg($"For direction {view.ToString()}, pixel count at row {row} is {pxCount} so dimension = {dimension:F2}");
                 if (pics++ < 3)
                 {
-                    string filePath = "C:\\temp\\112\\screenshot_" + obj.name + "_" + view.ToString() + ".png";
+                    string filePath = "C:\\temp\\112\\screenshot_";
+                    if (Patch_GameData._IsProcessing)
+                        filePath += "p_";
+                    filePath += obj.name + "_" + view.ToString() + ".png";
 
                     var bytes = ImageConversion.EncodeToPNG(_sideFrontTex);
                     Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);

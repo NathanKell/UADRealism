@@ -133,9 +133,8 @@ namespace UADRealism
             {
                 beamStr += $" ({_CachedStats.beamBulge:F2} at {_CachedStats.bulgeDepth:F2})";
             }
-            var secList = new Il2CppSystem.Collections.Generic.List<GameObject>();
-            secList.AddRange(__instance.hull.hullSections);
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {_CachedStats.Lwl:F2}x{beamStr}x{_CachedStats.D:F2}, {secList.Count - 2}s, {_CachedStats.Vd}t. Cb={_CachedStats.Cb:F3}, Cm={_CachedStats.Cm:F3}, Cwp={_CachedStats.Cwp:F3}, Cp={_CachedStats.Cp:F3}, Cvp={_CachedStats.Cvp:F3}. Awp={_CachedStats.Awp:F1}, Am={_CachedStats.Am:F2}");
+
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {_CachedStats.Lwl:F2}x{beamStr}x{_CachedStats.D:F2}, {_CachedStats.Vd}t. Cb={_CachedStats.Cb:F3}, Cm={_CachedStats.Cm:F3}, Cwp={_CachedStats.Cwp:F3}, Cp={_CachedStats.Cp:F3}, Cvp={_CachedStats.Cvp:F3}. Awp={_CachedStats.Awp:F1}, Am={_CachedStats.Am:F2}");
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)

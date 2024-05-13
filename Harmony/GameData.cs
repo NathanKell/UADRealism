@@ -69,6 +69,10 @@ namespace UADRealism
                     _PrintHeader = false;
                 }
 
+                bool isMaine = data.name == "ca_maine_threemast";
+                if (!isMaine)
+                    continue;
+
                 string key = data.model + "$" + data.sectionsMin;
                 if (!_ModelStats.TryGetValue(key, out var stats))
                 {
@@ -265,12 +269,11 @@ namespace UADRealism
                     }
 
                     // Get ship bounds
-                    var shipBounds = GetShipBounds(sections);
+                    var shipBounds = GetShipBounds(visual);
 
                     // Done! Now we can calculate.
 
                     //Melon<UADRealismMod>.Logger.Msg("Tonnage set");
-                    bool isMaine = data.name == "ca_maine_threemast";
                     stats = ShipStatsCalculator.Instance.GetStats(part.model.gameObject, shipBounds, isMaine ? 0f : 1f);
 
                     if (stats.Vd == 0f)
@@ -286,15 +289,17 @@ namespace UADRealism
                     {
                         beamStr += $" ({(stats.beamBulge * scaleFactor):F2} at {(stats.bulgeDepth * scaleFactor):F2})";
                     }
-                    string logMsg = $"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {sectionsReverse.Count - 2}s, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp * scaleFactor * scaleFactor):F1}, Am={(stats.Am * scaleFactor * scaleFactor):F2}";
+                    string logMsg = $"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp * scaleFactor * scaleFactor):F1}, Am={(stats.Am * scaleFactor * scaleFactor):F2}";
                     if (isMaine)
-                        logMsg = $"Bounds {shipBounds}: {logMsg}";
+                    {
+                        logMsg = $"Bounds {shipBounds}. {logMsg}";
+                    }
                     if (check || isMaine)
                     {
                         check = false;
                         part.model.transform.localScale = Vector3.one * scaleFactor;
                         shipBounds = GetShipBounds(visual);
-                        var stats2 = ShipStatsCalculator.Instance.GetStats(part.model.gameObject, shipBounds, 1f);
+                        var stats2 = ShipStatsCalculator.Instance.GetStats(part.model.gameObject, shipBounds, isMaine ? 0f : 1f);
                         logMsg += $",CHECK new {stats2.Vd}";
                         if (isMaine)
                             logMsg += "Bounds: " + shipBounds;
@@ -314,11 +319,9 @@ namespace UADRealism
             _IsProcessing = false;
         }
 
-        internal static Bounds GetShipBounds(GameObject sections)
+        internal static Bounds GetShipBounds(GameObject obj)
         {
-            var visual = sections.transform.parent.gameObject;
-            var sectionsTrf = sections.transform;
-            var allVRs = Part.GetVisualRenderers(visual);
+            var allVRs = Part.GetVisualRenderers(obj);
             Bounds shipBounds = new Bounds();
             bool foundShipBounds = false;
             foreach (var r in allVRs)
@@ -326,22 +329,14 @@ namespace UADRealism
                 if (!r.gameObject.activeInHierarchy)
                     continue;
 
-                var trf = r.transform;
-                var mesh = r.GetComponent<MeshFilter>();
-                var sharedMesh = mesh.sharedMesh;
-                var meshBounds = sharedMesh.bounds;
-                // transform bounds to sections space
-                meshBounds = Util.TransformBounds(trf, meshBounds);
-                var invBounds = Util.InverseTransformBounds(sectionsTrf, meshBounds);
-
                 if (foundShipBounds)
                 {
-                    shipBounds.Encapsulate(invBounds);
+                    shipBounds.Encapsulate(r.bounds);
                 }
                 else
                 {
                     foundShipBounds = true;
-                    shipBounds = invBounds;
+                    shipBounds = r.bounds;
                 }
             }
 
