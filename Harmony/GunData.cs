@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
@@ -10,11 +9,9 @@ namespace UADRealism
     [HarmonyPatch(typeof(GunData))]
     internal class Patch_GunData
     {
-        internal static List<float> oldDiameters = new List<float>();
-        internal static bool isPatched = false;
-
         private const float DiameterPower = 1.5f;
-        internal static float ConvertDiameter(float baseCaliberInch, float extraDiam)
+
+        private static float ConvertDiameter(float baseCaliberInch, float extraDiam)
         {
             bool isNegative;
             float extraDiamInch;
@@ -42,91 +39,144 @@ namespace UADRealism
             return newExtraDiam * 25.4f;
         }
 
-        /// <summary>
-        /// It's much faster to just patch all TurretCalibers than to find the matching one
-        /// (because of the weird way casemates are detected)
-        /// </summary>
-        /// <param name="ship"></param>
-        internal static void PatchDiameters(Ship ship)
+        private static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData partData)
         {
-            foreach (var tc in ship.shipGunCaliber)
+            bool isCasemate = Ship.IsCasemateGun(partData);
+            Ship.TurretCaliber tc = null;
+            foreach (var cal in ship.shipGunCaliber)
             {
-                oldDiameters.Add(tc.diameter);
-                if (tc.turretPartData != null)
-                    tc.diameter = ConvertDiameter(tc.turretPartData.GetCaliberInch(), tc.diameter);
+                if (cal.turretPartData.GetCaliberInch() == partData.GetCaliberInch() && isCasemate == cal.isCasemateGun)
+                {
+                    tc = cal;
+                    break;
+                }
             }
+
+            return tc;
         }
 
-        internal static void UnpatchDiameters(Ship ship)
+        private static GunData GetOtherCaliberData(PartData partData, Ship.TurretCaliber tc)
         {
-            for (int i = 0; i < ship.shipGunCaliber.Count; ++i)
-                ship.shipGunCaliber[i].diameter = oldDiameters[i];
+            var gunsData = G.GameData.guns;
+            int calInch = (int)((0.001f + partData.caliber) / 25.4f);
+            int calOffset = tc.diameter < 0 ? -1 : 1;
+            string nextCalStr;
 
-            oldDiameters.Clear();
+            var dataID = partData.GetGunDataId(null);
+            if (string.IsNullOrEmpty(dataID))
+                return null;
+
+            if (dataID.Contains("ironclad"))
+            {
+                var splits = dataID.Split('_');
+                int parsedCalNext = int.Parse(splits[splits.Length - 1]) + calOffset;
+                string ironcladNextCal = parsedCalNext.ToString();
+                splits[splits.Length - 1] = ironcladNextCal;
+                nextCalStr = string.Join("_", splits);
+            }
+            else
+            {
+                nextCalStr = (calInch + calOffset).ToString();
+            }
+
+            gunsData.TryGetValue(nextCalStr, out var nextCalData);
+            return nextCalData;
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(GunData.GetValue), new Type[] { typeof(Ship), typeof(PartData), typeof(float), typeof(Il2CppSystem.Func<GunData, float>) })]
-        internal static void Prefix_GetValue(GunData __instance, Ship ship)
+        internal static bool Prefix_GetValue(GunData __instance, Ship ship, PartData partData, float defValue, Il2CppSystem.Func<GunData, float> func, ref float __result)
         {
-            if (isPatched || ship == null || ship.shipGunCaliber == null)
-                return;
+            if (ship == null || ship.shipGunCaliber == null || partData == null || func == null)
+                return true;
 
-            isPatched = true;
+            var tc = FindMatchingTurretCaliber(ship, partData);
+            if (tc == null)
+            {
+                // Not gonna bother to log this, because the TC _will_ be null
+                // in the case where you have a tooltip open for a part in the part
+                // selection area in the Constructor, it will only be non-null
+                // for placed parts.
+                //Melon<UADRealismMod>.Logger.Msg("TC null!");
+                __result = defValue;
+                return false;
+            }
 
-            PatchDiameters(ship);
-        }
+            var nextCalData = GetOtherCaliberData(partData, tc);
 
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(GunData.GetValue), new Type[] { typeof(Ship), typeof(PartData), typeof(float), typeof(Il2CppSystem.Func<GunData, float>) })]
-        internal static void Postfix_GetValue(Ship ship)
-        {
-            if (!isPatched)
-                return;
+            if (nextCalData == null)
+            {
+                __result = defValue;
+                return false;
+            }
 
-            isPatched = false;
-
-            if (ship == null || ship.shipGunCaliber == null)
-                return;
-
-            UnpatchDiameters(ship);
+            int calInch = (int)((0.001f + partData.caliber) / 25.4f);
+            // Note that this may be a negative t-value for the lerp. That's fine, because nextCalData
+            // could be the next _lower_ caliber if the TurretCaliber's diameter offset is negative.
+            float lerpT = ConvertDiameter(calInch, tc.diameter);
+            __result = Mathf.Lerp(defValue, func.Invoke(nextCalData), lerpT);
+            return false;
         }
 
 
         /// <summary>
-        /// We're only going to use the caliber lerp, which means we need to zero out
-        /// the length params passed to GetValue since that leads to double-counting
-        /// caliber changes when done manually. We also patch diameters like in the simple
+        /// We're only going to use the caliber lerp, so we ignore minParam and maxParam
+        /// and just have a copy of the simple GetValue, just this time using the gun grade too.
         /// case.
         /// </summary>
         [HarmonyPrefix]
         [HarmonyPatch(nameof(GunData.GetValue), new Type[] { typeof(Ship), typeof(PartData), typeof(int), typeof(Il2CppSystem.Collections.Generic.Dictionary<int, float>), typeof(Il2CppSystem.Func<GunData, Il2CppSystem.Collections.Generic.Dictionary<int, float>>), typeof(float), typeof(float) })]
-        internal static void Prefix_GetValue_GradeLength(Ship ship, ref float minParam, ref float maxParam)
+        internal static bool Prefix_GetValue_GradeLength(GunData __instance, Ship ship, PartData partData, int index, Il2CppSystem.Collections.Generic.Dictionary<int, float> defValue, Il2CppSystem.Func<GunData, Il2CppSystem.Collections.Generic.Dictionary<int, float>> func, float minParam, float maxParam, ref float __result)
         {
-            minParam = 0f;
-            maxParam = 0f;
+            if (ship == null || ship.shipGunCaliber == null || partData == null || func == null || defValue == null)
+                return true;
 
-            if (isPatched || ship == null || ship.shipGunCaliber == null)
-                return;
+            if (!defValue.TryGetValue(index, out float defValFloat))
+            {
+                Melon<UADRealismMod>.Logger.Msg("defValue doesn't contain index " + index);
+                return true;
+            }
 
-            isPatched = true;
+            var tc = FindMatchingTurretCaliber(ship, partData);
+            if (tc == null)
+            {
+                // Not gonna bother to log this, because the TC _will_ be null
+                // in the case where you have a tooltip open for a part in the part
+                // selection area in the Constructor, it will only be non-null
+                // for placed parts.
+                //Melon<UADRealismMod>.Logger.Msg("GL___TC null!");
 
-            PatchDiameters(ship);
-        }
+                __result = defValFloat;
+                return false;
+            }
 
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(GunData.GetValue), new Type[] { typeof(Ship), typeof(PartData), typeof(int), typeof(Il2CppSystem.Collections.Generic.Dictionary<int, float>), typeof(Il2CppSystem.Func<GunData, Il2CppSystem.Collections.Generic.Dictionary<int, float>>), typeof(float), typeof(float) })]
-        internal static void Postfix_GetValue_GradeLength(Ship ship)
-        {
-            if (!isPatched)
-                return;
+            var nextCalData = GetOtherCaliberData(partData, tc);
 
-            isPatched = false;
+            if (nextCalData == null)
+            {
+                Melon<UADRealismMod>.Logger.Msg("Next Cal null!");
+                __result = defValFloat;
+                return false;
+            }
 
-            if (ship == null || ship.shipGunCaliber == null)
-                return;
+            int calInch = (int)((0.001f + partData.caliber) / 25.4f);
+            var nextCalDict = func.Invoke(nextCalData);
 
-            UnpatchDiameters(ship);
+            if (nextCalDict == null)
+            {
+                Melon<UADRealismMod>.Logger.Msg("can't find next cal dict");
+                return true;
+            }
+            if (!nextCalDict.ContainsKey(index))
+            {
+                Melon<UADRealismMod>.Logger.Msg("next cal dict doesn't contain index " + index);
+                return true;
+            }
+            // Note that this may be a negative t-value for the lerp. That's fine, because nextCalData
+            // could be the next _lower_ caliber if the TurretCaliber's diameter offset is negative.
+            float lerpT = ConvertDiameter(calInch, tc.diameter);
+            __result = Mathf.Lerp(defValFloat, nextCalDict[index], lerpT);
+            return false;
         }
 
         // Special patch to deal with reload time using shell velocity:
