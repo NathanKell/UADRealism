@@ -16,10 +16,9 @@ namespace UADRealism
 
         internal struct RefreshHullData
         {
-            public float beam;
-            public float draught;
-            public float tonnage;
-            public float yPosScaling;
+            public float _tonnage;
+            public float _yPosScaling;
+            public bool _valuesSet;
         }
 
         internal static System.Collections.IEnumerator RefreshHullRoutine(Ship ship)
@@ -51,46 +50,64 @@ namespace UADRealism
         {
 
             __state = new RefreshHullData();
-
-            if (_IsChangeHull || __instance == null || __instance.hull == null)
+            if (_IsChangeHull)
                 return;
+
+            if (__instance == null || __instance.hull == null)
+            {
+                Debug.LogError("Ship or hull null!");
+                return;
+            }
 
             var data = __instance.hull.data;
+            if (data == null)
+            {
+                Debug.LogError("hull PartData null!");
+                return;
+            }
             var hData = ShipStats.GetData(data);
             if (hData == null)
+            {
+                Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(data));
                 return;
+            }
 
             _IsRefreshPatched = true;
 
-            __state.beam = __instance.beam;
-            __state.draught = __instance.draught;
-            __state.tonnage = __instance.tonnage;
+            __state._tonnage = __instance.tonnage;
 
-            // TODO: Add a new bar
             int secsToUse = Mathf.RoundToInt(Mathf.Lerp(data.sectionsMin, data.sectionsMax, 1f - __instance.hullPartSizeZ * 0.01f));
 
-            if (secsToUse != __instance.hull.middles.Count)
-                updateSections = true;
+            if (__instance.hull.middles == null)
+            {
+                Debug.LogError("hull middles list null!");
+            }
+            else
+            {
+                updateSections =  secsToUse != __instance.hull.middles.Count;
+            }
+
+            if (hData._statsSet.Length <= secsToUse || secsToUse < 0)
+            {
+                Debug.LogError($"SecsToUse ({secsToUse}) out of bounds for StatsSet length {hData._statsSet.Length}");
+                return;
+            }
 
             float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd) / __instance.hull.model.transform.localScale.z;
 #if LOGSHIP
             Debug.Log($"{hData._key}: tonnage desired: {__instance.tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
 #endif
-            __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
+            //__instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
             __instance.tonnage = Mathf.Lerp(data.tonnageMin, data.tonnageMax, slider);
-            float bmMult = 1f + __instance.beam * 0.01f;
-            float drMult = bmMult * (1f + __instance.draught * 0.01f);
-            __instance.draught = -(drMult - 1f) * 100f;
-            __instance.beam = -__instance.beam;
-            __state.yPosScaling = 1f + __instance.draught * 0.01f;
-
-            //__instance.hull.AddOrUpdatePlacedObjects();
-            //__instance.hull.Refresh(true);
-            //__instance.hull.RegrabDeckSizes(false); // should maybe be true??
-            //__instance.hull.RecalcVisualSize();
-            //__instance.hull.UpdateCollidersSize(null);
+            //Debug.Log($"Refresh hull: Tonnage was {__state._tonnage:F0}, secs {data.sectionsMin}-{data.sectionsMax}, desired {secsToUse}, slider val {slider:F2}, temp tonnage {__instance.tonnage:F0}");
+            //float bmMult = 1f + __instance.beam * 0.01f;
+            //float drMult = bmMult * (1f + __instance.draught * 0.01f);
+            //__instance.draught = -(drMult - 1f) * 100f;
+            //__instance.beam = -__instance.beam;
+            __state._yPosScaling = 1f + __instance.draught * 0.01f;
+            __state._valuesSet = true;
         }
 
         private static readonly Il2CppSystem.Collections.Generic.List<GameObject> _hullSecitons = new Il2CppSystem.Collections.Generic.List<GameObject>();
@@ -99,19 +116,18 @@ namespace UADRealism
         [HarmonyPatch(nameof(Ship.RefreshHull))]
         internal static void Postfix_Ship_RefreshHull(Ship __instance, RefreshHullData __state)
         {
-            if (!_IsRefreshPatched)
+            if (!_IsRefreshPatched || !__state._valuesSet)
                 return;
 
-            __instance.beam = __state.beam;
-            __instance.draught = __state.draught;
-            __instance.tonnage = __state.tonnage;
+            __instance.tonnage = __state._tonnage;
 
             var hData = ShipStats.GetData(__instance.hull.data);
             _hullSecitons.AddRange(__instance.hull.hullSections);
             foreach (var sec in _hullSecitons)
             {
-                sec.transform.localPosition = new Vector3(sec.transform.localPosition.x, hData.yPos * __state.yPosScaling, sec.transform.localPosition.z);
+                sec.transform.localPosition = new Vector3(sec.transform.localPosition.x, hData.yPos * __state._yPosScaling, sec.transform.localPosition.z);
             }
+            _hullSecitons.Clear();
         }
 
 #if disabled
@@ -356,17 +372,6 @@ namespace UADRealism
             float tech = ship.TechR("armor");
             float weight = armorData.barbetteArmor * thickLerp / 25.4f * weightParam * GetTurretBaseWeight(ship, data) * tech;
             return weight;
-        }
-
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(Ship.RefreshHull))]
-        internal static void Postfix_RefreshHull(Ship __instance)
-        {
-            if (__instance == null)
-                return;
-
-            //Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: SetTonnage. Bounds size/min: {__instance.hullSize.size} / {__instance.hullSize.min}");
-            
         }
 
         [HarmonyPrefix]

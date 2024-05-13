@@ -201,7 +201,7 @@ namespace UADRealism
                 return new HullStats();
 
             int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, 1f - ship.hullPartSizeZ * 0.01f));
-            return GetScaledStats(hData, ship.tonnage, -ship.beam, -ship.draught, sec);
+            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, sec);
         }
 
         public static HullStats GetScaledStats(HullData hData, float tonnage, float lengthToBeamPct, float beamToDraughtPct, int sections)
@@ -230,7 +230,7 @@ namespace UADRealism
 
         public static float GetHullScaleFactor(Ship ship, float Vd)
         {
-            return GetHullScaleFactor(ship.tonnage, Vd, -ship.beam, -ship.draught);
+            return GetHullScaleFactor(ship.tonnage, Vd, ship.beam, ship.draught);
         }
         public static float GetHullScaleFactor(float tonnage, float Vd, float lengthToBeamPct, float beamToDraughtPct)
         {
