@@ -53,8 +53,8 @@ namespace UADRealism
                 return;
 
             var data = __instance.hull.data;
-            string key = ModUtils.GetHullModelKey(data);
-            if (!Patch_GameData._HullModelData.TryGetValue(key, out var hData))
+            var hData = ShipStats.GetData(data);
+            if (hData == null)
                 return;
 
             _IsRefreshPatched = true;
@@ -62,15 +62,15 @@ namespace UADRealism
             __state.beam = __instance.beam;
             __state.tonnage = __instance.tonnage;
 
-            ModUtils.GetSectionsAndBeamForLB(__instance.beam, data, out float newBeam, out int secsToUse);
+            ShipStats.GetSectionsAndBeamForLB(__instance.beam, data, out float newBeam, out int secsToUse);
             __instance.beam = newBeam;
             if (secsToUse != __instance.hull.middles.Count)
                 updateSections = true;
 
             //use unscaled tonnage; draught change applies to both sides of ratio
             float tonnage = Mathf.Clamp(__instance.tonnage, data.tonnageMin, data.tonnageMax);
-            float scaleFactor = ModUtils.GetHullScaleFactor(__instance, (hData._statsSet[secsToUse].Vd), newBeam) / __instance.hull.model.transform.localScale.z;
-            Debug.Log($"{key}: tonnage desired: {tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). New beam {newBeam:F2}. Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
+            float scaleFactor = ShipStats.GetHullScaleFactor(__instance, (hData._statsSet[secsToUse].Vd), newBeam) / __instance.hull.model.transform.localScale.z;
+            Debug.Log($"{hData._key}: tonnage desired: {tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). New beam {newBeam:F2}. Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
             __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
@@ -193,7 +193,7 @@ namespace UADRealism
         [HarmonyPatch(nameof(Ship.CalcInstability))]
         internal static void Postfix_CalcInstability(Ship __instance)
         {
-            if (Patch_GameData._IsRenderingHulls || __instance == null)
+            if (ShipStats._IsRenderingHulls || __instance == null)
                 return;
 
             if (__instance.hullSize == null
@@ -203,7 +203,7 @@ namespace UADRealism
                 || __instance.hullSize.min.y == 0f)
                 return;
 
-            var stats = ModUtils.ScaledStats(__instance);
+            var stats = ShipStats.ScaledStats(__instance);
 
             string beamStr = stats.B.ToString("F2");
             if (stats.beamBulge != stats.B)

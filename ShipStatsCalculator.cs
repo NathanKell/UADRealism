@@ -9,10 +9,203 @@ namespace UADRealism
 {
     public class HullData
     {
+        public string _key;
         public PartData _data;
         public int _sectionsMin;
         public int _sectionsMax;
-        public ShipStatsCalculator.ShipStats[] _statsSet;
+        public HullStats[] _statsSet;
+    }
+
+    public struct HullStats
+    {
+        public float Lwl;
+        public float B;
+        public float T;
+        public float beamBulge;
+        public float bulgeDepth;
+        public float Awp;
+        public float Am;
+        public float Vd;
+        public float Cb;
+        public float Cm;
+        public float Cwp;
+        public float Cp;
+        public float Cvp;
+    }
+
+    public static class ShipStats
+    {
+        private static bool _isRenderingHulls = false;
+        public static bool _IsRenderingHulls => _isRenderingHulls;
+
+        private static readonly Dictionary<string, HullData> _HullModelData = new Dictionary<string, HullData>();
+
+        public static HullData GetData(Ship ship) => GetData(ship.hull.data);
+
+        public static HullData GetData(PartData data)
+        {
+            _HullModelData.TryGetValue(GetHullModelKey(data), out var hData);
+            return hData;
+        }
+        public static HullData GetData(string key)
+        {
+            _HullModelData.TryGetValue(key, out var hData);
+            return hData;
+        }
+
+        public static HullData RegisterData(PartData data)
+        {
+            string key = GetHullModelKey(data);
+            var hData = new HullData()
+            {
+                _key = key,
+                _data = data,
+                _sectionsMin = data.sectionsMin,
+                _sectionsMax = data.sectionsMax
+            };
+            _HullModelData.Add(key, hData);
+            return hData;
+        }
+
+        public static string GetHullModelKey(PartData data)
+        {
+            string key = data.model;
+            if (data.paramx.TryGetValue("var", out var desiredVars))
+            {
+                key += "$";
+                for (int i = 0; i < desiredVars.Count - 1; ++i)
+                    key += desiredVars[i] + ";";
+                key += desiredVars[desiredVars.Count - 1];
+            }
+
+            return key;
+        }
+
+        public static void GetSectionsAndBeamForLB(float beam, int minSec, int maxSec, float minBeam, float maxBeam, HullData hData, out float beamScale, out int sections)
+        {
+            if (minSec == maxSec)
+            {
+                beamScale = beam;
+                sections = minSec;
+                Melon<UADRealismMod>.Logger.Msg($"For {hData._data.model}, sections always {minSec}");
+                return;
+            }
+
+            float minSecLB = hData._statsSet[minSec].Lwl / hData._statsSet[minSec].beamBulge;
+            float maxSecLB = hData._statsSet[maxSec].Lwl / hData._statsSet[maxSec].beamBulge;
+            float minLB = minSecLB / (maxBeam * 0.01f + 1f);
+            float maxLB = maxSecLB / (minBeam * 0.01f + 1f);
+
+            float lbT = Mathf.InverseLerp(maxBeam, minBeam, beam);
+            float lb = Mathf.Lerp(minLB, maxLB, lbT);
+            if (lb <= minSecLB)
+            {
+                sections = minSec;
+            }
+            else if (lb >= maxSecLB)
+            {
+                sections = maxSec;
+            }
+            else
+            {
+                // Estimate the section to use
+                sections = Mathf.RoundToInt(Util.Remap(lbT, minSecLB, maxSecLB, minSec, maxSec, true));
+                float lwlDesired = hData._statsSet[sections].beamBulge * lb;
+
+                // now find section
+                sections = minSec;
+                while (sections != maxSec && lwlDesired > hData._statsSet[sections].Lwl)
+                    ++sections;
+                float ratio = lwlDesired / hData._statsSet[sections].Lwl;
+
+                // see if the bordering options are closer to 0 beam change
+                if (ratio > 1f)
+                {
+                    if (sections < maxSec)
+                    {
+                        if (hData._statsSet[sections + 1].Lwl / lwlDesired < ratio)
+                            ++sections;
+                    }
+                }
+                else
+                {
+                    if (sections > minSec)
+                    {
+                        if (hData._statsSet[sections - 1].Lwl / lwlDesired > ratio)
+                            --sections;
+                    }
+                }
+            }
+
+            float lbAtSec = hData._statsSet[sections].Lwl / hData._statsSet[sections].beamBulge;
+            beamScale = (lbAtSec / lb - 1f) * 100f;
+
+            //float lwl = hData._statsSet[sections].Lwl;
+            //float bb = hData._statsSet[sections].beamBulge * (beamScale * 0.01f + 1f);
+            //float calcLB = lwl / bb;
+            //Melon<UADRealismMod>.Logger.Msg($"For {hData._data.model}, input {beam:F2} ({lbT:F2}). LB {minSecLB:F2}->{maxSecLB:F2}/{minLB:F2}->{maxLB:F2}.\nDesired {lb:F2}. B={beamScale:F2} S={sections} -> {calcLB:F2}");
+        }
+
+        public static HullData GetSectionsAndBeamForLB(float beam, PartData data, out float beamScale, out int sections)
+        {
+            var hData = GetData(data);
+            if (hData == null)
+            {
+                beamScale = beam;
+                sections = (data.sectionsMin + data.sectionsMax) / 2;
+                return null;
+            }
+
+            GetSectionsAndBeamForLB(beam, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out beamScale, out sections);
+            return hData;
+        }
+
+        public static HullStats ScaledStats(Ship ship)
+        {
+            var hData = GetSectionsAndBeamForLB(ship.beam, ship.hull.data, out float beamScale, out int sections);
+            if (hData == null)
+                return new HullStats();
+
+            var newStats = hData._statsSet[sections];
+            //Melon<UADRealismMod>.Logger.Msg($"Pre: {newStats.Lwl:F2}x{newStats.beamBulge:F2}x{newStats.T:F2}, {newStats.Vd}t. Awp={newStats.Awp:F1}, Am={newStats.Am:F2}");
+
+            float drMult = ship.draught * 0.01f + 1f;
+            float bmMult = beamScale * 0.01f + 1f;
+            float linearScale = GetHullScaleFactor(ship, newStats.Vd, beamScale);
+            newStats.Am *= drMult * bmMult * linearScale * linearScale;
+            newStats.Awp *= bmMult * linearScale * linearScale;
+            newStats.B *= bmMult * linearScale;
+            newStats.beamBulge *= bmMult * linearScale;
+            newStats.bulgeDepth *= drMult * linearScale;
+            newStats.Lwl *= linearScale;
+            newStats.T *= drMult * linearScale;
+            newStats.Vd *= drMult * bmMult * linearScale * linearScale * linearScale; // should be the same as ship.Tonnage()
+
+            //Melon<UADRealismMod>.Logger.Msg($"Post with {linearScale:F3}x, B={bmMult:F3},T={drMult:F3}: {newStats.Lwl:F2}x{newStats.beamBulge:F2}x{newStats.T:F2}, {newStats.Vd}t. Awp={newStats.Awp:F1}, Am={newStats.Am:F2}");
+
+            return newStats;
+        }
+
+        public static float GetHullScaleFactor(Ship ship, float Vd, float beamScale)
+        {
+            float tonnage = Mathf.Clamp(ship.tonnage, ship.hull.data.tonnageMin, ship.hull.data.tonnageMax);
+            return Mathf.Pow(tonnage / (Vd * (beamScale * 0.01f + 1f)), 1f / 3f);
+        }
+
+        public static float GetSHPRequired(Ship ship)
+        {
+            return 1f;
+        }
+
+        public static void CalculateHullData()
+        {
+            _isRenderingHulls = true;
+            foreach (var kvp in _HullModelData)
+            {
+                ShipStatsCalculator.Instance.ProcessHullData(kvp.Value);
+            }
+            _isRenderingHulls = false;
+        }
     }
 
     [RegisterTypeInIl2Cpp]
@@ -69,7 +262,7 @@ namespace UADRealism
                     coll.enabled = false;
                 }
 
-                for(int i = 0; i < hullModel.transform.GetChildCount(); ++i)
+                for (int i = 0; i < hullModel.transform.GetChildCount(); ++i)
                 {
                     var child = hullModel.transform.GetChild(i)?.gameObject;
                     if (child == null)
@@ -163,7 +356,7 @@ namespace UADRealism
 
             private static void RestoreLayerRecursive(GameObject obj)
             {
-                if(_layers.TryGetValue(obj, out int layer))
+                if (_layers.TryGetValue(obj, out int layer))
                     obj.layer = layer;
 
                 for (int i = 0; i < obj.transform.childCount; ++i)
@@ -184,6 +377,11 @@ namespace UADRealism
                 return _Instance;
             }
         }
+
+        // To avoid allocs. Compared to instantiation though it's probably not noticeable.
+        private static readonly List<string> _foundVars = new List<string>();
+        private static readonly List<string> _matchedVars = new List<string>();
+        private static readonly Dictionary<GameObject, Bounds> _sectionBounds = new Dictionary<GameObject, Bounds>();
 
         private static readonly int _CameraLayerInt = LayerMask.NameToLayer("VisibilityFog_unused");
         private const int _ResSideFront = 512;
@@ -233,26 +431,9 @@ namespace UADRealism
             MAX
         }
 
-        public struct ShipStats
+        public HullStats GetStats(GameObject obj, Bounds bounds)
         {
-            public float Lwl;
-            public float B;
-            public float T;
-            public float beamBulge;
-            public float bulgeDepth;
-            public float Awp;
-            public float Am;
-            public float Vd;
-            public float Cb;
-            public float Cm;
-            public float Cwp;
-            public float Cp;
-            public float Cvp;
-        }
-
-        public ShipStats GetStats(GameObject obj, Bounds bounds)
-        {
-            var stats = new ShipStats();
+            var stats = new HullStats();
 
             RenderSetup.SetForRender(obj);
 
@@ -437,10 +618,10 @@ namespace UADRealism
                                 // Assume symmetry for perf
                                 if (col > stopPoint)
                                     break;
-                                
+
                                 ++numPx;
 
-                                if(col < minInset)
+                                if (col < minInset)
                                 {
                                     minInset = col;
                                 }
@@ -489,6 +670,283 @@ namespace UADRealism
             RenderSetup.Restore(obj);
 
             return stats;
+        }
+
+        public void ProcessHullData(HullData hData)
+        {
+            var data = hData._data;
+            var part = SpawnPart(data);
+
+            int count = hData._sectionsMax + 1;
+            hData._statsSet = new HullStats[count];
+
+            for (int secCount = hData._sectionsMin; secCount < count; ++secCount)
+            {
+                // Ship.RefreshHull (only the bits we need)
+                CreateMiddles(part, secCount);
+                // It's annoying to rerun this every time, but it's not exactly expensive.
+                ApplyVariations(part);
+
+                PositionSections(part);
+
+                // Calc the stats for this layout. Note that scaling dimensions will only
+                // linearly change stats, it won't require a recalc.
+                var shipBounds = GetShipBounds(part.model.gameObject);
+                var stats = GetStats(part.model.gameObject, shipBounds);
+
+                if (stats.Vd == 0f)
+                    stats.Vd = 1f;
+
+                hData._statsSet[secCount] = stats;
+                Melon<UADRealismMod>.Logger.Msg($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{stats.beamBulge:F2}x{(stats.T):F2}, {(stats.Vd)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp):F1}, Am={stats.Am:F1}");
+            }
+            string varStr = hData._key.Substring(data.model.Length);
+            if (varStr != string.Empty)
+                varStr = $"({varStr.Substring(1)}) ";
+            Melon<UADRealismMod>.Logger.Msg($"Calculated stats for {data.model} {varStr}for {hData._sectionsMin} to {hData._sectionsMax} sections");
+
+            //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. Awp={(stats.Awp * scaleFactor * scaleFactor):F1}, Am={(stats.Am * scaleFactor * scaleFactor):F2}");
+
+            GameObject.Destroy(part.gameObject);
+            Part.CleanPartsStorage();
+        }
+
+        private Part SpawnPart(PartData data)
+        {
+            var partGO = new GameObject(data.name);
+            var part = partGO.AddComponent<Part>();
+            part.data = data;
+            partGO.active = true;
+
+            // Do what we need from Ship.ChangeHull and Part.LoadModel
+            var model = UnityEngine.Resources.Load<GameObject>(data.model); //Util.ResourcesLoad<GameObject>(data.model); //(pmi.modelName);
+            var instModel = Util.AttachInst(partGO, model /*processed*/);
+            instModel.active = true;
+            instModel.transform.localScale = Vector3.one;
+            part.model = instModel.GetComponent<PartModel>();
+            part.isShown = true;
+
+            var visual = part.model.GetChild("Visual", false);
+            var sections = visual.GetChild("Sections", false);
+            part.bow = sections.GetChild("Bow", false);
+            part.stern = sections.GetChild("Stern", false);
+            var middles = new List<GameObject>();
+            ModUtils.FindChildrenStartsWith(sections, "Middle", middles);
+            middles.Sort((a, b) => a.name.CompareTo(b.name));
+            part.middlesBase = new Il2CppSystem.Collections.Generic.List<GameObject>();
+            foreach (var m in middles)
+                part.middlesBase.Add(m);
+
+            part.middles = new Il2CppSystem.Collections.Generic.List<GameObject>();
+            part.hullInfo = part.model.GetComponent<HullInfo>();
+            //part.RegrabDeckSizes(true);
+            //part.RecalcVisualSize();
+
+            foreach (var go in part.middlesBase)
+                Util.SetActiveX(go, false);
+
+            return part;
+        }
+
+        private Bounds GetShipBounds(GameObject obj)
+        {
+            var allVRs = Part.GetVisualRenderers(obj);
+            Bounds shipBounds = new Bounds();
+            bool foundShipBounds = false;
+            foreach (var r in allVRs)
+            {
+                if (!r.gameObject.activeInHierarchy)
+                    continue;
+
+                if (foundShipBounds)
+                {
+                    shipBounds.Encapsulate(r.bounds);
+                }
+                else
+                {
+                    foundShipBounds = true;
+                    shipBounds = r.bounds;
+                }
+            }
+
+            return shipBounds;
+        }
+
+        private void CreateMiddles(Part part, int numTotal)
+        {
+            // Spawn middle sections
+            for (int i = part.middles.Count; i < numTotal; ++i)
+            {
+                var mPrefab = part.middlesBase[i % part.middlesBase._size];
+                var cloned = Util.CloneGameObject(mPrefab);
+                part.middles.Add(cloned);
+                Util.SetActiveX(cloned, true);
+            }
+        }
+
+        private void ApplyVariations(Part part)
+        {
+            part.data.paramx.TryGetValue("var", out var desiredVars);
+            var varComps = part.model.gameObject.GetComponentsInChildren<Variation>(true);
+            for (int i = 0; i < varComps.Length; ++i)
+            {
+                var varComp = varComps[i];
+                string varName = string.Empty;
+                if (desiredVars != null)
+                {
+                    foreach (var s in varComp.variations)
+                        if (desiredVars.Contains(s))
+                            _matchedVars.Add(s);
+                }
+
+                _foundVars.AddRange(_matchedVars);
+
+                if (_matchedVars.Count > 1)
+                    Debug.LogError("Found multiple variations on partdata " + part.data.name + ": " + string.Join(", ", _matchedVars));
+                if (_matchedVars.Count > 0)
+                    varName = _matchedVars[0];
+
+                _matchedVars.Clear();
+
+                // This is a reimplementation of Variation.Init, since that needs a Ship
+                var childObjs = Util.GetChildren(varComp);
+                if (childObjs.Count == 0)
+                {
+                    Debug.LogError("For part " + part.data.name + ", no variations!");
+                    continue;
+                }
+                if (varComp.variations.Count != childObjs.Count)
+                {
+                    Debug.LogError("For part " + part.data.name + ", var count / child count mismatch!");
+                    continue;
+                }
+                int varIdx = varComp.variations.IndexOf(varName);
+                if ((varIdx < 0 && varName != string.Empty))
+                {
+                    Debug.LogError("For part " + part.data.name + ", can't find variation " + varName);
+                }
+                int selectedIdx;
+                if (varIdx >= 0)
+                {
+                    selectedIdx = varIdx;
+                }
+                else if (varComp.random)
+                {
+                    selectedIdx = UnityEngine.Random.Range(0, varComp.variations.Count - 1);
+                }
+                else
+                {
+                    selectedIdx = varComp.variations.IndexOf(varComp.@default);
+                    if (selectedIdx < 0)
+                    {
+                        if (varComp.@default != string.Empty)
+                        {
+                            Debug.LogError("For part " + part.data.name + ", can't find default variation " + varComp.@default);
+                        }
+                        selectedIdx = 0;
+                    }
+                }
+                for (int v = childObjs.Count; v-- > 0;)
+                    Util.SetActiveX(childObjs[v], v == selectedIdx);
+            }
+
+            // This check is not quite the same as the game's
+            // but it's fine.
+            if (desiredVars != null)
+            {
+                foreach (var desV in desiredVars)
+                {
+                    for (int v = _foundVars.Count; v-- > 0;)
+                    {
+                        if (_foundVars[v] == desV)
+                            _foundVars.RemoveAt(v);
+                    }
+                }
+                if (_foundVars.Count > 0)
+                    Debug.LogError("On partdata " + part.data.name + ": Missing vars: " + string.Join(", ", _foundVars));
+            }
+
+            _foundVars.Clear();
+        }
+
+        private void PositionSections(Part part)
+        {
+            // Get reversed list of sections so we can position them
+            var sectionsReverse = new Il2CppSystem.Collections.Generic.List<GameObject>();
+            sectionsReverse.AddRange(part.hullSections);
+            for (int i = 0; i < sectionsReverse.Count / 2; ++i)
+            {
+                int opposite = sectionsReverse.Count - 1 - i;
+                if (i == opposite)
+                    break;
+
+                var tmp = sectionsReverse[i];
+                sectionsReverse[i] = sectionsReverse[opposite];
+                sectionsReverse[opposite] = tmp;
+            }
+
+            // Calculate bounds for all sections
+            var sectionsGO = Util.GetParent(part.bow);
+            var sectionsTrf = sectionsGO.transform;
+            float shipLength = 0f;
+
+            foreach (var sec in sectionsReverse)
+            {
+                var secBounds = GetSectionBounds(sec, sectionsTrf);
+                _sectionBounds[sec] = secBounds;
+                shipLength += secBounds.size.z;
+            }
+
+            // Reposition/rescale sections
+            float lengthOffset = shipLength * -0.5f;
+            foreach (var sec in sectionsReverse)
+            {
+                var secBounds = _sectionBounds[sec];
+                Util.SetLocalZ(sec.transform, secBounds.size.z * 0.5f - secBounds.center.z + lengthOffset + sec.transform.localPosition.z);
+                Util.SetScaleX(sec.transform, 1f); // beam
+                Util.SetScaleY(sec.transform, 1f); // draught
+                lengthOffset += secBounds.size.z;
+            }
+
+            _sectionBounds.Clear();
+        }
+
+        private Bounds GetSectionBounds(GameObject sec, Transform space)
+        {
+            var vr = Part.GetVisualRenderers(sec);
+            Bounds secBounds = new Bounds();
+            bool foundBounds = false;
+            foreach (var r in vr)
+            {
+                if (!r.gameObject.activeInHierarchy)
+                    continue;
+
+                var trf = r.transform;
+                var mesh = r.GetComponent<MeshFilter>();
+                var sharedMesh = mesh.sharedMesh;
+                var meshBounds = sharedMesh.bounds;
+                // transform bounds to 'Sections' space
+                meshBounds = Util.TransformBounds(trf, meshBounds);
+                var invBounds = Util.InverseTransformBounds(space, meshBounds);
+
+                if (foundBounds)
+                    secBounds.Encapsulate(invBounds);
+                else
+                    secBounds = invBounds;
+            }
+            var secInfo = sec.GetComponent<SectionInfo>() ?? sec.GetComponentInChildren<SectionInfo>();
+            if (secInfo != null)
+            {
+                //Debug.Log($"For part {data.name}, sec {sec.name}, size mods {secInfo.sizeFrontMod} + {secInfo.sizeBackMod}");
+                var bSize = secBounds.size;
+                bSize.z += secInfo.sizeFrontMod + secInfo.sizeBackMod;
+                secBounds.size = bSize;
+                var bCent = secBounds.center;
+                bCent.z += (secInfo.sizeFrontMod - secInfo.sizeBackMod) * 0.5f;
+                secBounds.center = bCent;
+            }
+
+            return secBounds;
         }
     }
 }
