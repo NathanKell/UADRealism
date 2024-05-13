@@ -132,6 +132,21 @@ namespace UADRealism
 
             return hierarchy;
         }
+
+        public static GameObject FindDeepChild(this GameObject obj, string name)
+        {
+            if (obj.name == name)
+                return obj;
+
+            for (int i = 0; i < obj.transform.childCount; ++i)
+            {
+                var test = obj.transform.GetChild(i).gameObject.FindDeepChild(name);
+                if (test != null)
+                    return test;
+            }
+
+            return null;
+        }
     }
 
     [RegisterTypeInIl2Cpp]

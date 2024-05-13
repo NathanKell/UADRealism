@@ -16,6 +16,7 @@ namespace UADRealism
         public HullStats[] _statsSet;
         public bool _isDDHull = false;
         public float _year;
+        public float yPos;
     }
 
     public struct HullStats
@@ -117,10 +118,10 @@ namespace UADRealism
                 if (data.type != "hull")
                     continue;
 
-                // Just apply beam delta to tonnage directly since we're going to use length/beam ratios
-                data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef);
-                data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef) * 1.2f;
-                // Don't bother to change based on draught, though we will do likewise.
+                // Just apply deltas to tonnage directly
+                data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef) * Mathf.Pow(data.draughtMin * 0.01f + 1f, data.draughtCoef);
+                data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef) * Mathf.Pow(data.draughtMax * 0.01f + 1f, data.draughtCoef);
+
 
                 //data.sectionsMin = (int)(data.sectionsMin * 0.75f);
                 data.sectionsMin = 0;
@@ -195,18 +196,18 @@ namespace UADRealism
             if (hData == null)
                 return new HullStats();
 
-            int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.CrewTrainingAmount * 0.01f));
-            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, sec);
+            int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, 1f - ship.hullPartSizeZ * 0.01f));
+            return GetScaledStats(hData, ship.tonnage, -ship.beam, -ship.draught, sec);
         }
 
-        public static HullStats GetScaledStats(HullData hData, float tonnage, float beamPct, float draughtPct, int sections)
+        public static HullStats GetScaledStats(HullData hData, float tonnage, float lengthToBeamPct, float beamToDraughtPct, int sections)
         {
             var newStats = hData._statsSet[sections];
             //Melon<UADRealismMod>.Logger.Msg($"Pre: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t.");
 
-            float drMult = draughtPct * 0.01f + 1f;
-            float bmMult = beamPct * 0.01f + 1f;
-            float linearScale = GetHullScaleFactor(tonnage, newStats.Vd, beamPct, draughtPct);
+            float linearScale = GetHullScaleFactor(tonnage, newStats.Vd, lengthToBeamPct, beamToDraughtPct);
+            float bmMult = lengthToBeamPct * 0.01f + 1f;
+            float drMult = bmMult * (beamToDraughtPct * 0.01f + 1f);
             newStats.B *= bmMult * linearScale;
             newStats.beamBulge *= bmMult * linearScale;
             newStats.bulgeDepth *= drMult * linearScale;
@@ -225,12 +226,14 @@ namespace UADRealism
 
         public static float GetHullScaleFactor(Ship ship, float Vd)
         {
-            return GetHullScaleFactor(ship.tonnage, Vd, ship.beam, ship.draught);
+            return GetHullScaleFactor(ship.tonnage, Vd, -ship.beam, -ship.draught);
         }
-        public static float GetHullScaleFactor(float tonnage, float Vd, float beamPct, float draughtPct)
+        public static float GetHullScaleFactor(float tonnage, float Vd, float lengthToBeamPct, float beamToDraughtPct)
         {
             float desiredVol = tonnage * TonnesToCubicMetersWater;
-            return Mathf.Pow(desiredVol / (Vd * (1f + beamPct * 0.01f) * (1f + draughtPct * 0.01f)), 1f / 3f);
+            float bmMult = 1f + lengthToBeamPct * 0.01f;
+            float drMult = bmMult * (1f + beamToDraughtPct * 0.01f);
+            return Mathf.Pow(desiredVol / (Vd * bmMult * drMult ), 1f / 3f);
         }
 
         // water at 15C, standard salinity

@@ -824,6 +824,7 @@ namespace UADRealism
             var part = Instance.SpawnPart(data);
             //part.gameObject.AddComponent<LogMB>();
             part.enabled = false;
+            hData.yPos = part.bow.transform.localPosition.y;
 
             int count = hData._sectionsMax + 1;
             hData._statsSet = new HullStats[count];
