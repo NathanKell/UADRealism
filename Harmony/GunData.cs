@@ -13,24 +13,33 @@ namespace UADRealism
         internal static List<float> oldDiameters = new List<float>();
         internal static bool isPatched = false;
 
-        internal static float ConvertDiameter(float diam)
+        private const float DiameterPower = 1.5f;
+        internal static float ConvertDiameter(float baseCaliberInch, float extraDiam)
         {
             bool isNegative;
-            float diamRound;
-            if (diam < 0f)
+            float extraDiamInch;
+            if (extraDiam < 0f)
             {
                 isNegative = true;
-                diamRound = (float)Math.Round(1f + (diam / 25.4f), 1);
+                extraDiamInch = (float)Math.Round(1f + (extraDiam / 25.4f), 1);
+                if (baseCaliberInch > 1f)
+                    baseCaliberInch -= 1f;
             }
             else
             {
                 isNegative = false;
-                diamRound = (float)Math.Round(diam / 25.4f, 1);
+                extraDiamInch = (float)Math.Round(extraDiam / 25.4f, 1);
             }
+
+            float basePowered = Mathf.Pow(baseCaliberInch, DiameterPower);
+            float exactPowered = Mathf.Pow(baseCaliberInch + extraDiamInch, DiameterPower);
+            float nextPowered = Mathf.Pow(baseCaliberInch + 1f, DiameterPower);
+            float newExtraDiam = (exactPowered - basePowered) / (nextPowered - basePowered);
+
             if (isNegative)
-                return ((diamRound * diamRound * diamRound) - 1f) * 25.4f;
-            else
-                return (diamRound * diamRound * diamRound) * 25.4f;
+                newExtraDiam = newExtraDiam - 1f;
+
+            return newExtraDiam * 25.4f;
         }
 
         /// <summary>
@@ -43,7 +52,8 @@ namespace UADRealism
             foreach (var tc in ship.shipGunCaliber)
             {
                 oldDiameters.Add(tc.diameter);
-                tc.diameter = ConvertDiameter(tc.diameter);
+                if (tc.turretPartData != null)
+                    tc.diameter = ConvertDiameter(tc.turretPartData.GetCaliberInch(), tc.diameter);
             }
         }
 
@@ -57,7 +67,7 @@ namespace UADRealism
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(GunData.GetValue), new Type[] { typeof(Ship), typeof(PartData), typeof(float), typeof(Il2CppSystem.Func<GunData, float>) })]
-        internal static void Prefix_GetValue(Ship ship)
+        internal static void Prefix_GetValue(GunData __instance, Ship ship)
         {
             if (isPatched || ship == null || ship.shipGunCaliber == null)
                 return;
@@ -73,7 +83,9 @@ namespace UADRealism
         {
             if (!isPatched)
                 return;
+
             isPatched = false;
+
             if (ship == null || ship.shipGunCaliber == null)
                 return;
 
@@ -108,7 +120,9 @@ namespace UADRealism
         {
             if (!isPatched)
                 return;
+
             isPatched = false;
+
             if (ship == null || ship.shipGunCaliber == null)
                 return;
 
