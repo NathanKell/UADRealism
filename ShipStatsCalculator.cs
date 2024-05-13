@@ -1031,14 +1031,15 @@ namespace UADRealism
 
                         var part = obj.GetParent().GetComponent<Part>();
                         int sec = part == null || part.middles == null ? 0 : part.middles.Count;
-                        bool detectBlock = false;
+                        int blockRow = -1;
                         for (int i = sternCol + 1; i < _ResSideFront - 10; ++i)
                         {
-                            if (_beamPixelCounts[i] > _beamPixelCounts[i - 1] + 5 && _beamPixelCounts[i + 10] == _beamPixelCounts[i])
+                            int px = _beamPixelCounts[i];
+                            if (px > _beamPixelCounts[i - 1] + 5 && px == _beamPixelCounts[i + 10] && px == _beamPixelCounts[i + 15])
                             {
-                                string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
+                                string hierarchy = $"Bounds:\n{string.Join("\n", secBoundsList)}\n{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
                                 Debug.Log("---------\n" + hierarchy);
-                                detectBlock = true;
+                                blockRow = i;
                                 break;
                             }
                         }
@@ -1050,14 +1051,14 @@ namespace UADRealism
                             //Debug.Log("---------\n" + hierarchy);
                             string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
                             int bbPx = Mathf.RoundToInt(stats.beamBulge / sizePerPixel);
-                            if (detectBlock)
+                            if (blockRow >= 0)
                                 filePath += "zzz";
-                            filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_t{transomCol}-{_beamPixelCounts[Math.Max(0, transomCol)]}_s{sternCol}_b{maxBeamPx}_f{bbPx}.png";
+                            filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_t{transomCol}-{_beamPixelCounts[Math.Max(0, transomCol)]}_s{sternCol}_bd{blockRow}_b{maxBeamPx}_f{bbPx}.png";
 
                             var bytes = ImageConversion.EncodeToPNG(_texture);
                             Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
                         }
-
+                        secBoundsList.Clear();
                         break;
 
                     default:
@@ -1455,6 +1456,11 @@ namespace UADRealism
 
         private void PositionSections(Part part)
         {
+            if (part == null)
+            {
+                Debug.LogError("Part null!\n" + Environment.StackTrace);
+                return;
+            }
             // Get reversed list of sections so we can position them
             var sectionsReverse = new Il2CppSystem.Collections.Generic.List<GameObject>();
             sectionsReverse.AddRange(part.hullSections);
@@ -1470,22 +1476,36 @@ namespace UADRealism
             }
 
             // Calculate bounds for all sections
+            int mCount = part.middles == null ? -1 : part.middles.Count;
             if (part.bow == null)
             {
-                Debug.LogError($"Part {part.name}@{part.middles.Count}: bow null!");
+                Debug.LogError($"Part {part.name}@{mCount}: bow null!");
                 return;
             }
             var sectionsGO = Util.GetParent(part.bow);
             if (sectionsGO == null)
             {
-                Debug.LogError($"Part {part.name}@{part.middles.Count}: Sections null!");
+                Debug.LogError($"Part {part.name}@{mCount}: Sections null!");
                 return;
             }
             var sectionsTrf = sectionsGO.transform;
             float shipLength = 0f;
 
-            foreach (var sec in sectionsReverse)
+            if (_sectionBounds == null)
             {
+                Debug.LogError($"Part {part.name}@{mCount}: _SectionBounds is null!");
+                return;
+            }
+
+            for (int i = 0; i < sectionsReverse.Count; ++i)
+            {
+                var sec = sectionsReverse[i];
+                if (sec == null)
+                {
+                    Debug.LogError($"Part {part.name}@{mCount}: Section {i} is null!");
+                    return;
+                }
+
                 var secBounds = GetSectionBounds(sec, sectionsTrf);
                 _sectionBounds[sec] = secBounds;
                 shipLength += secBounds.size.z;
@@ -1510,10 +1530,13 @@ namespace UADRealism
             var vr = Part.GetVisualRenderers(sec);
             Bounds secBounds = new Bounds();
             bool foundBounds = false;
+            int rCount = 0;
             foreach (var r in vr)
             {
                 if (!r.gameObject.activeInHierarchy)
                     continue;
+
+                ++rCount;
 
                 var trf = r.transform;
                 var mesh = r.GetComponent<MeshFilter>();
@@ -1529,12 +1552,10 @@ namespace UADRealism
                 }
                 else
                 {
-                    foundBounds = true;
                     secBounds = invBounds;
+                    foundBounds = true;
                 }
             }
-            secBounds = Util.InverseTransformBounds(space, secBounds);
-
             var secInfo = sec.GetComponent<SectionInfo>() ?? sec.GetComponentInChildren<SectionInfo>();
             if (secInfo != null)
             {
@@ -1546,8 +1567,10 @@ namespace UADRealism
                 bCent.z += (secInfo.sizeFrontMod - secInfo.sizeBackMod) * 0.5f;
                 secBounds.center = bCent;
             }
+            secBoundsList.Add($"Sec {sec.name}: {secBounds.min}-{secBounds.max} from {rCount}");
 
             return secBounds;
         }
+        private List<string> secBoundsList = new List<string>();
     }
 }
