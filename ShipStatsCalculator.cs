@@ -738,7 +738,6 @@ namespace UADRealism
         private Camera _camera;
         private RenderTexture _renderTexture;
         private Texture2D _texture;
-        //private Texture2D _textureOut;
         private short[] _beamPixelCounts = new short[_ResSideFront];
         private float[] _displacementsPerPx = new float[_ResSideFront];
 
@@ -751,7 +750,6 @@ namespace UADRealism
 
             _renderTexture = new RenderTexture(_ResSideFront, _ResSideFront, 16, RenderTextureFormat.ARGB32);
             _texture = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
-            //_textureOut = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
 
             _camera = gameObject.AddComponent<Camera>();
             _camera.clearFlags = CameraClearFlags.SolidColor;
@@ -952,7 +950,6 @@ namespace UADRealism
                         // This will detect the midpoints _counting the bulge_
                         // but that should be ok.
                         // We'll also record the number of beam pixels at each row.
-                        int minInset = _ResSideFront / 2 + 1;
                         int lastNonPropCol = -1;
                         
                         for (row = 0; row < _ResSideFront; ++row)
@@ -980,11 +977,6 @@ namespace UADRealism
                                 }
 
                                 ++numPx;
-
-                                if (col < minInset)
-                                {
-                                    minInset = col;
-                                }
                             }
 
                             // Prop detection
@@ -1021,6 +1013,13 @@ namespace UADRealism
                                     else
                                     {
                                         numPx = predictedPx;
+
+                                        int pxStart = (_ResSideFront - numPx) / 2;
+                                        int pxEnd = pxStart + numPx - 1;
+                                        for (int i = 0; i < _ResSideFront; ++i)
+                                        {
+                                            pixels[row * _ResSideFront + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
+                                        }
                                     }
                                 }
                             }
@@ -1173,16 +1172,22 @@ namespace UADRealism
 
                             bool firstRowFog = IsFogged(pixels[(_ResSideFront - 1) * _ResSideFront + col]);
                             int numFog = 0;
+                            int startRow = -1;
+                            // Note: we don't have to cover the case where we don't hit an empty pixel
+                            // before the end of the column, because we know the ship is going to be longer
+                            // (wider in columns) than it is deep (tall in rows), and this is a square ortho
+                            // projection.
                             for (int r = _ResSideFront - 1; r >= 0; --r)
                             {
-                                // Stop when we hit a gap (no holes in the hull! Otherwise we'll count
-                                // prop shafts). If we're aft of midships, we also keep track of the last depth
-                                // and stop if we go beyond it. This is to try not to count rudders. Note we can't
-                                // just use pure midships, since the max depth might be slightly aft of that.
-                                bool depthLimit = col < _ResSideFront * 2 / 3 && r < lastDepth;
+                                var px = pixels[r * _ResSideFront + col];
                                 if (hasPx)
                                 {
-                                    var px = pixels[r * _ResSideFront + col];
+                                    // Stop when we hit a gap (no holes in the hull! Otherwise we'll count
+                                    // prop shafts). If we're aft of midships, we also keep track of the last depth
+                                    // and stop if we go beyond it. This is to try not to count rudders. Note we can't
+                                    // just use pure midships, since the max depth might be slightly aft of that.
+                                    bool depthLimit = col < _ResSideFront * 2 / 3 && r < lastDepth;
+
                                     bool isFogged = IsFogged(px);
                                     // If we're going back deeper and we're aft, or it's an empty pixel (a hole, or below the hull),
                                     // _or_ we're aft and it's some kind of narrow rudder / keel thing (which we detect via fog), stop here.
@@ -1194,15 +1199,25 @@ namespace UADRealism
                                     //if (depthLimit || px.a == 0 || (!firstRowRed && col < _ResSideFront / 2 && IsFogged(px) && (r == 0 || pixels[(r - 1) * _ResSideFront + col].a > 0)))
                                     if (depthLimit || px.a == 0 || (!firstRowFog && col < _ResSideFront / 2 && numFog > 0))
                                     {
-                                        Vd += (_ResSideFront - r) * dispPerPx;
+                                        Vd += (startRow - r) * dispPerPx;
                                         if (!depthLimit)
                                             lastDepth = r + 1;
+
+                                        // handle output
+                                        for (int r2 = r; r2 >= 0; --r2)
+                                            pixels[r2 * _ResSideFront + col].a = 0;
+
                                         break;
                                     }
                                     if (isFogged)
                                         ++numFog;
                                 }
+                                // we don't care about fog in this case
+                                if (px.a == 0)
+                                    continue;
+
                                 hasPx = true;
+                                startRow = r;
                                 int curDepth = _ResSideFront - r;
                                 if (curDepth > maxDepthPx)
                                     maxDepthPx = curDepth;
@@ -1252,10 +1267,16 @@ namespace UADRealism
                     filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}";
                     if (view == ShipViewDir.Bottom && firstPropCol > 0)
                         filePath += $"ps{firstPropCol}_pe{firstEndPropCol}";
-                    filePath += ".png";
 
                     var bytes = ImageConversion.EncodeToPNG(_texture);
-                    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
+                    Il2CppSystem.IO.File.WriteAllBytes(filePath + ".png", bytes);
+
+                    if (view == ShipViewDir.Side)
+                    {
+                        _texture.SetPixels32(pixels);
+                        bytes = ImageConversion.EncodeToPNG(_texture);
+                        Il2CppSystem.IO.File.WriteAllBytes(filePath + "_out.png", bytes);
+                    }
                 }
             }
             RenderTexture.active = null;
