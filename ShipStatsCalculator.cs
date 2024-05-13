@@ -525,6 +525,12 @@ namespace UADRealism
             private static Color _ambientLight;
             private static UnityEngine.Rendering.AmbientMode _ambientMode;
             private static UnityEngine.Rendering.SphericalHarmonicsL2 _ambientProbe;
+            private static bool _fog;
+            private static Color _fogColor;
+            private static float _fogDensity;
+            private static float _fogStartDistance;
+            private static float _fogEndDistance;
+            private static FogMode _fogMode;
 
             public static void SetForRender(GameObject hullModel)
             {
@@ -532,10 +538,20 @@ namespace UADRealism
                 _ambientLight = RenderSettings.ambientLight;
                 _ambientMode = RenderSettings.ambientMode;
                 _ambientProbe = RenderSettings.ambientProbe;
+                _fog = RenderSettings.fog;
+                _fogColor = RenderSettings.fogColor;
+                _fogDensity = RenderSettings.fogDensity;
+                _fogStartDistance = RenderSettings.fogStartDistance;
+                _fogEndDistance = RenderSettings.fogEndDistance;
+                _fogMode = RenderSettings.fogMode;
 
-                RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-                RenderSettings.ambientIntensity = 1f;
-                RenderSettings.ambientLight = new Color(1f, 1f, 1f);
+                //RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+                //RenderSettings.ambientIntensity = 99f;
+                //RenderSettings.ambientLight = new Color(99f, 0f, 0f);
+
+                RenderSettings.fog = true;
+                RenderSettings.fogMode = FogMode.Linear;
+                RenderSettings.fogColor = new Color(100f, 0f, 0f);
 
                 var okRenderers = Part.GetVisualRenderers(hullModel);
 
@@ -662,6 +678,13 @@ namespace UADRealism
                 RenderSettings.ambientLight = _ambientLight;
                 RenderSettings.ambientMode = _ambientMode;
                 RenderSettings.ambientProbe = _ambientProbe;
+
+                RenderSettings.fog = _fog;
+                RenderSettings.fogColor = _fogColor;
+                RenderSettings.fogDensity = _fogDensity;
+                RenderSettings.fogStartDistance = _fogStartDistance;
+                RenderSettings.fogEndDistance = _fogEndDistance;
+                RenderSettings.fogMode = _fogMode;
             }
 
             private static void StoreLayerRecursive(GameObject obj)
@@ -713,9 +736,9 @@ namespace UADRealism
         private const int _ResSideFront = 512;
 
         private Camera _camera;
-        //private Light _light;
         private RenderTexture _renderTexture;
         private Texture2D _texture;
+        //private Texture2D _textureOut;
         private short[] _beamPixelCounts = new short[_ResSideFront];
         private float[] _displacementsPerPx = new float[_ResSideFront];
 
@@ -728,6 +751,7 @@ namespace UADRealism
 
             _renderTexture = new RenderTexture(_ResSideFront, _ResSideFront, 16, RenderTextureFormat.ARGB32);
             _texture = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
+            //_textureOut = new Texture2D(_ResSideFront, _ResSideFront, TextureFormat.ARGB32, false);
 
             _camera = gameObject.AddComponent<Camera>();
             _camera.clearFlags = CameraClearFlags.SolidColor;
@@ -758,6 +782,11 @@ namespace UADRealism
             MAX
         }
 
+        private static bool IsFogged(Color32 px)
+        {
+            return px.r > 200 && px.g < 100 && px.b < 100;
+        }
+
         public HullStats GetStats(GameObject obj, Bounds bounds, bool isDDHull)
         {
             var stats = new HullStats();
@@ -783,6 +812,8 @@ namespace UADRealism
             bool hasBulge = false;
             int sternCol = 0;
             int transomCol = -1;
+            int firstPropCol = -1;
+            int firstEndPropCol = -1;
             var part = obj.GetParent().GetComponent<Part>();
             int sec = part == null || part.middles == null ? 0 : part.middles.Count;
 
@@ -801,14 +832,15 @@ namespace UADRealism
                     default:
                     case ShipViewDir.Side:
                         size = Mathf.Max(draught, bounds.size.z);
-                        depth = bounds.size.x;
+                        depth = bounds.size.x * 0.5f;
                         dir = Vector3.left;
                         _camera.transform.position = new Vector3(bounds.max.x + 1f, -size * 0.5f, bounds.center.z);
                         break;
 
                     case ShipViewDir.Front:
                         size = Mathf.Max(draught, bounds.size.x);
-                        depth = bounds.size.z;
+                        //depth = bounds.size.z - GetSectionBounds(part.stern, null).size.z + 5f;
+                        depth = GetSectionBounds(part.bow, null).size.z;
                         dir = Vector3.back;
                         _camera.transform.position = new Vector3(bounds.center.x, -size * 0.5f, bounds.max.z + 1f);
                         break;
@@ -824,6 +856,8 @@ namespace UADRealism
                 _camera.orthographicSize = size * 0.5f;
                 _camera.nearClipPlane = 0.1f;
                 _camera.farClipPlane = depth + 1f;
+                RenderSettings.fogStartDistance = 0f;
+                RenderSettings.fogEndDistance = depth;
 
                 _camera.Render();
                 _texture.ReadPixels(new Rect(0, 0, _ResSideFront, _ResSideFront), 0, 0);
@@ -878,8 +912,6 @@ namespace UADRealism
 
                                 ++pixelsInCurrentRow;
                             }
-                            
-                            // TODO: Account for props that extend outside/below a hull
 
                             if (pixelsInCurrentRow > 0)
                             {
@@ -921,17 +953,31 @@ namespace UADRealism
                         // but that should be ok.
                         // We'll also record the number of beam pixels at each row.
                         int minInset = _ResSideFront / 2 + 1;
+                        int lastNonPropCol = -1;
                         
                         for (row = 0; row < _ResSideFront; ++row)
                         {
                             short numPx = 0;
-                            // TODO: Account for the case where there's prop shafts
-                            // outside the hull. Discard pixels if on left side and
-                            // we hit a gap? Stop when we hit a gap if on right side?
+                            int sideCol = _ResSideFront - row - 1;
                             for (int col = 0; col < _ResSideFront; ++col)
                             {
                                 if (pixels[row * _ResSideFront + col].a == 0)
-                                    continue;
+                                {
+                                    // Account for the case where there's prop shafts
+                                    // outside the hull. Discard pixels if on left side and
+                                    // we hit a gap; stop when we hit a gap if on right side.
+                                    if (col < _ResSideFront / 2 - 1)
+                                    {
+                                        if (numPx > 0)
+                                            numPx = 0;
+
+                                        continue;
+                                    }
+                                    else
+                                    {
+                                        break;
+                                    }
+                                }
 
                                 ++numPx;
 
@@ -940,8 +986,47 @@ namespace UADRealism
                                     minInset = col;
                                 }
                             }
+
+                            // Prop detection
+                            if (row > _ResSideFront * 3 / 4)
+                            {
+                                int lastSideCol = sideCol + 1;
+                                short lastPx = _beamPixelCounts[lastSideCol];
+                                if (numPx > lastPx)
+                                {
+                                    if (lastNonPropCol < 0)
+                                    {
+                                        lastNonPropCol = lastSideCol;
+                                        if (firstPropCol < 0)
+                                            firstPropCol = sideCol;
+                                    }
+                                }
+
+                                if (lastNonPropCol > 0)
+                                {
+                                    // attempt to continue angle - this will reverse the rate
+                                    // of change of angle, but it's better than continuing straight back
+                                    // and local curvature will be low for the few pixels of propeller
+                                    int delta = lastNonPropCol - sideCol;
+                                    short deltaPx = _beamPixelCounts[lastNonPropCol + delta];
+                                    short lastPropPx = _beamPixelCounts[lastNonPropCol];
+                                    short predictedPx = (short)(lastPropPx - (deltaPx - lastPropPx));
+
+                                    if (delta > 6 || (numPx < predictedPx + 2 && numPx <= lastPropPx))
+                                    {
+                                        lastNonPropCol = -1;
+                                        if (firstEndPropCol < 0)
+                                            firstEndPropCol = sideCol;
+                                    }
+                                    else
+                                    {
+                                        numPx = predictedPx;
+                                    }
+                                }
+                            }
+
                             Awp += numPx;
-                            _beamPixelCounts[_ResSideFront - row - 1] = numPx;
+                            _beamPixelCounts[sideCol] = numPx;
 
                             if (numPx > 0)
                             {
@@ -1017,13 +1102,13 @@ namespace UADRealism
 
                         //if (transomCol >= 0)
                         //{
-                            //if (transomCol >= 0)
-                            //{
-                            //Debug.Log($"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): Transom at col {transomCol}: {(_beamPixelCounts[transomCol] / (float)maxBeamPx):P2}");
-                            //}
-                            //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
-                            //string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
-                            //Debug.Log("---------\n" + hierarchy);
+                        //if (transomCol >= 0)
+                        //{
+                        //Debug.Log($"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): Transom at col {transomCol}: {(_beamPixelCounts[transomCol] / (float)maxBeamPx):P2}");
+                        //}
+                        //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
+                        //string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
+                        //Debug.Log("---------\n" + hierarchy);
                         //}
                         //{
                         //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
@@ -1086,6 +1171,8 @@ namespace UADRealism
                             if (hasBulge && col >= bulgeFirst && col <= bulgeLast)
                                 dispPerPx *= nonBulgeMult;
 
+                            bool firstRowFog = IsFogged(pixels[(_ResSideFront - 1) * _ResSideFront + col]);
+                            int numFog = 0;
                             for (int r = _ResSideFront - 1; r >= 0; --r)
                             {
                                 // Stop when we hit a gap (no holes in the hull! Otherwise we'll count
@@ -1093,15 +1180,27 @@ namespace UADRealism
                                 // and stop if we go beyond it. This is to try not to count rudders. Note we can't
                                 // just use pure midships, since the max depth might be slightly aft of that.
                                 bool depthLimit = col < _ResSideFront * 2 / 3 && r < lastDepth;
-                                if ((hasPx && pixels[r * _ResSideFront + col].a == 0) || depthLimit)
+                                if (hasPx)
                                 {
-                                    if (hasPx)
+                                    var px = pixels[r * _ResSideFront + col];
+                                    bool isFogged = IsFogged(px);
+                                    // If we're going back deeper and we're aft, or it's an empty pixel (a hole, or below the hull),
+                                    // _or_ we're aft and it's some kind of narrow rudder / keel thing (which we detect via fog), stop here.
+                                    // Note: we need to make sure this whole column isn't fogged, and we need to make sure this isn't the
+                                    // last row of a normal column (where the row after this will be empty, which means the fog just means
+                                    // that the beam is zeroing here).
+                                    // TODO: Do the same thing for rudders we do for props in bottom view: if we go below last depth,
+                                    // instead of just continuing at last depth, continue the _slope_.
+                                    //if (depthLimit || px.a == 0 || (!firstRowRed && col < _ResSideFront / 2 && IsFogged(px) && (r == 0 || pixels[(r - 1) * _ResSideFront + col].a > 0)))
+                                    if (depthLimit || px.a == 0 || (!firstRowFog && col < _ResSideFront / 2 && numFog > 0))
                                     {
                                         Vd += (_ResSideFront - r) * dispPerPx;
                                         if (!depthLimit)
                                             lastDepth = r + 1;
+                                        break;
                                     }
-                                    break;
+                                    if (isFogged)
+                                        ++numFog;
                                 }
                                 hasPx = true;
                                 int curDepth = _ResSideFront - r;
@@ -1147,16 +1246,17 @@ namespace UADRealism
                         break;
                 }
 
-                //if (pics++ < 3)
-                //{
-                //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\screenshot_";
-                //    if (Patch_GameData._IsProcessing)
-                //        filePath += "p_";
-                //    filePath += obj.name + "_" + view.ToString() + ".png";
+                if(view != ShipViewDir.Front || sec == 0)
+                {
+                    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
+                    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}";
+                    if (view == ShipViewDir.Bottom && firstPropCol > 0)
+                        filePath += $"ps{firstPropCol}_pe{firstEndPropCol}";
+                    filePath += ".png";
 
-                //    var bytes = ImageConversion.EncodeToPNG(_texture);
-                //    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
-                //}
+                    var bytes = ImageConversion.EncodeToPNG(_texture);
+                    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
+                }
             }
             RenderTexture.active = null;
 
@@ -1529,7 +1629,7 @@ namespace UADRealism
                 var meshBounds = sharedMesh.bounds;
                 // transform bounds to 'Sections' space
                 meshBounds = Util.TransformBounds(trf, meshBounds);
-                var invBounds = Util.InverseTransformBounds(space, meshBounds);
+                var invBounds = space == null ? meshBounds : Util.InverseTransformBounds(space, meshBounds);
 
                 if (foundBounds)
                 {
