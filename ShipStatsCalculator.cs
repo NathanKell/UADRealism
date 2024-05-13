@@ -1044,7 +1044,7 @@ namespace UADRealism
                             }
                         }
 
-                        if (true || transomCol >= 0 )
+                        if (true || transomCol >= 0)
                         {
                             //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
                             //string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
@@ -1515,7 +1515,11 @@ namespace UADRealism
             float lengthOffset = shipLength * -0.5f;
             foreach (var sec in sectionsReverse)
             {
-                var secBounds = _sectionBounds[sec];
+                if (!_sectionBounds.TryGetValue(sec, out var secBounds))
+                {
+                    Debug.LogError($"Part {part.name}@{mCount}: Section {(sec == null? "NULL" : sec.name)} not found in dict!");
+                    return;
+                }
                 Util.SetLocalZ(sec.transform, secBounds.size.z * 0.5f - secBounds.center.z + lengthOffset + sec.transform.localPosition.z);
                 Util.SetScaleX(sec.transform, 1f); // beam
                 Util.SetScaleY(sec.transform, 1f); // draught
