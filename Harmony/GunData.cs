@@ -39,7 +39,7 @@ namespace UADRealism
             return newExtraDiam * 25.4f;
         }
 
-        private static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData partData)
+        internal static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData partData)
         {
             bool isCasemate = Ship.IsCasemateGun(partData);
             Ship.TurretCaliber tc = null;
