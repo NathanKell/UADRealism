@@ -113,7 +113,14 @@ namespace UADRealism
 
                 // Just apply beam delta to tonnage directly since we're going to use length/beam ratios
                 data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef);
-                data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef);
+                data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef) * 1.2f;
+
+                //data.sectionsMin = (int)(data.sectionsMin * 0.75f);
+                data.sectionsMin = 0;
+                data.beamMin = -50f;
+                data.beamMax = 30f;
+                data.draughtMin = -50f;
+                data.draughtMax = 30f;
 
                 data.beamCoef = 0f;
 
@@ -155,14 +162,19 @@ namespace UADRealism
                     continue;
                 }
                 var modelName = GetHullModelKey(data);
-                for (int i = 0; i < 3; ++i)
+                for (int i = 0; i < hData._sectionsMax; ++i)
                 {
+                    if (i == 1 && i < hData._sectionsMin)
+                        i = hData._sectionsMin;
+
                     float tVal = i > 0 ? 0.25f : 0;
                     float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
-                    GetSectionsAndBeamForLB(i == 1 ? data.beamMin : 0, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out var beamScale, out var sections);
-                    if (i == 0)
-                        sections = 0;
-                    var stats = GetScaledStats(hData, tng, i == 0 ? data.beamMin : beamScale, 0, sections);
+                    //GetSectionsAndBeamForLB(i == 1 ? data.beamMin : 0, data.sectionsMin, data.sectionsMax, data.beamMin, data.beamMax, hData, out var beamScale, out var sections);
+                    //if (i == 0)
+                    //    sections = 0;
+                    //var stats = GetScaledStats(hData, tng, i == 0 ? data.beamMin : beamScale, 0, sections);
+                    int sections = i;
+                    var stats = GetScaledStats(hData, tng, 0, 0, sections);
                     float shp = GetSHPRequired(stats, data.speedLimiter * 0.51444444f, false);
                     Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0}");
                     ++num;
@@ -268,11 +280,13 @@ namespace UADRealism
 
         public static HullStats GetScaledStats(Ship ship)
         {
-            var hData = GetSectionsAndBeamForLB(ship.beam, ship.hull.data, out float beamScale, out int sections);
+            var hData = GetData(ship); //GetSectionsAndBeamForLB(ship.beam, ship.hull.data, out float beamScale, out int sections);
             if (hData == null)
                 return new HullStats();
 
-            return GetScaledStats(hData, ship.tonnage, beamScale, ship.draught, sections);
+            //return GetScaledStats(hData, ship.tonnage, beamScale, ship.draught, sections);
+            int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.CrewTrainingAmount * 0.01f));
+            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, sec);
         }
 
         public static HullStats GetScaledStats(HullData hData, float tonnage, float beamScale, float draught, int sections)
@@ -359,7 +373,7 @@ namespace UADRealism
             double iE = 1d + 89d * Math.Exp(-(Math.Pow(LB, 0.80856)) * Math.Pow(1 - Cw, 0.30484) * Math.Pow(1 - Cp - 0.0225 * lcb, 0.6367) * Math.Pow(LRperL * LB, 0.34574) * Math.Pow(100 * VolCoeff, 0.16302));
             // this is SpringSharp's "Sharpness coefficient"
             double coSharp = 0.4d * Math.Pow(B / L * 6f, 0.3333333432674408d) * Math.Sqrt(Cb / 0.52f);
-            double sharpLerp = ModUtils.InverseLerp(0.3d, 0.45d, coSharp);
+            double sharpLerp = ModUtils.InverseLerp(0.35d, 0.45d, coSharp);
             double LrMax, LrMin, iEMax, iEMin;
             if (LRperL < stats.LrPct)
             {
@@ -769,6 +783,8 @@ namespace UADRealism
             bool hasBulge = false;
             int sternCol = 0;
             int transomCol = -1;
+            var part = obj.GetParent().GetComponent<Part>();
+            int sec = part == null || part.middles == null ? 0 : part.middles.Count;
 
             float draught = -bounds.min.y;
             stats.T = draught;
@@ -999,25 +1015,24 @@ namespace UADRealism
                             }
                         }
 
-                        var part = obj.GetParent().GetComponent<Part>();
-                        int sec = part == null || part.middles == null ? 0 : part.middles.Count;
-
-                        if (transomCol >= 0)
-                        {
+                        //if (transomCol >= 0)
+                        //{
                             //if (transomCol >= 0)
                             //{
-                                //Debug.Log($"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): Transom at col {transomCol}: {(_beamPixelCounts[transomCol] / (float)maxBeamPx):P2}");
+                            //Debug.Log($"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): Transom at col {transomCol}: {(_beamPixelCounts[transomCol] / (float)maxBeamPx):P2}");
                             //}
                             //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
                             //string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
                             //Debug.Log("---------\n" + hierarchy);
-                            //string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
-                            //int bbPx = Mathf.RoundToInt(stats.beamBulge / sizePerPixel);
-                            //filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_t{transomCol}-{_beamPixelCounts[Math.Max(0, transomCol)]}_s{sternCol}_b{maxBeamPx}_f{bbPx}.png";
+                        //}
+                        //{
+                        //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
+                        //    int bbPx = Mathf.RoundToInt(stats.beamBulge / sizePerPixel);
+                        //    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_b{maxBeamPx}_f{bbPx}.png";
 
-                            //var bytes = ImageConversion.EncodeToPNG(_texture);
-                            //Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
-                        }
+                        //    var bytes = ImageConversion.EncodeToPNG(_texture);
+                        //    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
+                        //}
 
                         break;
 

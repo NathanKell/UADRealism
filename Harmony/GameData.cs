@@ -14,10 +14,9 @@ namespace UADRealism
         //[HarmonyPatch(nameof(GameData.PostProcessAll))]
         //internal static void Postfix_PostProcessAll(GameData __instance)
         //{
-        //    var ssc = ShipStatsCalculator.Instance;
-        //    ssc = null;
-
-        //    MelonCoroutines.Start(ShipStats.ProcessGameData());
+            
         //}
+
+        
     }
 }

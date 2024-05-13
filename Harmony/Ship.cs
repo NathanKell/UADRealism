@@ -39,6 +39,8 @@ namespace UADRealism
         {
             _IsChangeHull = false;
             MelonCoroutines.Start(RefreshHullRoutine(__instance));
+            if (G.ui.GetComponent<ShipUpdater>() == null)
+                G.ui.gameObject.AddComponent<ShipUpdater>();
         }
 
         [HarmonyPrefix]
@@ -62,8 +64,11 @@ namespace UADRealism
             __state.beam = __instance.beam;
             __state.tonnage = __instance.tonnage;
 
-            ShipStats.GetSectionsAndBeamForLB(__instance.beam, data, out float newBeam, out int secsToUse);
-            __instance.beam = newBeam;
+            //ShipStats.GetSectionsAndBeamForLB(__instance.beam, data, out float newBeam, out int secsToUse);
+            //__instance.beam = newBeam;
+            float newBeam = __instance.beam;
+            int secsToUse = Mathf.RoundToInt(Mathf.Lerp(data.sectionsMin, data.sectionsMax, __instance.CrewTrainingAmount * 0.01f));
+
             if (secsToUse != __instance.hull.middles.Count)
                 updateSections = true;
 
@@ -211,7 +216,7 @@ namespace UADRealism
                 beamStr += $" ({stats.beamBulge:F2} at {stats.bulgeDepth:F2})";
             }
 
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {SHP:N0} SHP for {(__instance.speedMax/0.5144444f):F1}kn");
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {SHP:N0} SHP for {(__instance.speedMax/0.5144444f):F1}kn");
 
 
             //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
@@ -345,6 +350,24 @@ namespace UADRealism
 
             //Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: SetTonnage. Bounds size/min: {__instance.hullSize.size} / {__instance.hullSize.min}");
             
+        }
+    }
+
+    [RegisterTypeInIl2Cpp]
+    public class ShipUpdater : MonoBehaviour
+    {
+        public ShipUpdater(IntPtr ptr) : base(ptr) { }
+
+        public void Update()
+        {
+            if (GameManager.IsConstructor)
+            {
+                var ship = G.ui.mainShip;
+                int secsToUse = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.CrewTrainingAmount * 0.01f));
+
+                if (secsToUse != ship.hull.middles.Count)
+                    ship.RefreshHull(true);
+            }
         }
     }
 }
