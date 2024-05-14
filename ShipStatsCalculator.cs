@@ -965,12 +965,36 @@ namespace UADRealism
                 }
 
                 hData._statsSet[secCount] = stats;
+
 #if LOGSTATS
                 string beam = stats.B.ToString("F2");
                 if (stats.beamBulge != stats.B)
                     beam += $"({stats.beamBulge:F2})";
                 Debug.Log($"{hData._key}@{secCount}: {(stats.Lwl):F2}x{beam}x{(stats.T):F2} ({(stats.Lwl/stats.B):F2},{(stats.B/stats.T):F2}), LCB={stats.lcbPct:P2}, {stats.Vd:F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}, Catr={stats.Catr:F3}, Cv={stats.Cv:F3}, DD={(hData._isDDHull)}");
 #endif
+                // Early-out if the hull is getting too blocky
+                // (but keep going if it's a special ship)
+                if (stats.Cp > 0.7f)
+                {
+                    int minSec = Math.Max(hData._sectionsMin, secCount);
+                    bool stop = true;
+                    foreach (var hull in hData._hulls)
+                    {
+                        switch (hull.shipType.name)
+                        {
+                            case "amc":
+                            case "tr":
+                            case "ic":
+                            case "ss":
+                                stop = false;
+                                continue;
+                        }
+                        if (hull.sectionsMax > minSec)
+                            hull.sectionsMax = minSec;
+                    }
+                    if (stop)
+                        break;
+                }
                 yield return null;
             }
 
