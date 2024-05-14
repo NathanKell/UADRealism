@@ -245,6 +245,61 @@ namespace UADRealism
         public const float TonnesToCubicMetersWater = (float)(1d / (WaterDensity * 0.001d));
         public const double WaterKinematicViscosity = 1.1892e-6d;
 
+        public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
+        {
+            float Cb = 0.65f;
+            switch (sType)
+            {
+                case "tb":
+                case "dd":
+                    Cb = Util.Remap(year, 1890f, 1920f, 0.38f, 0.54f, true);
+                    break;
+
+                case "cl":
+                case "ic":
+                    Cb = 0.55f;
+                    break;
+
+                case "bc":
+                case "ca":
+                    Cb = 0.6f;
+                    break;
+
+                case "bb":
+                    Cb = Util.Remap(year, 1890f, 1930f, 0.65f, 0.62f, true);
+                    break;
+            }
+
+            float blockVolume = Vd / Cb;
+
+            // Use block to estimate a starting L/B
+            float desiredLdivB = LdivBFromBlock(Cb, year);
+            for (int i = 0; i < 8; ++i)
+            {
+                float B = Mathf.Pow(blockVolume * BdivT / desiredLdivB, 1f / 3f);
+                float L = desiredLdivB * B;
+                float Fn = speedMS / Mathf.Sqrt(9.8066f * L);
+                float oldLB = desiredLdivB;
+                desiredLdivB = LdivBFromFn(Fn, year);
+                //Melon<UADRealismMod>.Logger.Msg($"Iterating to find L/B. Cb={Cb:F3} ({sType}), {L:F2}x{B:F2}, Fn={Fn:F3}, old={oldLB:F2},new={desiredLdivB:F2}");
+                float ratio = oldLB > desiredLdivB ? desiredLdivB / oldLB : oldLB / desiredLdivB;
+                if (ratio > 0.99f)
+                    break;
+            }
+            return desiredLdivB;
+        }
+
+        private static float LdivBFromFn(float Fn, float year)
+        {
+            return Mathf.Clamp(5f + (Fn - 0.2f) * 21f, Util.Remap(year, 1890f, 1930f, 4f, 5f, true), Util.Remap(year, 1890f, 1930f, 11f, 9.5f, true));
+        }
+
+        private static float LdivBFromBlock(float Cb, float year)
+        {
+            float t = Mathf.InverseLerp(0.45f, 0.65f, Cb);
+            return Mathf.Lerp(11f, Util.Remap(year, 1890f, 1930f, 5f, 6.5f), t * t);
+        }
+
         public static float GetDesiredCpForFn(float Fn)
         {
             float tVal;

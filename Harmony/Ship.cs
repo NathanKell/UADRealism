@@ -15,6 +15,9 @@ namespace UADRealism
         internal static Ship.Store _ChangeHullShipStore = null;
         internal static Ship _ChangeHullShip = null;
         internal static bool _IsRefreshPatched = false;
+        
+        internal static bool _AboutToAdjustHullStats = false;
+        internal static bool _InAdjustHullStats = false;
 
         internal struct RefreshHullData
         {
@@ -33,22 +36,29 @@ namespace UADRealism
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.ChangeHull))]
-        internal static void Prefix_Ship_ChangeHull(Ship __instance, PartData data, Ship.Store store = null)
+        internal static void Prefix_Ship_ChangeHull(Ship __instance, Ship.Store store = null)
         {
             _IsChangeHull = true;
             _ChangeHullShipStore = store;
             _ChangeHullShip = __instance;
-            _SetFinenessOnNextGetYear = false;
+            _AboutToAdjustHullStats = false;
+            _InAdjustHullStats = false;
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.ChangeHull))]
-        internal static void Postfix_Ship_ChangeHull(Ship __instance)
+        internal static void Postfix_Ship_ChangeHull(Ship __instance, Ship.Store store = null)
         {
             _IsChangeHull = false;
             _ChangeHullShipStore = null;
             _ChangeHullShip = null;
-            _SetFinenessOnNextGetYear = false;
+            _AboutToAdjustHullStats = false;
+            _InAdjustHullStats = false;
+
+            // Second pass, after speed adjustment
+            if (store == null)
+                SetShipBeamDraughtFineness(__instance);
+
             // This refresh may or may not be needed, but it won't really hurt.
             MelonCoroutines.Start(RefreshHullRoutine(__instance));
         }
@@ -67,47 +77,83 @@ namespace UADRealism
         // We should just be prefixing that, but it crashes (!) because apparently
         // the runtime interop can't handle patching methods that take nullable
         // arguments. Blergh.
-        private static bool _SetFinenessOnNextGetYear = false;
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.SetTonnage))]
         internal static void Postfix_SetTonnage()
         {
-            if (_IsChangeHull && !_SetFinenessOnNextGetYear && _ChangeHullShipStore == null)
-                _SetFinenessOnNextGetYear = true;
+            if (_IsChangeHull && !_AboutToAdjustHullStats && !_InAdjustHullStats)
+                _AboutToAdjustHullStats = true;
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.GetYear))]
         internal static void Prefix_GetYear(Ship __instance)
         {
-            // If we're in ChangeHull, and we've got our bool set,
-            // we should set fineness based on the speed set
-            if (_IsChangeHull && _SetFinenessOnNextGetYear)
+            if (!_InAdjustHullStats && _IsChangeHull && _AboutToAdjustHullStats)
             {
-                // we need to set this now because AdjustHullStats also
-                // calls GetYear a bunch.
-                _SetFinenessOnNextGetYear = false;
+                _InAdjustHullStats = true;
 
-                // Find the section count with closest-to-desired Cp.
-                // We could try to binary search here, but this is fast enough
-                float bestDiff = 1f;
-                int bestSec = __instance.hull.data.sectionsMin;
-                for (int secs = __instance.hull.data.sectionsMin; secs <= __instance.hull.data.sectionsMax; ++secs)
+                // If we're in ChangeHull, and we've got our bool set, and not loading
+                // from store, we should set fineness based on the speed set
+                if (_ChangeHullShipStore == null)
                 {
-                    var stats = ShipStats.GetScaledStats(ShipStats.GetData(__instance), __instance.tonnage, 0f, 0f, secs);
-                    float desiredCp = ShipStats.GetDesiredCpForFn(__instance.speedMax / Mathf.Sqrt(9.80665f * stats.Lwl));
-                    float delta = Mathf.Abs(desiredCp - stats.Cp);
-                    if (delta < bestDiff)
-                    {
-                        bestDiff = delta;
-                        bestSec = secs;
-                    }
-                }
+                    // we need to set this now because AdjustHullStats also
+                    // calls GetYear a bunch.
+                    _AboutToAdjustHullStats = false;
 
-                __instance.hullPartSizeZ = (1f - Mathf.InverseLerp(__instance.hull.data.sectionsMin, __instance.hull.data.sectionsMax, bestSec * bestSec * UnityEngine.Random.Range(0.8f, 1.2f))) * 100f;
-                if (__instance.modelState == Ship.ModelState.Constructor || __instance.modelState == Ship.ModelState.Battle)
-                    __instance.RefreshHull(false);
+                    SetShipBeamDraughtFineness(__instance);
+                }
             }
+        }
+
+        internal static void SetShipBeamDraughtFineness(Ship ship)
+        {
+            // First, set L/B from B/T
+            float desiredBdivT = 3.0f + ModUtils.DistributedRange(0.2f);
+            float desiredLdivB = ShipStats.GetDesiredLdivB(ship.tonnage * ShipStats.TonnesToCubicMetersWater, desiredBdivT, ship.speedMax, ship.shipType.name, ship.GetYear(ship));
+            desiredLdivB *= 1f + ModUtils.DistributedRange(0.025f);
+
+            float CpOffset = ModUtils.DistributedRange(0.02f, 3);
+            //Melon<UADRealismMod>.Logger.Msg($"Iterating to find Cp for {(ship.speedMax / 0.51444444f)}kn. L/B {desiredLdivB:F2}, B/T {desiredBdivT:F2}, Cp offset {CpOffset:F3}");
+
+            // Find the section count with closest-to-desired Cp.
+            // We could try to binary search here, but this is fast enough
+            float bestDiff = 1f;
+            int bestSec = ship.hull.data.sectionsMin;
+            float finalBmPct = 0f;
+            float finalDrPct = 0f;
+            for (int secs = ship.hull.data.sectionsMin; secs <= ship.hull.data.sectionsMax; ++secs)
+            {
+                var hData = ShipStats.GetData(ship);
+                float bmMult = (hData._statsSet[secs].Lwl / hData._statsSet[secs].B) / desiredLdivB;
+                float drMult = (hData._statsSet[secs].B * bmMult / hData._statsSet[secs].T) / desiredBdivT;
+                float bmPct = (bmMult - 1f) * 100f;
+                float drPct = (drMult / bmMult - 1f) * 100f;
+                var stats = ShipStats.GetScaledStats(hData, ship.tonnage, bmPct, drPct, secs);
+                float Fn = ship.speedMax / Mathf.Sqrt(9.80665f * stats.Lwl);
+                float desiredCp = ShipStats.GetDesiredCpForFn(Fn) + CpOffset;
+                float delta = Mathf.Abs(desiredCp - stats.Cp);
+                if (delta < bestDiff)
+                {
+                    bestDiff = delta;
+                    bestSec = secs;
+                    finalBmPct = bmPct;
+                    finalDrPct = drPct;
+                    //Melon<UADRealismMod>.Logger.Msg($"Iterating@{secs} {hData._statsSet[secs].Lwl:F2}x{hData._statsSet[secs].B:F2}x{hData._statsSet[secs].T:F2}->{stats.Lwl:F2}x{stats.B:F2}x{stats.T:F2} with {bmPct:F0}%,{drPct:F0}%. Fn={Fn:F2}, desired={desiredCp:F3}, Cp={stats.Cp:F3}");
+                }
+                // Once we overshoot, everything after will have a bigger delta.
+                if (stats.Cp > desiredCp)
+                    break;
+            }
+
+            ship.SetBeam(finalBmPct, false);
+            ship.SetDraught(finalDrPct, false);
+
+            float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
+            ship.hullPartSizeZ = (1f - t) * 100f;
+            //Melon<UADRealismMod>.Logger.Msg($"Setting sizeZ={ship.hullPartSizeZ:F1} from {t:F3} from {bestSec} in {ship.hull.data.sectionsMin}-{ship.hull.data.sectionsMax}");
+            if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
+                ship.RefreshHull(false);
         }
 
         [HarmonyPrefix]
@@ -143,7 +189,9 @@ namespace UADRealism
             __state._tonnage = __instance.tonnage;
             __state._draught = __instance.draught;
 
-            int secsToUse = Mathf.RoundToInt(Mathf.Lerp(data.sectionsMin, data.sectionsMax, 1f - __instance.hullPartSizeZ * 0.01f));
+            float lerp = Mathf.Lerp(data.sectionsMin, data.sectionsMax, 1f - __instance.hullPartSizeZ * 0.01f);
+            int secsToUse = Mathf.RoundToInt(lerp);
+            //Melon<UADRealismMod>.Logger.Msg($"Setting sections. sizeZ={__instance.hullPartSizeZ:F1} yields {lerp:F3}->{secsToUse}");
 
             if (__instance.hull.middles == null)
             {
