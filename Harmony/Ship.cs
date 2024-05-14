@@ -12,6 +12,8 @@ namespace UADRealism
     internal class Patch_Ship
     {
         internal static bool _IsChangeHull = false;
+        internal static Ship.Store _ChangeHullShipStore = null;
+        internal static Ship _ChangeHullShip = null;
         internal static bool _IsRefreshPatched = false;
 
         internal struct RefreshHullData
@@ -25,14 +27,18 @@ namespace UADRealism
         internal static System.Collections.IEnumerator RefreshHullRoutine(Ship ship)
         {
             yield return new WaitForEndOfFrame();
-            ship.RefreshHull(false); // will be made true if sections need updating
+            if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
+                ship.RefreshHull(false); // will be made true if sections need updating
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.ChangeHull))]
-        internal static void Prefix_Ship_ChangeHull(Ship __instance)
+        internal static void Prefix_Ship_ChangeHull(Ship __instance, PartData data, Ship.Store store = null)
         {
             _IsChangeHull = true;
+            _ChangeHullShipStore = store;
+            _ChangeHullShip = __instance;
+            _SetFinenessOnNextGetYear = false;
         }
 
         [HarmonyPostfix]
@@ -40,9 +46,68 @@ namespace UADRealism
         internal static void Postfix_Ship_ChangeHull(Ship __instance)
         {
             _IsChangeHull = false;
+            _ChangeHullShipStore = null;
+            _ChangeHullShip = null;
+            _SetFinenessOnNextGetYear = false;
+            // This refresh may or may not be needed, but it won't really hurt.
             MelonCoroutines.Start(RefreshHullRoutine(__instance));
-            //if (G.ui.GetComponent<ShipUpdater>() == null)
-            //    G.ui.gameObject.AddComponent<ShipUpdater>();
+        }
+
+        //This runs right before ChangeHull loads from store
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.GenerateArmor))]
+        internal static void Postfix_GenerateArmor()
+        {
+            if (_IsChangeHull && _ChangeHullShipStore != null && _ChangeHullShip != null)
+                _ChangeHullShip.hullPartSizeZ = _ChangeHullShipStore.hullPartSizeZ;
+        }
+
+        // This is extremely gross. We have to patch both SetTonnage _and_ GetYear
+        // so that we can set fineness in ChangeHull before AdjustHullStats runs.
+        // We should just be prefixing that, but it crashes (!) because apparently
+        // the runtime interop can't handle patching methods that take nullable
+        // arguments. Blergh.
+        private static bool _SetFinenessOnNextGetYear = false;
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.SetTonnage))]
+        internal static void Postfix_SetTonnage()
+        {
+            if (_IsChangeHull && !_SetFinenessOnNextGetYear && _ChangeHullShipStore == null)
+                _SetFinenessOnNextGetYear = true;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.GetYear))]
+        internal static void Prefix_GetYear(Ship __instance)
+        {
+            // If we're in ChangeHull, and we've got our bool set,
+            // we should set fineness based on the speed set
+            if (_IsChangeHull && _SetFinenessOnNextGetYear)
+            {
+                // we need to set this now because AdjustHullStats also
+                // calls GetYear a bunch.
+                _SetFinenessOnNextGetYear = false;
+
+                // Find the section count with closest-to-desired Cp.
+                // We could try to binary search here, but this is fast enough
+                float bestDiff = 1f;
+                int bestSec = __instance.hull.data.sectionsMin;
+                for (int secs = __instance.hull.data.sectionsMin; secs <= __instance.hull.data.sectionsMax; ++secs)
+                {
+                    var stats = ShipStats.GetScaledStats(ShipStats.GetData(__instance), __instance.tonnage, 0f, 0f, secs);
+                    float desiredCp = ShipStats.GetDesiredCpForFn(__instance.speedMax / Mathf.Sqrt(9.80665f * stats.Lwl));
+                    float delta = Mathf.Abs(desiredCp - stats.Cp);
+                    if (delta < bestDiff)
+                    {
+                        bestDiff = delta;
+                        bestSec = secs;
+                    }
+                }
+
+                __instance.hullPartSizeZ = (1f - Mathf.InverseLerp(__instance.hull.data.sectionsMin, __instance.hull.data.sectionsMax, bestSec * bestSec * UnityEngine.Random.Range(0.8f, 1.2f))) * 100f;
+                if (__instance.modelState == Ship.ModelState.Constructor || __instance.modelState == Ship.ModelState.Battle)
+                    __instance.RefreshHull(false);
+            }
         }
 
         [HarmonyPrefix]
