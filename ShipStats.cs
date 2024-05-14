@@ -306,9 +306,9 @@ namespace UADRealism
             double L = stats.Lwl;
             double B = stats.B;
             double T = stats.T;
-            double LB = L / B;
-            double BT = B / T;
-            double LT = L / T;
+            double LdivB = L / B;
+            double BdivT = B / T;
+            double LdivT = L / T;
             double BdivL = B / L;
             double TdivB = T / B;
             double TdivL = T / L;
@@ -334,15 +334,10 @@ namespace UADRealism
             double corr = log10Re - 7.5;
             Cf *= (1.0245 + 0.03311 * (log10Re - 7.5) - 0.006028 * corr * corr);
             double c14 = 1d; // stern coefficient, varies 0.9725-1.011
-            double c12;
-            if (TdivL > 0.05d)
-                c12 = Math.Pow(TdivL, 0.228446d);
-            else
-                c12 = 48.2d * Math.Pow(TdivL - 0.02d, 2.078d) + 0.479948d;
 
             double lcb = stats.lcbPct * 100d;
             double LRperL = (1d - Cp + 0.06d * Cp * lcb / (4d * Cp - 1d));
-            double iE = 1d + 89d * Math.Exp(-(Math.Pow(LB, 0.80856)) * Math.Pow(1 - Cw, 0.30484) * Math.Pow(1 - Cp - 0.0225 * lcb, 0.6367) * Math.Pow(LRperL * LB, 0.34574) * Math.Pow(100 * VolCoeff, 0.16302));
+            double iE = 1d + 89d * Math.Exp(-(Math.Pow(LdivB, 0.80856)) * Math.Pow(1 - Cw, 0.30484) * Math.Pow(1 - Cp - 0.0225 * lcb, 0.6367) * Math.Pow(LRperL * LdivB, 0.34574) * Math.Pow(100 * VolCoeff, 0.16302));
             // this is SpringSharp's "Sharpness coefficient"
             double coSharp = 0.4d * Math.Pow(B / L * 6f, 0.3333333432674408d) * Math.Sqrt(Cb / 0.52f);
             double sharpLerp = ModUtils.InverseLerp(0.35d, 0.45d, coSharp);
@@ -372,8 +367,8 @@ namespace UADRealism
             iE = ModUtils.Lerp(iEMin, iEMax, sharpLerp);
 
             // recalc 
-            double formFactor = 0.93 + 0.487118 * c14 * Math.Pow(BdivL, 1.06806) * Math.Pow(TdivL, 0.46106) * Math.Pow(L / (LRperL * L), 0.121563) * Math.Pow(L3V, 0.36486) * Math.Pow(1 - Cp, -0.604247);
-            double S = L * (B + 2d * T) * Math.Sqrt(Cm) * (0.453d + 0.4425d * Cb - 0.2862d * Cm - 0.003467d * BT + 0.3696d * Cw);// + 19.65 * A_bulb_at_stem / Cb
+            double formFactor = 0.93 + 0.487118 * c14 * Math.Pow(BdivL, 1.06806) * Math.Pow(TdivL, 0.46106) * Math.Pow(1d / LRperL, 0.121563) * Math.Pow(L3V, 0.36486) * Math.Pow(1 - Cp, -0.604247);
+            double S = L * (B + 2d * T) * Math.Sqrt(Cm) * (0.453d + 0.4425d * Cb - 0.2862d * Cm - 0.003467d * BdivT + 0.3696d * Cw);// + 19.65 * A_bulb_at_stem / Cb
             double dynPres = 0.5d * WaterDensity * msVel * msVel;
             double Rf = Cf * formFactor * dynPres * S;
 
@@ -383,7 +378,7 @@ namespace UADRealism
             // Ra
             double Cb4 = Cb * Cb;
             Cb4 *= Cb4;
-            double Ca = 0.006 * Math.Pow(L + 100, -0.16) - 0.00205 + 0.003 * Math.Sqrt(L / 7.5) * Cb4 * c2 * (0.004 - Math.Min(0.004, (TdivL)));
+            double Ca = 0.006d * Math.Pow(L + 100d, -0.16d) - 0.00205d + 0.003d * Math.Sqrt(L / 7.5d) * Cb4 * c2 * (0.04d - Math.Min(0.04d, TdivL));
             double Ra = Ca * dynPres * S;
 
             // Rtr
@@ -396,14 +391,14 @@ namespace UADRealism
             if (BdivL < 0.11d)
                 c7 = 0.229577d * Math.Pow(BdivL, 0.3333);
             else if (BdivL > 0.25d)
-                c7 = 0.5d - 0.0625 * LB;
+                c7 = 0.5d - 0.0625 * LdivB;
             else
                 c7 = BdivL;
 
             double c1 = 2223105d * Math.Pow(c7, 3.78615d) * Math.Pow(TdivB, 1.07961d) * Math.Pow(90d - iE, -1.37565d);
             double c5 = 1d - 0.8 * Catr;
             double Fr = msVel / Math.Sqrt(9.80665d * L);
-            double lambda = 1.446d * Cp - 0.03d * Math.Min(12d, LB);
+            double lambda = 1.446d * Cp - 0.03d * Math.Min(12d, LdivB);
             double c16;
             if (Cp < 0.8d)
                 c16 = 8.07981d * Cp - 13.8673d * Cp * Cp + 6.984388d * Cp * Cp * Cp;
@@ -416,8 +411,8 @@ namespace UADRealism
                 c15 = 0d;
             else
                 c15 = -1.69385d + (L / V13 - 8d) / 2.36d;
-            double m1 = 0.0140407 * LT - 1.75254 * V13 / L - 4.79323 * BdivL - c16;
-            double c17 = 6919.3 * Math.Pow(Cm, -1.3346) * Math.Pow(VolCoeff, 2.00977) * Math.Pow(LB - 2, 1.40692);
+            double m1 = 0.0140407 * LdivT - 1.75254 * V13 / L - 4.79323 * BdivL - c16;
+            double c17 = 6919.3 * Math.Pow(Cm, -1.3346) * Math.Pow(VolCoeff, 2.00977) * Math.Pow(LdivB - 2, 1.40692);
             double m3 = -7.2035 * Math.Pow(BdivL, 0.326869) * Math.Pow(TdivB, 0.605375);
             double m4 = c15 * 0.4 * Math.Exp(-0.034 * Math.Pow(Fr, -3.29));
 
@@ -455,8 +450,8 @@ namespace UADRealism
             if (log && frames != _LastLogFrame)
             {
                 _LastLogFrame = frames;
-                Debug.Log($"c1={c1:F3}, c2={c2:F3}, c3={c3:F3}, c5={c5:F3}, c6={c6:F3}, c7={c7:F3}, c12={c12:F3}, c14={c14:F3}, c15={c15:F3}, c16={c16:F3}, c17={c17:F3}, lcb={lcb:F1}, sharp={coSharp:F3}, sLerp={sharpLerp:F2}, LR={(LRperL*L):F1}, iE={iE:F1}, "
-                    + $"Cvol={VolCoeff:F5}, Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
+                Debug.Log($"c1={c1:F3}, c2={c2:F3}, c3={c3:F3}, c5={c5:F3}, c6={c6:F3}, c7={c7:F3}, c14={c14:F3}, c15={c15:F3}, c16={c16:F3}, c17={c17:F3}, lcb={lcb:F1}, sharp={coSharp:F3}, sLerp={sharpLerp:F2}, LR={(LRperL*L):F1}, iE={iE:F1}, "
+                    + $"Cvol={VolCoeff:F5}, labmda={lambda:F3}, Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
                     + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}.");
             }
 //#endif
