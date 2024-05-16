@@ -94,6 +94,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy /y UADRealism.dll "C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Mods\UADRealism.dll"</PostBuildEvent>
+    <PostBuildEvent>copy /y UADRealism.dll "C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Mods\UADRealism.dll"
+copy /y ..\..\English.lng "C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Ultimate Admiral Dreadnoughts_Data\StreamingAssets\Languages\English.lng"</PostBuildEvent>
   </PropertyGroup>
 </Project>
