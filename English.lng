@@ -5380,4 +5380,5 @@ $Ui_EnginePower_IHP;IHP
 $Ui_EnginePower_SHP;SHP
 $Ui_EnginePower_kIHP;kIHP
 $Ui_EnginePower_kSHP;kSHP
-
+$Ui_Constr_FreeboardDP0Per1;Freeboard: {0}%{1}
+$tooltip_con_freeboard;*Freeboard*: The more freeboard a hull has, the better the ship will be at seakeeping and the drier the deck, particularly forward. High freeboard will decrease metastatic height, however, putting the ship at higher risk of capsizing from floading.

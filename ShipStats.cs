@@ -355,7 +355,10 @@ namespace UADRealism
             float shp = GetSHPRequired(GetScaledStats(ship), ship.speedMax);
             return shp * GetHullFormSHPMult(ship);
         }
+
+#if LOGSHP
         private static int _LastLogFrame = -1;
+#endif
         public static float GetSHPRequired(HullStats stats, float speedMS, bool log = true)
         {
             double L = stats.Lwl;
@@ -500,7 +503,7 @@ namespace UADRealism
 
             double Pe = Rt * msVel;
             double Ps = Pe / (eta_R * eta_shaft * eta_o * (1 - t) / (1 - w));
-            //#if LOGSHP
+#if LOGSHP
             int frames = Time.frameCount;
             if (log && frames != _LastLogFrame)
             {
@@ -509,7 +512,7 @@ namespace UADRealism
                     + $"Cvol={VolCoeff:F5}, labmda={lambda:F3}, Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
                     + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}.");
             }
-//#endif
+#endif
 
             return (float)(Ps / 745.7d);
         }

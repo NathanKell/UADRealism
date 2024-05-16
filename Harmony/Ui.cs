@@ -12,11 +12,22 @@ namespace UADRealism
     internal class Patch_Ui
     {
         private static GameObject _Fineness = null;
+        private static Text _FineText = null;
+        private static Slider _FineS = null;
+        private static GameObject _Freeboard = null;
+        private static Text _FreeText = null;
+        private static Slider _FreeS = null;
+
         private static Text _BeamText = null;
         private static Text _DraughtText = null;
         private static Color _ColorNumber = new Color(0.667f, 0.8f, 0.8f, 1f);
         private static Il2CppSystem.Nullable<Color> _ColorNumberN = new Il2CppSystem.Nullable<Color>(_ColorNumber);
         private static Il2CppSystem.Object[] _LocArray = new Il2CppSystem.Object[2];
+
+        public const float _MinFineness = 0f;
+        public const float _MaxFineness = 100f;
+        public const float _MinFreeboard = -30f;
+        public const float _MaxFreeboard = 45f;
 
         internal static Ship _ShipForEnginePower = null;
 
@@ -59,12 +70,19 @@ namespace UADRealism
             // Just in case we get out of sync
             if (_Fineness == null)
                 _Fineness = __instance.gameObject.FindDeepChild("Fineness");
+            if (_Freeboard == null)
+                _Freeboard = __instance.gameObject.FindDeepChild("Freeboard");
 
-            if (_Fineness == null)
+            if (_Fineness == null || _Freeboard == null)
             {
                 _BeamText = __instance.gameObject.FindDeepChild("Beam").GetComponentInChildren<Text>();
                 _DraughtText = __instance.gameObject.FindDeepChild("Draught").GetComponentInChildren<Text>();
-                AddFinenessSlider(__instance);
+                if (_Fineness == null)
+                    AddFinenessSlider(__instance);
+                if(_Freeboard == null)
+                    AddFreeboardSlider(__instance);
+
+                UpdateSliders();
             }
         }
 
@@ -83,34 +101,37 @@ namespace UADRealism
             _Fineness.active = true;
             _Fineness.transform.SetSiblingIndex(beamSlider.transform.GetSiblingIndex());
 
-            var slider = _Fineness.GetComponentInChildren<UnityEngine.UI.Slider>();
-            if (slider == null)
+            _FineS = _Fineness.GetComponentInChildren<UnityEngine.UI.Slider>();
+            if (_FineS == null)
             {
                 Debug.LogError("Can't find slider component!");
                 GameObject.Destroy(_Fineness);
                 return;
             }
 
-            slider.onValueChanged.RemoveAllListeners();
-            slider.minValue = 0f;
-            slider.maxValue = 100f;
-            slider.value = 0f;
-            ui.sliderValues[slider] = slider.value;
-            slider.onValueChanged.AddListener(new System.Action<float>(val =>
+            _FineS.onValueChanged.RemoveAllListeners();
+            _FineS.minValue = 0f;
+            _FineS.maxValue = _MaxFineness - _MinFineness;
+            _FineS.value = _MinFineness;
+            ui.sliderValues[_FineS] = _FineS.value;
+            _FineS.onValueChanged.AddListener(new System.Action<float>(val =>
             {
-                if (GameManager.IsConstructor)
-                {
-                    var ship = G.ui.mainShip;
+            if (GameManager.IsConstructor)
+            {
+                var ship = G.ui.mainShip;
                     if (ship != null)
                     {
-                        if (UndoCommandManager.CanRecordFor(slider))
+                        if (UndoCommandManager.CanRecordFor(_FineS))
                         {
-                            if (!G.ui.sliderValues.TryGetValue(slider, out var oldVal))
+                            if (!G.ui.sliderValues.TryGetValue(_FineS, out var oldVal))
                                 oldVal = 0f;
-                            UndoCommandManager.RecordSliderChange(slider, oldVal);
-                            G.ui.sliderValues[slider] = val;
+                            UndoCommandManager.RecordSliderChange(_FineS, oldVal);
+                            G.ui.sliderValues[_FineS] = val;
                         }
-                        SetFineness(ship, val);
+                        val = Mathf.Clamp(val, 0f, _FineS.maxValue);
+                        float rounded = Mathf.RoundToInt(val);
+
+                        SetFineness(ship, _MinFineness + rounded);
                         G.ui.OnConShipChanged(true);
                         G.ui.RefreshConstructorInfo();
                     }
@@ -127,18 +148,18 @@ namespace UADRealism
                 G.ui.HideTooltip();
             });
 
-            var text = _Fineness.GetChild("Text").GetComponent<UnityEngine.UI.Text>();
+            _FineText = _Fineness.GetChild("Text").GetComponent<UnityEngine.UI.Text>();
             var edit = _Fineness.GetChild("Edit").GetComponent<UnityEngine.UI.InputField>();
-            edit.text = slider.value.ToString("F0");
+            edit.text = (_MinFineness + _FineS.value).ToString("F0");
 
-            var click = text.GetComponent<OnClickH>();
+            var click = _FineText.GetComponent<OnClickH>();
             click.action = new System.Action<UnityEngine.EventSystems.PointerEventData>(pData =>
             {
-                text.SetActiveX(false);
+                _FineText.SetActiveX(false);
                 edit.SetActiveX(true);
                 edit.Select();
                 edit.ActivateInputField();
-                edit.text = slider.value.ToString("F0");
+                edit.text = (_MinFineness + _FineS.value).ToString("F0");
                 G.ui.textFieldValues[edit] = edit.text;
             });
 
@@ -150,7 +171,7 @@ namespace UADRealism
                     var ship = G.ui.mainShip;
                     if (ship != null)
                     {
-                        val = Mathf.Clamp(val, 0f, 100f);
+                        val = Mathf.Clamp(val, _MinFineness, _MaxFineness);
                         SetFineness(ship, val);
                         G.ui.OnConShipChanged(true);
                         G.ui.RefreshConstructorInfo();
@@ -160,12 +181,112 @@ namespace UADRealism
                             G.ui.textFieldValues.Remove(edit);
                         }
                     }
-                    text.SetActiveX(true);
+                    _FineText.SetActiveX(true);
                     edit.SetActiveX(false);
                 }
             }));
+        }
 
-            UpdateSliders();
+        private static void AddFreeboardSlider(Ui ui)
+        {
+            var draughtSlider = ui.gameObject.FindDeepChild("Beam");
+            if (draughtSlider == null)
+            {
+                Debug.LogError("Couldn't find Draught slider!");
+                return;
+            }
+
+            _Freeboard = GameObject.Instantiate(draughtSlider);
+            _Freeboard.name = "Freeboard";
+            _Freeboard.transform.SetParent(draughtSlider.transform.parent, false);
+            _Freeboard.active = true;
+            _Freeboard.transform.SetSiblingIndex(draughtSlider.transform.GetSiblingIndex() + 1);
+
+            _FreeS = _Freeboard.GetComponentInChildren<UnityEngine.UI.Slider>();
+            if (_FreeS == null)
+            {
+                Debug.LogError("Freeboard: Can't find slider component!");
+                GameObject.Destroy(_Freeboard);
+                return;
+            }
+
+            _FreeS.onValueChanged.RemoveAllListeners();
+            _FreeS.minValue = 0f;
+            _FreeS.maxValue = (_MaxFreeboard - _MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
+            _FreeS.value = _FreeS.maxValue * 0.5f;
+            ui.sliderValues[_FreeS] = _FreeS.value;
+            _FreeS.onValueChanged.AddListener(new System.Action<float>(val =>
+            {
+                if (GameManager.IsConstructor)
+                {
+                    var ship = G.ui.mainShip;
+                    if (ship != null)
+                    {
+                        if (UndoCommandManager.CanRecordFor(_FreeS))
+                        {
+                            if (!G.ui.sliderValues.TryGetValue(_FreeS, out var oldVal))
+                                oldVal = 0f;
+                            UndoCommandManager.RecordSliderChange(_FreeS, oldVal);
+                            G.ui.sliderValues[_FreeS] = val;
+                        }
+                        val = Mathf.Clamp(val, 0f, _FreeS.maxValue);
+                        float step = G.GameData.Param("beam_draught_step", 0.5f);
+                        float rounded = Mathf.RoundToInt(step * val * 10f) * 0.1f;
+
+                        SetFreeboard(ship, _MinFreeboard + rounded);
+                        G.ui.OnConShipChanged(true);
+                        G.ui.RefreshConstructorInfo();
+                    }
+                }
+            }));
+
+            _Freeboard.GetComponent<OnEnter>().action = new System.Action(() =>
+            {
+                G.ui.ShowTooltip(Ui.ApplyTextFormatting(LocalizeManager.Localize("$tooltip_con_freeboard")), _Freeboard);
+            });
+
+            _Freeboard.GetComponent<OnLeave>().action = new System.Action(() =>
+            {
+                G.ui.HideTooltip();
+            });
+
+            _FreeText = _Freeboard.GetChild("Text").GetComponent<UnityEngine.UI.Text>();
+            var edit = _Freeboard.GetChild("Edit").GetComponent<UnityEngine.UI.InputField>();
+            edit.text = (_MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1");
+
+            var click = _FreeText.GetComponent<OnClickH>();
+            click.action = new System.Action<UnityEngine.EventSystems.PointerEventData>(pData =>
+            {
+                _FreeText.SetActiveX(false);
+                edit.SetActiveX(true);
+                edit.Select();
+                edit.ActivateInputField();
+                edit.text = (_MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1");
+                G.ui.textFieldValues[edit] = edit.text;
+            });
+
+            edit.onEndEdit.RemoveAllListeners();
+            edit.onEndEdit.AddListener(new System.Action<string>(value =>
+            {
+                if (G.ui.allowEdit && float.TryParse(value, out var val))
+                {
+                    var ship = G.ui.mainShip;
+                    if (ship != null)
+                    {
+                        val = Mathf.Clamp(val, _MinFreeboard, _MaxFreeboard);
+                        SetFreeboard(ship, val);
+                        G.ui.OnConShipChanged(true);
+                        G.ui.RefreshConstructorInfo();
+                        if (G.ui.textFieldValues.TryGetValue(edit, out var oldVal))
+                        {
+                            UndoCommandManager.RecordInputFieldChange(edit, oldVal);
+                            G.ui.textFieldValues.Remove(edit);
+                        }
+                    }
+                    _FreeText.SetActiveX(true);
+                    edit.SetActiveX(false);
+                }
+            }));
         }
 
         private static void SetFineness(Ship ship, float val)
@@ -178,14 +299,21 @@ namespace UADRealism
             //ship.statEffectsCache.Clear();
         }
 
+        private static void SetFreeboard(Ship ship, float val)
+        {
+            // no need to recalc stats
+            //ship.CStats();
+            ship.hullPartSizeY = val;
+            ship.RefreshHull(false); // let it figure out
+            // would change ship.stats[item]'s value here
+            //ship.statEffectsCache.Clear();
+        }
+
         private static void UpdateSliders()
         {
-            var text = _Fineness.GetComponentInChildren<UnityEngine.UI.Text>();
-            var slider = _Fineness.GetComponentInChildren<UnityEngine.UI.Slider>();
-
-            if (text == null || slider == null)
+            if (_FineText == null || _FreeText == null)
             {
-                Debug.LogError("Failed to find Fineness slider's children");
+                Debug.LogError("Failed to find Fineness/Freeboard slider's children");
                 return;
             }
 
@@ -197,7 +325,8 @@ namespace UADRealism
                 var ship = G.ui.mainShip;
                 if (ship != null)
                 {
-                    slider.value = ship.hullPartSizeZ;
+                    _FineS.value = ship.hullPartSizeZ;
+                    _FreeS.value = (ship.hullPartSizeY - _MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
                     var hData = ShipStats.GetData(ship.hull.data);
                     if (hData == null)
                     {
@@ -215,10 +344,16 @@ namespace UADRealism
 
             _ColorNumberN.value = _ColorNumber;
             _ColorNumberN.has_value = true;
-            _LocArray[0] = Ui.Colorize(_ColorNumberN, slider.value.ToString("F0"), false);
+            
+            _LocArray[0] = Ui.Colorize(_ColorNumberN, _FineS.value.ToString("F0"), false);
             // TODO track change
             _LocArray[1] = Ui.Colorize(_ColorNumberN, "*", false);
-            text.text = LocalizeManager.Localize("$Ui_Constr_FinenessDP01", _LocArray);
+            _FineText.text = LocalizeManager.Localize("$Ui_Constr_FinenessDP01", _LocArray);
+
+            _LocArray[0] = Ui.Colorize(_ColorNumberN, (_MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1"), false);
+            // TODO track change
+            _LocArray[1] = Ui.Colorize(_ColorNumberN, "*", false);
+            _FreeText.text = LocalizeManager.Localize("$Ui_Constr_FreeboardDP0Per1", _LocArray);
 
             _LocArray[0] = Ui.Colorize(_ColorNumberN, LdivB.ToString("F2"), false);
             _LocArray[1] = G.ui.beamWasChanged ? "*" : string.Empty;

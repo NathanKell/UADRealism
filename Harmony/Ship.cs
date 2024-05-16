@@ -24,6 +24,7 @@ namespace UADRealism
             public float _draught;
             public float _tonnage;
             public float _yPosScaling;
+            public float _oldYScale;
             public bool _valuesSet;
         }
 
@@ -150,7 +151,11 @@ namespace UADRealism
             ship.SetDraught(finalDrPct, false);
 
             float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
-            ship.hullPartSizeZ = (1f - t) * 100f;
+            ship.hullPartSizeZ = Mathf.Lerp(Patch_Ui._MinFineness, Patch_Ui._MaxFineness, 1f - t);
+
+            // Also set freeboard
+            ship.hullPartSizeY = Mathf.Lerp(Patch_Ui._MinFreeboard, Patch_Ui._MaxFreeboard, ModUtils.DistributedRange(0.5f) + 0.5f);
+
             //Melon<UADRealismMod>.Logger.Msg($"Setting sizeZ={ship.hullPartSizeZ:F1} from {t:F3} from {bestSec} in {ship.hull.data.sectionsMin}-{ship.hull.data.sectionsMax}");
             if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
                 ship.RefreshHull(false);
@@ -209,6 +214,7 @@ namespace UADRealism
             }
 
             float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd) / __instance.hull.model.transform.localScale.z;
+            float oldScaleYLocal = __instance.hull.bow.GetParent().GetParent().transform.localScale.y;
 //#if LOGSHIP
             Debug.Log($"{hData._key}: tonnage desired: {__instance.tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
 //#endif
@@ -217,9 +223,12 @@ namespace UADRealism
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
             __instance.tonnage = Mathf.Lerp(data.tonnageMin, data.tonnageMax, slider);
             float bmMult = 1f + __instance.beam * 0.01f;
-            float drMult = bmMult * (1f + __instance.draught * 0.01f);
-            __instance.draught = (drMult - 1f) * 100f;
-            __state._yPosScaling = 1f + __instance.draught * 0.01f;
+            // We don't scale the hull height based on draught, just beam
+            // (to preserve beam/draught ratio). We'll scale Y based on freeboard.
+            float freeboardMult = (1f + __instance.hullPartSizeY * 0.01f);
+            __state._yPosScaling = bmMult * freeboardMult;
+            __state._oldYScale = oldScaleYLocal * __instance.hull.bow.transform.localScale.y;
+            __instance.draught = (__state._yPosScaling - 1f) * 100f;
             __state._valuesSet = true;
         }
 
@@ -242,6 +251,16 @@ namespace UADRealism
                 sec.transform.localPosition = new Vector3(sec.transform.localPosition.x, hData.yPos * __state._yPosScaling, sec.transform.localPosition.z);
             }
             _hullSecitons.Clear();
+
+            float scaleRatio = __instance.hull.bow.GetParent().GetParent().transform.localScale.y * __instance.hull.bow.transform.localScale.y / __state._oldYScale;
+            foreach (Part p in __instance.parts)
+            {
+                if (p == __instance.hull)
+                    continue;
+                // The above offset code makes sure the hull remains centered around the waterline, and the waterline is the origin
+                // so this should just work
+                p.transform.localPosition = new Vector3(p.transform.localPosition.x, p.transform.localPosition.y * scaleRatio, p.transform.localPosition.z);
+            }
         }
 
 #if disabled
@@ -490,18 +509,26 @@ namespace UADRealism
             return weight;
         }
 
+        internal struct HullSizePreserve
+        {
+            public float sizeZ;
+            public float sizeY;
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.CheckHullSizeMaxMin))]
-        internal static void Prefix_CheckHullSizeMaxMin(Ship __instance, out float __state)
+        internal static void Prefix_CheckHullSizeMaxMin(Ship __instance, out HullSizePreserve __state)
         {
-            __state = __instance.hullPartSizeZ;
+            __state.sizeZ = __instance.hullPartSizeZ;
+            __state.sizeY = __instance.hullPartSizeY;
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.CheckHullSizeMaxMin))]
-        internal static void Postfix_CheckHullSizeMaxMin(Ship __instance, float __state)
+        internal static void Postfix_CheckHullSizeMaxMin(Ship __instance, HullSizePreserve __state)
         {
-            __instance.hullPartSizeZ = __state;
+            __instance.hullPartSizeZ = __state.sizeZ;
+            __instance.hullPartSizeY = __state.sizeY;
         }
 
         [HarmonyPrefix]
