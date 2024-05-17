@@ -1083,7 +1083,7 @@ namespace UADRealism
                 part.middles.Add(cloned);
                 //if (cloned.transform.parent != part.bow.transform.parent)
                 //{
-                //    Debug.LogError($"New middle {cloned.name} has parent {cloned.transform.parent.gameObject.name} not {part.bow.transform.parent.gameObject.name}! Reparenting.");
+                //    Melon<UADRealismMod>.Logger.BigError($"New middle {cloned.name} has parent {cloned.transform.parent.gameObject.name} not {part.bow.transform.parent.gameObject.name}! Reparenting.");
                 //    cloned.transform.parent = part.bow.transform.parent;
                 //}
                 Util.SetActiveX(cloned, true);
@@ -1108,7 +1108,7 @@ namespace UADRealism
                 _foundVars.AddRange(_matchedVars);
 
                 if (_matchedVars.Count > 1)
-                    Debug.LogError("Found multiple variations on partdata " + part.data.name + ": " + string.Join(", ", _matchedVars));
+                    Melon<UADRealismMod>.Logger.BigError("Found multiple variations on partdata " + part.data.name + ": " + string.Join(", ", _matchedVars));
                 if (_matchedVars.Count > 0)
                     varName = _matchedVars[0];
 
@@ -1118,18 +1118,18 @@ namespace UADRealism
                 var childObjs = Util.GetChildren(varComp);
                 if (childObjs.Count == 0)
                 {
-                    Debug.LogError("For part " + part.data.name + ", no variations!");
+                    Melon<UADRealismMod>.Logger.BigError("For part " + part.data.name + ", no variations!");
                     continue;
                 }
                 if (varComp.variations.Count != childObjs.Count)
                 {
-                    Debug.LogError("For part " + part.data.name + ", var count / child count mismatch!");
+                    Melon<UADRealismMod>.Logger.BigError("For part " + part.data.name + ", var count / child count mismatch!");
                     continue;
                 }
                 int varIdx = varComp.variations.IndexOf(varName);
                 if ((varIdx < 0 && varName != string.Empty))
                 {
-                    Debug.LogError("For part " + part.data.name + ", can't find variation " + varName);
+                    Melon<UADRealismMod>.Logger.BigError("For part " + part.data.name + ", can't find variation " + varName);
                 }
                 int selectedIdx;
                 if (varIdx >= 0)
@@ -1147,7 +1147,7 @@ namespace UADRealism
                     {
                         if (varComp.@default != string.Empty)
                         {
-                            Debug.LogError("For part " + part.data.name + ", can't find default variation " + varComp.@default);
+                            Melon<UADRealismMod>.Logger.BigError("For part " + part.data.name + ", can't find default variation " + varComp.@default);
                         }
                         selectedIdx = 0;
                     }
@@ -1169,7 +1169,7 @@ namespace UADRealism
                     }
                 }
                 if (_foundVars.Count > 0)
-                    Debug.LogError("On partdata " + part.data.name + ": Missing vars: " + string.Join(", ", _foundVars));
+                    Melon<UADRealismMod>.Logger.BigError("On partdata " + part.data.name + ": Missing vars: " + string.Join(", ", _foundVars));
             }
 
             _foundVars.Clear();
@@ -1181,7 +1181,7 @@ namespace UADRealism
         {
             if (part == null)
             {
-                Debug.LogError("Part null!\n" + Environment.StackTrace);
+                Melon<UADRealismMod>.Logger.BigError("Part null!\n" + Environment.StackTrace);
                 return;
             }
             // Get reversed list of sections so we can position them
@@ -1202,13 +1202,13 @@ namespace UADRealism
             int mCount = part.middles == null ? -1 : part.middles.Count;
             if (part.bow == null)
             {
-                Debug.LogError($"Part {part.name}@{mCount}: bow null!");
+                Melon<UADRealismMod>.Logger.BigError($"Part {part.name}@{mCount}: bow null!");
                 return;
             }
             var sectionsGO = Util.GetParent(part.bow);
             if (sectionsGO == null)
             {
-                Debug.LogError($"Part {part.name}@{mCount}: Sections null!");
+                Melon<UADRealismMod>.Logger.BigError($"Part {part.name}@{mCount}: Sections null!");
                 return;
             }
             var sectionsTrf = sectionsGO.transform;
@@ -1216,7 +1216,7 @@ namespace UADRealism
 
             if (_sectionBounds == null)
             {
-                Debug.LogError($"Part {part.name}@{mCount}: _SectionBounds is null!");
+                Melon<UADRealismMod>.Logger.BigError($"Part {part.name}@{mCount}: _SectionBounds is null!");
                 return;
             }
 
@@ -1225,7 +1225,7 @@ namespace UADRealism
                 var sec = sectionsReverse[i];
                 if (sec == null)
                 {
-                    Debug.LogError($"Part {part.name}@{mCount}: Section {i} is null!");
+                    Melon<UADRealismMod>.Logger.BigError($"Part {part.name}@{mCount}: Section {i} is null!");
                     return;
                 }
                 var secBounds = GetSectionBounds(sec, sectionsTrf);
@@ -1240,12 +1240,12 @@ namespace UADRealism
                 var sec = sectionsReverse[i];
                 if (sec == null)
                 {
-                    Debug.LogError($"Part {part.name}@{mCount}: Section {i} is null!");
+                    Melon<UADRealismMod>.Logger.BigError($"Part {part.name}@{mCount}: Section {i} is null!");
                     return;
                 }
                 if(_sectionBounds[i] == _EmptyBounds)
                 {
-                    Debug.LogError($"Part {part.name}@{mCount}: Section {(sec == null ? "NULL" : sec.name)} ({i}) has empty bounds!");
+                    Melon<UADRealismMod>.Logger.BigError($"Part {part.name}@{mCount}: Section {(sec == null ? "NULL" : sec.name)} ({i}) has empty bounds!");
                     return;
                 }
                 var secBounds = _sectionBounds[i];

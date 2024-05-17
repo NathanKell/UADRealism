@@ -91,7 +91,7 @@ namespace UADRealism
             var beamSlider = ui.gameObject.FindDeepChild("Beam");
             if (beamSlider == null)
             {
-                Debug.LogError("Couldn't find Beam slider!");
+                Melon<UADRealismMod>.Logger.BigError("Couldn't find Beam slider!");
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace UADRealism
             _FineS = _Fineness.GetComponentInChildren<UnityEngine.UI.Slider>();
             if (_FineS == null)
             {
-                Debug.LogError("Can't find slider component!");
+                Melon<UADRealismMod>.Logger.BigError("Can't find slider component!");
                 GameObject.Destroy(_Fineness);
                 return;
             }
@@ -192,7 +192,7 @@ namespace UADRealism
             var draughtSlider = ui.gameObject.FindDeepChild("Beam");
             if (draughtSlider == null)
             {
-                Debug.LogError("Couldn't find Draught slider!");
+                Melon<UADRealismMod>.Logger.BigError("Couldn't find Draught slider!");
                 return;
             }
 
@@ -205,7 +205,7 @@ namespace UADRealism
             _FreeS = _Freeboard.GetComponentInChildren<UnityEngine.UI.Slider>();
             if (_FreeS == null)
             {
-                Debug.LogError("Freeboard: Can't find slider component!");
+                Melon<UADRealismMod>.Logger.BigError("Freeboard: Can't find slider component!");
                 GameObject.Destroy(_Freeboard);
                 return;
             }
@@ -313,7 +313,7 @@ namespace UADRealism
         {
             if (_FineText == null || _FreeText == null)
             {
-                Debug.LogError("Failed to find Fineness/Freeboard slider's children");
+                Melon<UADRealismMod>.Logger.BigError("Failed to find Fineness/Freeboard slider's children");
                 return;
             }
 
@@ -330,7 +330,7 @@ namespace UADRealism
                     var hData = ShipStats.GetData(ship.hull.data);
                     if (hData == null)
                     {
-                        Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
+                        Melon<UADRealismMod>.Logger.BigError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
                         return;
                     }
                     else
@@ -436,7 +436,7 @@ namespace UADRealism
                 var hData = ShipStats.GetData(ship.hull.data);
                 if (hData == null)
                 {
-                    Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
+                    Melon<UADRealismMod>.Logger.BigError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
                     return;
                 }
                 else
@@ -457,7 +457,7 @@ namespace UADRealism
                 var hData = ShipStats.GetData(ship.hull.data);
                 if (hData == null)
                 {
-                    Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
+                    Melon<UADRealismMod>.Logger.BigError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
                     return;
                 }
                 else
@@ -481,7 +481,7 @@ namespace UADRealism
                 var hData = ShipStats.GetData(ship.hull.data);
                 if (hData == null)
                 {
-                    Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
+                    Melon<UADRealismMod>.Logger.BigError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
                     return;
                 }
                 else
@@ -502,7 +502,7 @@ namespace UADRealism
                 var hData = ShipStats.GetData(ship.hull.data);
                 if (hData == null)
                 {
-                    Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
+                    Melon<UADRealismMod>.Logger.BigError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(ship.hull.data));
                     return;
                 }
                 else

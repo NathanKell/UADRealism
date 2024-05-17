@@ -172,20 +172,20 @@ namespace UADRealism
 
             if (__instance == null || __instance.hull == null)
             {
-                Debug.LogError("Ship or hull null!");
+                Melon<UADRealismMod>.Logger.BigError("Ship or hull null!");
                 return;
             }
 
             var data = __instance.hull.data;
             if (data == null)
             {
-                Debug.LogError("hull PartData null!");
+                Melon<UADRealismMod>.Logger.BigError("hull PartData null!");
                 return;
             }
             var hData = ShipStats.GetData(data);
             if (hData == null)
             {
-                Debug.LogError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(data));
+                Melon<UADRealismMod>.Logger.BigError("Couldn't find hulldata for " + ShipStats.GetHullModelKey(data));
                 return;
             }
 
@@ -200,7 +200,7 @@ namespace UADRealism
 
             if (__instance.hull.middles == null)
             {
-                Debug.LogError("hull middles list null!");
+                Melon<UADRealismMod>.Logger.BigError("hull middles list null!");
             }
             else
             {
@@ -209,7 +209,7 @@ namespace UADRealism
 
             if (hData._statsSet.Length <= secsToUse || secsToUse < 0)
             {
-                Debug.LogError($"SecsToUse ({secsToUse}) out of bounds for StatsSet length {hData._statsSet.Length}");
+                Melon<UADRealismMod>.Logger.BigError($"SecsToUse ({secsToUse}) out of bounds for StatsSet length {hData._statsSet.Length}");
                 return;
             }
 
@@ -381,7 +381,7 @@ namespace UADRealism
             }
             string hp = ihpMult == 1f ? $"{SHP:N0} SHP" : $"{(SHP * ihpMult):N0} IHP";
 #if LOGSHIP
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} ({ShipStats.GetHullFormSHPMult(__instance):F2}x{ihpMult:F2}) for {(__instance.speedMax/0.5144444f):F1}kn");
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} ({ShipStats.GetHullFormSHPMult(__instance):F2}x{ihpMult:F2}) for {(__instance.speedMax/ShipStats.KnotsToMS):F1}kn");
 #endif
             Patch_Ui._ShipForEnginePower = __instance;
             Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} Cb={stats.Cb:F3}/Cwp={stats.Cwp:F3}/Cp={stats.Cp:F3}, {Ui.FormatEnginePower(SHP * ihpMult)}");
