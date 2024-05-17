@@ -123,8 +123,6 @@ namespace UADRealism
                 data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef) * Mathf.Pow(data.draughtMax * 0.01f + 1f, data.draughtCoef);
 
 
-                //data.sectionsMin = (int)(data.sectionsMin * 0.75f);
-                data.sectionsMin = 0;
                 data.beamMin = -50f;
                 data.beamMax = 50f;
                 data.draughtMin = -75f;
@@ -162,6 +160,9 @@ namespace UADRealism
                 if (data.type != "hull")
                     continue;
 
+                // _now_ we set min sections to 0
+                data.sectionsMin = 0;
+
                 var hData = GetData(data);
                 if (hData == null)
                 {
@@ -171,8 +172,9 @@ namespace UADRealism
                 var modelName = GetHullModelKey(data);
                 for (int i = 0; i < hData._sectionsMax; ++i)
                 {
-                    if (i == 1 && i < hData._sectionsMin)
-                        i = hData._sectionsMin;
+                    // We're going to set min to 0 later.
+                    //if (i == 1 && i < hData._sectionsMin)
+                    //    i = hData._sectionsMin;
 
                     float tVal = i > 0 ? 0.25f : 0;
                     float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
@@ -240,6 +242,47 @@ namespace UADRealism
             return Mathf.Pow(desiredVol / (Vd * bmMult * drMult ), 1f / 3f);
         }
 
+        public static float GetYear(PartData hull)
+        {
+            foreach (var tech in G.GameData.technologies)
+            {
+                if (!tech.Value.effects.TryGetValue("unlock", out var eff))
+                    continue;
+
+                foreach (var lst in eff)
+                {
+                    foreach (var item in lst)
+                    {
+                        if (item == hull.name)
+                            return tech.value.year;
+                    }
+                }
+            }
+
+            return -1f;
+        }
+
+        public static float GetAverageYear(HullData hData)
+        {
+            float year = 0f;
+            float divisor = 0f;
+            foreach (var hull in hData._hulls)
+            {
+                float hYear = GetYear(hull);
+                if (hYear < 0f)
+                    continue;
+
+                year += hYear;
+                ++divisor;
+            }
+            if (divisor > 0)
+                year /= divisor;
+            else
+                year = 1915f;
+
+            return year;
+        }
+
         // water at 15C, standard salinity
         public const double WaterDensity = 1026;
         public const float TonnesToCubicMetersWater = (float)(1d / (WaterDensity * 0.001d));
@@ -248,6 +291,10 @@ namespace UADRealism
         public const float KnotsToMS = 0.514444444f;
 
         public const float DefaultBdivT = 3f;
+
+        public static float GetDesiredLdivB(Ship ship, float BdivT)
+            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, ship.GetYear(ship));
+
         public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
         {
             float Cb = 0.65f;

@@ -833,10 +833,11 @@ namespace UADRealism
             float sec0Draught = 1f;
             float sec0Beam = 1f;
             float sec0BulgeDepth = 1f;
-            for (int secCount = 0 /*hData._sectionsMin*/; secCount < count; ++secCount)
+            for (int secCount = 0; secCount < count; ++secCount)
             {
-                if (secCount == 1 && secCount < hData._sectionsMin)
-                    secCount = hData._sectionsMin;
+                // we're going to set min to 0 later
+                //if (secCount == 1 && secCount < hData._sectionsMin)
+                //    secCount = hData._sectionsMin;
 
                 // Ship.RefreshHull (only the bits we need)
                 Instance.CreateMiddles(part, secCount);
@@ -858,40 +859,7 @@ namespace UADRealism
                 float powCb = 1f;
                 if (hData._isDDHull)
                 {
-                    float year = 0f;
-                    float divisor = 0f;
-                    foreach (var hull in hData._hulls)
-                    {
-                        bool found = false;
-                        foreach (var tech in G.GameData.technologies)
-                        {
-                            if (!tech.Value.effects.TryGetValue("unlock", out var eff))
-                                continue;
-
-                            foreach (var lst in eff)
-                            {
-                                foreach (var item in lst)
-                                {
-                                    if (item == hull.name)
-                                    {
-                                        year += tech.value.year;
-                                        found = true;
-                                        break;
-                                    }
-                                }
-                                if (found)
-                                    break;
-                            }
-                            if (found)
-                                break;
-                        }
-                        if (found)
-                            ++divisor;
-                    }
-                    if (divisor > 0)
-                        year /= divisor;
-                    else
-                        year = 1915f;
+                    float year = ShipStats.GetAverageYear(hData);
 
                     powCm = Util.Remap(year, 1900, 1925, 1f, 0.7f, true);
                     powCb = Util.Remap(year, 1900, 1925, 1.5f, 1f, true);
