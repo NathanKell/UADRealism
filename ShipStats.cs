@@ -41,6 +41,17 @@ namespace UADRealism
         public float Cv;
     }
 
+    public struct OriginalHullData
+    {
+        public float _beamMin;
+        public float _beamMax;
+        public float _draughtMin;
+        public float _draughtMax;
+        public int _sectionsMin;
+        public int _sectionsMax;
+        public float _scale;
+    }
+
     public static class ShipStats
     {
         private static bool _isRenderingHulls = false;
@@ -50,9 +61,8 @@ namespace UADRealism
         public static bool LoadingDone => _LoadingDone;
 
         private static readonly Dictionary<string, HullData> _HullModelData = new Dictionary<string, HullData>();
-
-        //public static readonly HashSet<string> _WrittenModels = new HashSet<string>();
-        private static List<string> _DestoyerHullsPerModel = new List<string>();
+        private static readonly Dictionary<string, HullData> _HullToHullData = new Dictionary<string, HullData>();
+        private static readonly Dictionary<string, OriginalHullData> _OriginalHullData = new Dictionary<string, OriginalHullData>();
 
         public static HullData GetData(Ship ship) => GetData(ship.hull.data);
 
@@ -115,8 +125,20 @@ namespace UADRealism
             foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
-                if (data.type != "hull")
+                if (!data.isHull)
                     continue;
+
+                var origData = new OriginalHullData()
+                {
+                    _beamMax = data.beamMax,
+                    _beamMin = data.beamMin,
+                    _draughtMax = data.draughtMax,
+                    _draughtMin = data.draughtMin,
+                    _sectionsMin = data.sectionsMin,
+                    _sectionsMax = data.sectionsMax,
+                    _scale = data.scale
+                };
+                _OriginalHullData[data.name] = origData;
 
                 // Just apply deltas to tonnage directly
                 data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef) * Mathf.Pow(data.draughtMin * 0.01f + 1f, data.draughtCoef);
@@ -131,7 +153,6 @@ namespace UADRealism
                 data.beamCoef = 0f;
                 data.draughtCoef = 0f;
 
-
                 // Now get var/section data
                 var hData = GetData(data);
                 if (hData == null)
@@ -144,6 +165,7 @@ namespace UADRealism
                     hData._sectionsMax = Math.Max(hData._sectionsMax, data.sectionsMax);
                     hData._hulls.Add(data);
                 }
+                _HullToHullData[data.name] = hData;
             }
 
             // Pass 2: Spawn and render the hull models, calculating stats
@@ -153,12 +175,15 @@ namespace UADRealism
 #if LOGSTATS
             Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
 #endif
+            List<PartData> hulls = new List<PartData>();
             int num = 1;
             foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
-                if (data.type != "hull")
+                if (!data.isHull)
                     continue;
+
+                hulls.Add(data);
 
                 // _now_ we set min sections to 0
                 data.sectionsMin = 0;
@@ -189,11 +214,320 @@ namespace UADRealism
                 }
             }
 
+            const float torpedoScale = 0.85f;
+
+            // Pass 4: change part sizes
+            Dictionary<PartData, float> hullToScaleRatio = new Dictionary<PartData, float>();
+            HashSet<PartModelData> rescaledPMDs = new HashSet<PartModelData>();
+            _PMDKVPs = new List<KeyValuePair<int, float>>();
+            foreach (var kvp in gameData.parts)
+            {
+                var data = kvp.Value;
+                if (data.isHull)
+                    continue;
+
+                if (data.isTorpedo)
+                {
+                    if (data.model != "(custom")
+                        data.scale *= torpedoScale;
+
+                    continue;
+                }
+
+                // Assume no regular part is has "(custom)" for model
+                if (data.isWeapon)
+                {
+                    // It appears the "(custom)" and non-custom paths
+                    // are the same for guns. And we already did torps.
+
+                    string str = data.name;
+                    Util.TryRemovePostfix(ref str, "_side");
+
+                    if (!gameData.partModels.TryGetValue(str, out var mData))
+                    {
+                        Melon<UADRealismMod>.Logger.BigError($"Part {data.name} is a gun but has no matching partmodel!");
+                        continue;
+                    }
+
+                    if (mData == null)
+                    {
+                        Melon<UADRealismMod>.Logger.BigError($"Part {data.name} is a gun but has a null partmodel!");
+                        continue;
+                    }
+
+                    if (rescaledPMDs.Contains(mData))
+                        continue;
+
+                    rescaledPMDs.Add(mData);
+                    float scaleFactor = GunModelScale(data.caliber * (1f / 25.4f));
+                    ApplyScale(mData, scaleFactor);
+
+                    foreach (var pmd in mData.overrides)
+                    {
+                        if (rescaledPMDs.Contains(pmd))
+                            continue;
+
+                        if (pmd == null)
+                        {
+                            Melon<UADRealismMod>.Logger.BigError($"Part {data.name} with PartModel {mData.name} has a null PMD in its overrides!");
+                            continue;
+                        }
+
+                        rescaledPMDs.Add(pmd);
+                        ApplyScale(pmd, scaleFactor);
+                    }
+                }
+#if FALSE
+                if ((data.needTags.Count == 0 || data.needTags[0].Count == 0) && (data.excludeTags.Count == 0 || data.excludeTags[0].Count == 0))
+                {
+                    Melon<UADRealismMod>.Logger.BigError($"Part {data.name} isn't a weapon but has no need or exclude!");
+                    continue;
+                }
+                var needs = new List<string>();
+                foreach (var h in data.needTags)
+                    foreach (var s in h)
+                        needs.Add(s);
+
+                if (needs.Count == 0)
+                {
+                    Melon<UADRealismMod>.Logger.Warning($"Part {data.name} isn't a weapon but has no need param, can't rescale!");
+                    continue;
+                }
+
+                float minScaleRatio = float.MaxValue;
+                foreach (var hName in needs)
+                {
+                    if (!gameData.parts.TryGetValue(hName, out var hull))
+                    {
+                        // This is apparently common. Woohoo.
+                        //Melon<UADRealismMod>.Logger.BigError($"Part {data.name} has a need of hull {hName} but it can't be found!");
+                        continue;
+                    }
+#endif
+                // Hate to do n^2 but we don't have a lookup, stock does hashset overlaps.
+                float minScaleRatio = float.MaxValue;
+                foreach(var hull in hulls)
+                {
+                    if (!IsPartAllowed(hull, hull.shipType, data))
+                        continue;
+
+                    if (!hullToScaleRatio.TryGetValue(hull, out var scaleRatio))
+                    {
+                        var hData = GetData(hull);
+                        if (hData == null)
+                        {
+                            Melon<UADRealismMod>.Logger.BigError($"Part {data.name} is allowed for hull {hull.name} but we can't find HullData for it!");
+                            continue;
+                        }
+
+                        float sMax = hull.speedLimiter;
+                        if (sMax > 33f && (hull.shipType.name != "dd" && hull.shipType.name != "tb"))
+                            sMax = 33f;
+                        
+                        float year = GetYear(hull);
+                        if (year < 0f)
+                            year = 1915f;
+
+                        float lDivB = GetDesiredLdivB(hull.tonnageMin * TonnesToCubicMetersWater, DefaultBdivT * 0.867f, sMax * KnotsToMS, hull.shipType.name, year);
+                        int secs = GetDesiredSections(hData, hull.sectionsMax, hull.sectionsMax, hull.tonnageMin, sMax * KnotsToMS, lDivB, DefaultBdivT * 0.867f, out var bmPct, out var drPct);
+                        var stats = GetScaledStats(hData, hull.tonnageMin, bmPct, drPct, secs);
+                        if (secs < 0 || secs > hData._sectionsMax)
+                        {
+                            Melon<UADRealismMod>.Logger.BigError($"Part {data.name} is allowed for hull {hull.name} but we calculated an out of bounds section count {secs} for it! Max {hData._sectionsMax}!");
+                            continue;
+                        }
+                        var origStats = hData._statsSet[secs];
+                        var origData = _OriginalHullData[hull.name];
+                        float origB = (origStats.B * (1f + origData._beamMin * 0.01f)) * origData._scale;
+                        float newB = stats.B;
+                        scaleRatio = newB / origB;
+                        hullToScaleRatio[hull] = scaleRatio;
+                        //Melon<UADRealismMod>.Logger.Msg($"Calculating hull {hull.name}. Orig beam {origB:F2}m from {origStats.B:F2}m ({origData._beamMin:F2}%). New {newB:F2}m L/B={lDivB:F2}@{secs},{year:F0}. {(sMax):F0}. Ratio {scaleRatio:F3}");
+                    }
+                    if (scaleRatio < minScaleRatio)
+                        minScaleRatio = scaleRatio;
+                }
+                //string log = $"Part {data.name}: orig scale {data.scale:F3}";
+                if (minScaleRatio != float.MaxValue)
+                {
+                    // TODO: Should we scale up? For now,
+                    // only scale down.
+                    if (minScaleRatio < 1f)
+                    {
+                        data.scale *= minScaleRatio;
+                        //log += $". Rescaling by {minScaleRatio:F4}x to {data.scale:F3}";
+                    }
+                }
+                //Melon<UADRealismMod>.Logger.Msg(log);
+            }
+
+            // Pass 5: fix up torpedo scaling
+            foreach (var kvp in gameData.partModels)
+            {
+                if (kvp.value == null)
+                {
+                    Melon<UADRealismMod>.Logger.BigError($"PartModel {(string.IsNullOrEmpty(kvp.key) ? "NULL/EMPTY" :  kvp.key)} is null!");
+                    continue;
+                }
+
+                if (!kvp.key.StartsWith("torp"))
+                {
+                    if (!rescaledPMDs.Contains(kvp.value))
+                        Melon<UADRealismMod>.Logger.Warning($"Found PartModelData {kvp.key} that hasn't been rescaled! Has subName {kvp.value.subName} and shiptypes {kvp.value.shipTypes}");
+
+                    continue;
+                }
+
+                ApplyScale(kvp.value, torpedoScale);
+            }
+
             var time = sw.Elapsed;
             Melon<UADRealismMod>.Logger.Msg($"Total time: {time}");
 
             _LoadingDone = true;
             G.ui.CompleteLoadingScreen();
+        }
+
+        private static float GunModelScale(float caliber)
+        {
+            float calInch = caliber * (1f / 25.4f);
+            return 0.9f + 0.1f * Mathf.Cos((calInch < 11.87f ?
+                (Mathf.Pow(Mathf.Max(0, calInch - 4f), 0.78f) + 4)
+                : (Mathf.Pow(calInch - 11.87f, 1.25f) + 11.87f)) * Mathf.PI * 0.5f);
+        }
+
+        private static List<KeyValuePair<int, float>> _PMDKVPs;
+
+        private static void ApplyScale(PartModelData pmd, float scaleFactor)
+        {
+            if (pmd == null)
+            {
+                Melon<UADRealismMod>.Logger.BigError("Got to ApplyScale with null PMD!");
+                return;
+            }
+
+            pmd.scale_1 *= scaleFactor;
+            pmd.scale_2 *= scaleFactor;
+            pmd.scale_3 *= scaleFactor;
+            pmd.scale_4 *= scaleFactor;
+            pmd.scale_5 *= scaleFactor;
+
+            pmd.max_scale_1 *= scaleFactor;
+            pmd.max_scale_2 *= scaleFactor;
+            pmd.max_scale_3 *= scaleFactor;
+            pmd.max_scale_4 *= scaleFactor;
+            pmd.max_scale_5 *= scaleFactor;
+
+            if (_PMDKVPs == null)
+            {
+                Melon<UADRealismMod>.Logger.BigError($"PartModel {pmd.name}: _Keys null!");
+                _PMDKVPs = new List<KeyValuePair<int, float>>();
+            }
+
+            if (pmd.scales == null)
+            {
+                Melon<UADRealismMod>.Logger.BigError($"PartModel {pmd.name} has null scales!");
+            }
+            else
+            {
+                foreach (var kvp in pmd.scales)
+                    _PMDKVPs.Add(new KeyValuePair<int, float>(kvp.key, kvp.value));
+                foreach (var kvp in _PMDKVPs)
+                    pmd.scales[kvp.Key] = kvp.Value * scaleFactor;
+                _PMDKVPs.Clear();
+            }
+
+            if (pmd.maxScales == null)
+            {
+                Melon<UADRealismMod>.Logger.BigError($"PartModel {pmd.name} has null maxScales!");
+            }
+            else
+            {
+                foreach (var kvp in pmd.maxScales)
+                    _PMDKVPs.Add(new KeyValuePair<int, float>(kvp.key, kvp.value));
+                foreach (var kvp in _PMDKVPs)
+                    pmd.maxScales[kvp.Key] = kvp.Value * scaleFactor;
+                _PMDKVPs.Clear();
+            }
+        }
+
+        private static bool IsPartAllowed(PartData hull, ShipType sType, PartData part)
+        {
+            bool failsTest = false;
+            foreach (var needSet in part.needTags)
+            {
+                bool noOverlap = true;
+                foreach (var s in needSet)
+                {
+                    if (hull.paramx.ContainsKey(s))
+                    {
+                        noOverlap = false;
+                        break;
+                    }
+                }
+                if (noOverlap)
+                {
+                    failsTest = true;
+                    break;
+                }
+            }
+            if (failsTest)
+                return false;
+
+            foreach (var excludeSet in part.excludeTags)
+            {
+                bool noOverlap = true;
+                foreach (var s in excludeSet)
+                {
+                    if (hull.paramx.ContainsKey(s))
+                    {
+                        noOverlap = false;
+                        break;
+                    }
+                }
+                if (!noOverlap)
+                {
+                    failsTest = true;
+                    break;
+                }
+            }
+
+            if (failsTest)
+                return false;
+
+            if (part.isGun)
+            {
+                var calInch = part.GetCaliberInch();
+                if ((calInch < sType.mainFrom || sType.mainTo < calInch) && (calInch < sType.secFrom || sType.secTo < calInch))
+                    return false;
+
+                if (hull.maxAllowedCaliber > 0 && calInch > hull.maxAllowedCaliber)
+                    return false;
+
+                if (hull.paramx.ContainsKey("unique_guns"))
+                {
+                    return part.paramx.ContainsKey("unique");
+                }
+                else
+                {
+                    // Ignore max caliber for secondary guns from tech
+                    // Ignore barrel limits from tech
+                    return true;
+                }
+            }
+
+            // No need to check torpedo, since all paths lead to true.
+            //if (part.isTorpedo)
+            //{
+            //    if (part.paramx.ContainsKey("sub_torpedo"))
+            //        return true;
+            //    if (part.paramx.ContainsKey("deck_torpedo"))
+            //        return true;
+
+            //    // Ignore barrel limit by tech
+            //}
+
+            return true;
         }
 
         public static HullStats GetScaledStats(Ship ship)
