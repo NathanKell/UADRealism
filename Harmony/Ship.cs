@@ -110,45 +110,17 @@ namespace UADRealism
         internal static void SetShipBeamDraughtFineness(Ship ship)
         {
             // First, set L/B from B/T
-            float desiredBdivT = 3.0f + ModUtils.DistributedRange(0.2f);
-            float desiredLdivB = ShipStats.GetDesiredLdivB(ship.tonnage * ShipStats.TonnesToCubicMetersWater, desiredBdivT, ship.speedMax, ship.shipType.name, ship.GetYear(ship));
+            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.2f);
+            float desiredLdivB = ShipStats.GetDesiredLdivB(ship, desiredBdivT);
             desiredLdivB *= 1f + ModUtils.DistributedRange(0.025f);
 
             float CpOffset = ModUtils.DistributedRange(0.02f, 3);
-            //Melon<UADRealismMod>.Logger.Msg($"Iterating to find Cp for {(ship.speedMax / 0.51444444f)}kn. L/B {desiredLdivB:F2}, B/T {desiredBdivT:F2}, Cp offset {CpOffset:F3}");
+            //Melon<UADRealismMod>.Logger.Msg($"Iterating to find Cp for {(ship.speedMax / ShipStats.KnotsToMS)}kn. L/B {desiredLdivB:F2}, B/T {desiredBdivT:F2}, Cp offset {CpOffset:F3}");
 
-            // Find the section count with closest-to-desired Cp.
-            // We could try to binary search here, but this is fast enough
-            float bestDiff = 1f;
-            int bestSec = ship.hull.data.sectionsMin;
-            float finalBmPct = 0f;
-            float finalDrPct = 0f;
-            for (int secs = ship.hull.data.sectionsMin; secs <= ship.hull.data.sectionsMax; ++secs)
-            {
-                var hData = ShipStats.GetData(ship);
-                float bmMult = (hData._statsSet[secs].Lwl / hData._statsSet[secs].B) / desiredLdivB;
-                float drMult = (hData._statsSet[secs].B * bmMult / hData._statsSet[secs].T) / desiredBdivT;
-                float bmPct = (bmMult - 1f) * 100f;
-                float drPct = (drMult / bmMult - 1f) * 100f;
-                var stats = ShipStats.GetScaledStats(hData, ship.tonnage, bmPct, drPct, secs);
-                float Fn = ship.speedMax / Mathf.Sqrt(9.80665f * stats.Lwl);
-                float desiredCp = ShipStats.GetDesiredCpForFn(Fn) + CpOffset;
-                float delta = Mathf.Abs(desiredCp - stats.Cp);
-                if (delta < bestDiff)
-                {
-                    bestDiff = delta;
-                    bestSec = secs;
-                    finalBmPct = bmPct;
-                    finalDrPct = drPct;
-                    //Melon<UADRealismMod>.Logger.Msg($"Iterating@{secs} {hData._statsSet[secs].Lwl:F2}x{hData._statsSet[secs].B:F2}x{hData._statsSet[secs].T:F2}->{stats.Lwl:F2}x{stats.B:F2}x{stats.T:F2} with {bmPct:F0}%,{drPct:F0}%. Fn={Fn:F2}, desired={desiredCp:F3}, Cp={stats.Cp:F3}");
-                }
-                // Once we overshoot, everything after will have a bigger delta.
-                if (stats.Cp > desiredCp)
-                    break;
-            }
+            var bestSec = 0; // ShipStats.GetDesiredSections(ship, desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, CpOffset);
 
-            ship.SetBeam(finalBmPct, false);
-            ship.SetDraught(finalDrPct, false);
+            //ship.SetBeam(finalBmPct, false);
+            //ship.SetDraught(finalDrPct, false);
 
             float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
             ship.hullPartSizeZ = Mathf.Lerp(Patch_Ui._MinFineness, Patch_Ui._MaxFineness, 1f - t);

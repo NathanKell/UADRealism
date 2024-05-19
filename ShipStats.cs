@@ -234,6 +234,7 @@ namespace UADRealism
         {
             return GetHullScaleFactor(ship.tonnage, Vd, ship.beam, ship.draught);
         }
+
         public static float GetHullScaleFactor(float tonnage, float Vd, float lengthToBeamPct, float beamToDraughtPct)
         {
             float desiredVol = tonnage * TonnesToCubicMetersWater;
@@ -348,6 +349,43 @@ namespace UADRealism
         {
             float t = Mathf.InverseLerp(0.45f, 0.65f, Cb);
             return Mathf.Lerp(11f, Util.Remap(year, 1890f, 1930f, 5f, 6.5f), t * t);
+        }
+
+        public static int GetDesiredSections(Ship ship, float desiredLdivB, float desiredBdivT, out float finalBmPct, out float finalDrPct, float CpOffset = 0f)
+            => GetDesiredSections(GetData(ship.hull.data), ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.tonnage, ship.speedMax, desiredLdivB, desiredBdivT, out finalBmPct, out finalDrPct, CpOffset);
+
+        public static int GetDesiredSections(HullData hData, int sectionsMin, int sectionsMax, float tonnage, float speedMS, float desiredLdivB, float desiredBdivT, out float finalBmPct, out float finalDrPct, float CpOffset = 0f)
+        {
+            // Find the section count with closest-to-desired Cp.
+            // We could try to binary search here, but this is fast enough
+            float bestDiff = 1f;
+            int bestSec = sectionsMin;
+            finalBmPct = 0f;
+            finalDrPct = 0f;
+            for (int secs = sectionsMin; secs <= sectionsMax; ++secs)
+            {
+                float bmMult = (hData._statsSet[secs].Lwl / hData._statsSet[secs].B) / desiredLdivB;
+                float drMult = (hData._statsSet[secs].B * bmMult / hData._statsSet[secs].T) / desiredBdivT;
+                float bmPct = (bmMult - 1f) * 100f;
+                float drPct = (drMult / bmMult - 1f) * 100f;
+                var stats = GetScaledStats(hData, tonnage, bmPct, drPct, secs);
+                float Fn = speedMS / Mathf.Sqrt(9.80665f * stats.Lwl);
+                float desiredCp = GetDesiredCpForFn(Fn) + CpOffset;
+                float delta = Mathf.Abs(desiredCp - stats.Cp);
+                if (delta < bestDiff)
+                {
+                    bestDiff = delta;
+                    bestSec = secs;
+                    finalBmPct = bmPct;
+                    finalDrPct = drPct;
+                    //Melon<UADRealismMod>.Logger.Msg($"Iterating@{secs} {hData._statsSet[secs].Lwl:F2}x{hData._statsSet[secs].B:F2}x{hData._statsSet[secs].T:F2}->{stats.Lwl:F2}x{stats.B:F2}x{stats.T:F2} with {bmPct:F0}%,{drPct:F0}%. Fn={Fn:F2}, desired={desiredCp:F3}, Cp={stats.Cp:F3}");
+                }
+                // Once we overshoot, everything after will have a bigger delta.
+                if (stats.Cp > desiredCp)
+                    break;
+            }
+
+            return bestSec;
         }
 
         public static float GetDesiredCpForFn(float Fn)
