@@ -117,7 +117,7 @@ namespace UADRealism
             float CpOffset = ModUtils.DistributedRange(0.02f, 3);
             //Melon<UADRealismMod>.Logger.Msg($"Iterating to find Cp for {(ship.speedMax / ShipStats.KnotsToMS)}kn. L/B {desiredLdivB:F2}, B/T {desiredBdivT:F2}, Cp offset {CpOffset:F3}");
 
-            var bestSec = 0; // ShipStats.GetDesiredSections(ship, desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, CpOffset);
+            var bestSec = ShipStats.GetDesiredSections(ship, desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, CpOffset);
 
             //ship.SetBeam(finalBmPct, false);
             //ship.SetDraught(finalDrPct, false);
