@@ -233,7 +233,7 @@ namespace UADRealism
         }
 
         private static readonly Il2CppSystem.Collections.Generic.List<GameObject> _hullSecitons = new Il2CppSystem.Collections.Generic.List<GameObject>();
-
+        private static readonly List<Mount> _mounts = new List<Mount>();
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.RefreshHull))]
         internal static void Postfix_Ship_RefreshHull(Ship __instance, RefreshHullData __state)
@@ -261,6 +261,18 @@ namespace UADRealism
                 // so this should just work
                 p.transform.localPosition = new Vector3(p.transform.localPosition.x, p.transform.localPosition.y * scaleRatio, p.transform.localPosition.z);
             }
+
+            // Finally, make sure we have funnel mounts
+            _mounts.AddRange(__instance.hull.bow.GetComponentsInChildren<Mount>());
+            _mounts.AddRange(__instance.hull.stern.GetComponentsInChildren<Mount>());
+            foreach (var m in _mounts)
+            {
+                if (!m.funnel && Mathf.Abs(m.gameObject.transform.localPosition.x) < 0.01f)
+                {
+                    m.funnel = true;
+                }
+            }
+            _mounts.Clear();
         }
 
 #if disabled
