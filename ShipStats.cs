@@ -694,7 +694,8 @@ namespace UADRealism
                 float Fn = speedMS / Mathf.Sqrt(9.8066f * L);
                 float oldLB = desiredLdivB;
                 desiredLdivB = LdivBFromFn(Fn, year);
-                //Melon<UADRealismMod>.Logger.Msg($"Iterating to find L/B. Cb={Cb:F3} ({sType}), {L:F2}x{B:F2}, Fn={Fn:F3}, old={oldLB:F2},new={desiredLdivB:F2}");
+                //if (_LoadingDone)
+                //    Melon<UADRealismMod>.Logger.Msg($"Iterating to find L/B. Cb={Cb:F3} ({sType}), {L:F2}x{B:F2}, Fn={Fn:F3}, old={oldLB:F2},new={desiredLdivB:F2}");
                 float ratio = oldLB > desiredLdivB ? desiredLdivB / oldLB : oldLB / desiredLdivB;
                 if (ratio > 0.99f)
                     break;
@@ -742,7 +743,8 @@ namespace UADRealism
                     finalBmPct = bmPct;
                     finalDrPct = drPct;
                     desiredCp = desCp - CpOffset;
-                    //Melon<UADRealismMod>.Logger.Msg($"Iterating@{secs} {hData._statsSet[secs].Lwl:F2}x{hData._statsSet[secs].B:F2}x{hData._statsSet[secs].T:F2}->{stats.Lwl:F2}x{stats.B:F2}x{stats.T:F2} with {bmPct:F0}%,{drPct:F0}%. Fn={Fn:F2}, desired={desiredCp:F3}, Cp={stats.Cp:F3}");
+                    //if (_LoadingDone)
+                    //    Melon<UADRealismMod>.Logger.Msg($"Iterating@{secs} {hData._statsSet[secs].Lwl:F2}x{hData._statsSet[secs].B:F2}x{hData._statsSet[secs].T:F2}->{stats.Lwl:F2}x{stats.B:F2}x{stats.T:F2} with {bmPct:F0}%,{drPct:F0}%. Fn={Fn:F2}, desired={desiredCp:F3}, Cp={stats.Cp:F3}");
                 }
                 // Once we overshoot, everything after will have a bigger delta.
                 if (stats.Cp > desCp)

@@ -119,8 +119,8 @@ namespace UADRealism
 
             var bestSec = ShipStats.GetDesiredSections(ship, desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, CpOffset);
 
-            //ship.SetBeam(finalBmPct, false);
-            //ship.SetDraught(finalDrPct, false);
+            ship.SetBeam(finalBmPct, false);
+            ship.SetDraught(finalDrPct, false);
 
             float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
             ship.hullPartSizeZ = Mathf.Lerp(Patch_Ui._MinFineness, Patch_Ui._MaxFineness, 1f - t);
