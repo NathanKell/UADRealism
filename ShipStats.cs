@@ -848,33 +848,35 @@ namespace UADRealism
             double lcb = stats.lcbPct * 100d;
             double LRperL = (1d - Cp + 0.06d * Cp * lcb / (4d * Cp - 1d));
             double iE = 1d + 89d * Math.Exp(-(Math.Pow(LdivB, 0.80856)) * Math.Pow(1 - Cw, 0.30484) * Math.Pow(1 - Cp - 0.0225 * lcb, 0.6367) * Math.Pow(LRperL * LdivB, 0.34574) * Math.Pow(100 * VolCoeff, 0.16302));
+            // Just use the calculated iE and LR/L.
+
             // this is SpringSharp's "Sharpness coefficient"
-            double coSharp = 0.4d * Math.Pow(B / L * 6f, 0.3333333432674408d) * Math.Sqrt(Cb / 0.52f);
-            double sharpLerp = ModUtils.InverseLerp(0.35d, 0.45d, coSharp);
-            double LrMax, LrMin, iEMax, iEMin;
-            if (LRperL < stats.LrPct)
-            {
-                LrMax = stats.LrPct;
-                LrMin = LRperL;
-            }
-            else
-            {
-                LrMax = LRperL;
-                LrMin = stats.LrPct;
-            }
-            if (iE < stats.iE)
-            {
-                iEMax = stats.iE;
-                iEMin = iE;
-            }
-            else
-            {
-                iEMax = iE;
-                iEMin = stats.iE;
-            }
-            // lower is faster in both cases.
-            LRperL = ModUtils.Lerp(LrMin, LrMax, sharpLerp);
-            iE = ModUtils.Lerp(iEMin, iEMax, sharpLerp);
+            //double coSharp = 0.4d * Math.Pow(B / L * 6f, 0.3333333432674408d) * Math.Sqrt(Cb / 0.52f);
+            //double sharpLerp = ModUtils.InverseLerp(0.35d, 0.45d, coSharp);
+            //double LrMax, LrMin, iEMax, iEMin;
+            //if (LRperL < stats.LrPct)
+            //{
+            //    LrMax = stats.LrPct;
+            //    LrMin = LRperL;
+            //}
+            //else
+            //{
+            //    LrMax = LRperL;
+            //    LrMin = stats.LrPct;
+            //}
+            //if (iE < stats.iE)
+            //{
+            //    iEMax = stats.iE;
+            //    iEMin = iE;
+            //}
+            //else
+            //{
+            //    iEMax = iE;
+            //    iEMin = stats.iE;
+            //}
+            //// lower is faster in both cases.
+            //LRperL = ModUtils.Lerp(LrMin, LrMax, sharpLerp);
+            //iE = ModUtils.Lerp(iEMin, iEMax, sharpLerp);
 
             // recalc 
             double formFactor = 0.93 + 0.487118 * c14 * Math.Pow(BdivL, 1.06806) * Math.Pow(TdivL, 0.46106) * Math.Pow(1d / LRperL, 0.121563) * Math.Pow(L3V, 0.36486) * Math.Pow(1 - Cp, -0.604247);
@@ -928,7 +930,6 @@ namespace UADRealism
 
             const double FrAEnd = 0.35d;
             const double FrBStart = 0.50d;
-            const double FrBCube = FrBStart * FrBStart * FrBStart;
             double FrA = Math.Min(Fr, FrAEnd);
             double FrB = Math.Max(Fr, FrBStart);
             double c5_mul_weight = c5 * Vd * WaterDensity * 9.80665d;
@@ -936,10 +937,19 @@ namespace UADRealism
             double RwB = c17 * c2 * c5_mul_weight * Math.Exp(m3 * Math.Pow(FrB, -0.9) + m4 * Math.Cos(lambda / (FrB * FrB)));
             double Rw = ModUtils.Lerp(RwA, RwB, ModUtils.InverseLerp(FrAEnd, FrBStart, Fr));
             // Additional tweaks past Holtrop-Mennen
-            double rwmultVolCoeff = 1d + 200d * (VolCoeff - 0.0025d) * Math.Max(0.1d, ModUtils.InverseLerp(0.25d, 0.4d, Fr));
-            double rwmultFr = Math.Pow(FrB, 3d) / FrBCube;
+            double rwmultVolCoeff = Math.Max(0.85d, 1d + 200d * (VolCoeff - 0.0025d) * Math.Max(0.1d, ModUtils.InverseLerp(0.25d, 0.4d, Fr)));
             double rwmultCm = 1d + (1.8d * Math.Max(0.75d, Cm) - 1) * ModUtils.InverseLerp(0.25d, 0.3d, Fr);
-            Rw *= rwmultVolCoeff * rwmultFr * rwmultCm;
+            
+            double rwmultFr = 1d;
+            double rwmultCb = 1d;
+            const double highFrStart = 0.4d;
+            if (Fr > highFrStart)
+            {
+                rwmultFr += Fr * Fr / (highFrStart * highFrStart) * 0.55d;
+                rwmultCb += (0.16d - 0.5 * ModUtils.InverseLerp(0.3d, 0.5d, Cb)) * ModUtils.InverseLerp(0.4d, 0.5d, Fr);
+            }
+
+            Rw *= rwmultVolCoeff * rwmultFr * rwmultCm * rwmultCb;
 
             double Rt = Rf + Rw + Rtr + Ra;
 
@@ -962,7 +972,7 @@ namespace UADRealism
                 _LastLogFrame = frames;
                 Debug.Log($"c1={c1:F3}, c2={c2:F3}, c3={c3:F3}, c5={c5:F3}, c6={c6:F3}, c7={c7:F3}, c14={c14:F3}, c15={c15:F3}, c16={c16:F3}, c17={c17:F3}, lcb={lcb:F1}, sharp={coSharp:F3}, sLerp={sharpLerp:F2}, LR={(LRperL*L):F1}, iE={iE:F1}, "
                     + $"Cvol={VolCoeff:F5}, labmda={lambda:F3}, Re={Re:E3}, Cf={Cf:F5}, S={S:N0}, FF={formFactor:F3}, Rf={Rf:N0}, Ra={Ra:N0}, Fr={Fr:F2}, m1={m1:F3}, m3={m3:F3}, m4={m4:F3}, RwA={RwA:N0}, RwB={RwB:N0}, rwmVol={rwmultVolCoeff:F2}, "
-                    + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}.");
+                    + $"rwmFr={rwmultFr:F2}, rwmCm={rwmultCm:F2}, rwmCb={rwmultCb:F2}, Rw={Rw:N0}, Rt={Rt:N0}, etaR={eta_R:F2}, Cv={Cv:F3}, w={w:F2}, t={t:F2}.");
             }
 #endif
 
