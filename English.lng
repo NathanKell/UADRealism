@@ -229,7 +229,8 @@ $component_name_short_Anti_Flooding_3;Anti-Flood III
 $component_name_short_ap_1;Capped
 $component_name_short_ap_2;Capped - Ballistic I
 $component_name_short_ap_3;Semi
-$component_name_short_ap_4;Semi- Ballistic
+$component_name_short_ap_6;Semi - Capped
+$component_name_short_ap_4;Semi - Ballistic
 $component_name_short_ap_5;Capped - Ballistic II
 $component_name_short_armor_0;Compound
 $component_name_short_armor_1;Nickel-steel
@@ -2361,7 +2362,7 @@ $technology_desc_engine_engine_3;An evolution to the older triple expansion stea
 $technology_desc_engine_engine_4;The most advanced version of a steam reciprocating engine may still be a wise choice for warships, if we consider the low price and good fuel efficiency at cruising speeds.
 $technology_desc_engine_engine_5;The revolutionary steam turbine mechanism makes older reciprocating engines obsolete. However, the fuel efficiency of steam turbines is overall worse compared to reciprocating engines except when running at maximum load.
 $technology_desc_engine_engine_6;Reduction gears offer high engine power and torque at lower rpm and reduce chances of malfunctioning.
-$technology_desc_engine_engine_7;An engine which uses a steam turbine and special electric motors to convert the mechanical energy into power for the drive shafts instead of a much heavier and complex gearbox. Additionally, a portion of the mechanical energy is efficiently stored to electric generators which power the vital ship mechanisms, such as the pumping system, the turret rotation and the various functions that demand electric supply.\n\nThe turbo electric drive offers increased ship maneuverability, survivability and engine reliability due to the overall efficiency of its power output. However, the turbo electric drive engine has a much lower horsepower per weight than geared steam turbines, therefore it is an option which will deter a high top speed for a large warship, unless many other sacrifices are made for weight savings. \n\n*Warning* Complex engine systems increase the chance of construction flaws.\n
+$technology_desc_engine_engine_7;An engine which uses a steam turbine and special electric motors to convert the mechanical energy into power for the drive shafts instead of a much heavier and complex gearbox. Additionally, a portion of the mechanical energy is efficiently stored to electric generators which power the vital ship mechanisms, such as the pumping system, the turret rotation and the various functions that demand electric supply. Offers increased ship maneuverability, survivability and engine reliability due to the overall efficiency of its power output. However, the turbo electric drive engine has a much lower horsepower per weight than geared steam turbines, therefore it is an option which will deter a high top speed for a large warship, unless many other sacrifices are made for weight savings. \n\n*Warning* Complex engine systems increase the chance of construction flaws.\n
 $technology_desc_engine_engine_8;Double reduction gears can now be used on steam turbines, increasing further their performance and reliability.\n\n*Warning* Complex engine systems increase the chance of construction flaws.
 $technology_desc_engine_engine_9;Latest technology allows the construction of diesel engines that can be fitted to warships as their main propulsion system. These engines can only be powered by oil fuel and are more expensive per horsepower but they pay off with their decreased fuel consumption and reliability,\n\n*Warning* Complex engine systems increase the chance of construction flaws.
 $technology_desc_engine_engine_end;All engine types benefited from the latest advancements in technology, with an increased horsepower output and reliability.
@@ -2483,17 +2484,17 @@ $technology_desc_gun_mech_19;Enables large triple turrets (9 inch or higher) for
 $technology_desc_gun_mech_2;A standard hydraulic system is used to rotate the turrets.
 $technology_desc_gun_mech_20;Triple turrets become more reliable.
 $technology_desc_gun_mech_21;Triple turrets gain their maximum effectiveness.
-$technology_desc_gun_mech_22;Enables large quadruple guns (9 inch or higher) for Battleships, Battlecruisers, Heavy Cruisers.  NOTE: IN NAR only France, Britain, EUA and Russia have quads.
+$technology_desc_gun_mech_22;Enables large quadruple guns (9 inch or higher) for Battleships, Battlecruisers, Heavy Cruisers.  NOTE: IN NAR only France, Britain, USA, Russia, Italy and Austria have quads.
 $technology_desc_gun_mech_23;Quadruple turrets gain their maximum effectiveness.
 $technology_desc_gun_mech_25;Enables single turrets for the secondary guns of Light Cruisers.
 $technology_desc_gun_mech_26;Enables secondary double turrets for Battleships, Battlecruisers, Heavy Cruisers.
 $technology_desc_gun_mech_27;Enables secondary triple turrets for Battleships, Battlecruisers, Heavy Cruisers.
-$technology_desc_gun_mech_28;Enables secondary quadruple turrets for Battleships, Battlecruisers, Heavy Cruisers.  NOTE: IN NAR only France, Britain, EUA and Russia have quads.
+$technology_desc_gun_mech_28;Enables secondary quadruple turrets for Battleships, Battlecruisers, Heavy Cruisers.  NOTE: IN NAR only France, Britain, EUA, Russia, Italy and Austria have quads.
 $technology_desc_gun_mech_29;Enables double turrets for Light Cruisers.
 $technology_desc_gun_mech_3;Cylinders of better design and layout affect positively the turret traverse system.
 $technology_desc_gun_mech_30;Enables double turrets for Destroyers.
 $technology_desc_gun_mech_31;Enables triple turrets for Light Cruisers & enables secondary triple turrets on Destroyers.
-$technology_desc_gun_mech_32;Enables triple secondary turrets for Destroyers & quad secondary turrets on light cruisers.  NOTE: IN NAR only France, Britain, EUA and Russia have quads.
+$technology_desc_gun_mech_32;Enables triple secondary turrets for Destroyers & quad secondary turrets on light cruisers.  NOTE: IN NAR only France, Britain, USA, Russia, Italy and Austria have quads.
 $technology_desc_gun_mech_33;Gun metallurgy allows further elongation of the barrel rifle system without increasing the risk of cracking and failure of the mechanism.
 $technology_desc_gun_mech_4;The turret's traverse system gains a more efficient gearbox.
 $technology_desc_gun_mech_41;Metallurgy dedicated for small caliber naval guns allows a further elongation of the barrel rifle system without increasing the risk of cracking and failure of the mechanism.
@@ -2644,10 +2645,10 @@ $technology_desc_projectile_explosive_7;This is the earliest form of explosive a
 $technology_desc_projectile_explosive_8;Nitrocellulose or "Gun Cotton". This low-power explosive, somewhat more powerful than Black Powder, was the first in the chemical series that quickly created the high (detonable) explosives Nitroglycerine and its many successors. It was simply finely shredded wood pulp free of any impurities (so that it was much like white cotton, hence its nickname) that was soaked into hydrochloric acid until it was a thick white paste, with the acid then washed away by pure water and some small amounts of chemicals added to soak up any residue acid to keep the powder chemically stable (this turned out to be rather difficult to get right and unstable powder caused many disasters). It could be used much like black powder in guns, but could be made to burn more slowly, allowing improved gun designs with higher muzzle velocities to be developed (long-barrel breech-loading rifled cannons). Used primarily as a gun propellant replacing Black Powder, it was used by itself (single-based powder, as used by the US and French Navies) or, more widely, mixed with Nitroglycerine for added power (smaller size of charge needed for a given gun muzzle velocity, the most famous being British Cordite).
 $technology_desc_projectile_explosive_9;A super high explosive mainly composed from picric acid equivalent to the British “Lyddite”, the French “Melinite”, the Japanese “Shimose Powder'', the Austro-Hungarian “Ecrasite” or other names. It is an ultra powerful explosive charge but highly sensitive, causing shells to often detonate upon impact before penetrating the armor. HE shells filled with that explosive can be very effective against lightly armored targets or cause endless fires to heavily armored ships.
 $technology_desc_projectile_explosive_end;Shell explosives become safer to use in storage but also more powerful.
-$technology_desc_projectile_shell_11;Lighter shells have reduced damage and penetration properties, but they are cheaper, reload faster and are less prone to detonation. Furthermore, the lighter shells cause less gun barrel erosion, affecting the gun accuracy positively. The range of a lighter shell is, on average, shorter than a heavier shell of the same muzzle velocity. Because of the higher muzzle velocity of a light shell, its range can become larger according to other shell properties.
+$technology_desc_projectile_shell_11;Lighter shells have better accuracy at low ranges due to higher muzzle velocity, trajectory flattening and reduced time to target.\nThese shells have less momentum to overcome surface irregularities and tend to deflect more easily upon impact.\nQuicker to reload, cheaper, are also safer to use and storage.\nHave low penetration and reduced damaged due to low mass and smaller bursting charge.
 $technology_desc_projectile_shell_12;Shells with default ballistic properties according to technology.
-$technology_desc_projectile_shell_13;Heavier shells cause more damage and can penetrate thicker armor at all ranges because of their better ballistics. However, they cost more, they are more prone to detonation and increase gun barrel erosion. Furthermore, their slower muzzle velocity increases the chance of calculation errors when firing at long range targets.
-$technology_desc_projectile_shell_14;Shells of the maximum possible size cause immense damage and may make guns of smaller caliber almost equivalent to bigger guns in terms of firepower and ballistics. However, those shells are much heavier, riskier to become detonated and cause more gun barrel erosion, while their slower muzzle velocity increases the chance of calculation errors when firing at long range targets.
+$technology_desc_projectile_shell_13;Heavy shells have better range and are more accurate at long ranges due to improved ballistic coefficient, that is a measure of how well a projectile retains its velocity and resists drag as it travels through the air.\nThese shells tend to penetrate surfaces rather than bouncing off, due to their greater mass and momentum.\nSlower to reload, expensive, are also more dangerous to use and storage.\nHave improved penetration and damaged due to higher mass and bigger bursting charge.
+$technology_desc_projectile_shell_14;Super heavy shells have the best range and are the most accurate at long ranges due to better ballistic coefficient, that is a measure of how well a projectile retains its velocity and resists drag as it travels through the air.\nThese shells, possess more mass, resulting in higher momentum, improving the capability to penetrate armor.\nIt is the slowest to reload, incredible expensive and are also the most dangerous to use and storage.\nHave the best penetration and damaged due to the highest mass and biggest bursting charge.
 $technology_desc_projectile_shell_15;The shape of the shell nose is aerodynamically improved providing greater range and penetration power.
 $technology_desc_projectile_shell_16;Better designed shells which have more aerodynamic shape offer greater range and penetration power.
 $technology_desc_projectile_shell_17;High explosive shells can carry more explosive charge due to the thinner and durable shell cases.
@@ -2658,12 +2659,13 @@ $technology_desc_projectile_shell_21;High Capacity HE shells (HCHE) have thinner
 $technology_desc_projectile_shell_22;A Common Nose Fuse (CNF) High Explosive shell has the percussion fuze located at the nose of the shell. The short delay fuse is designed to cause the detonation of the shell almost at the time of impact, reducing its penetration effect but increasing its incendiary capability as the shell has more chances to explode into smaller fragments and damage the ship's surface. The explosive filling and weight of CNF shells is increased compared to CP.
 $technology_desc_projectile_shell_23;Common Pointed (CP) shells have a solid nose and a percussion fuze on the base of a shell delaying the detonation upon impact and thus increasing the chance of penetrating a ship's steel protection before exploding. The shell’s thin walls allow inside a higher load of explosive, compared to an AP shell that is heavier and denser.
 $technology_desc_projectile_shell_24;A Common Pointed shell which has an extra soft cap on the nose which helps it to penetrate further into a steel plate before detonating. A CPC shell has a higher penetrating power than a typical HE shell but carries a slightly lighter bursting charge.
-$technology_desc_projectile_shell_25;An improved CPC shell which has an aerodynamically shaped cap that improves ballistics and penetration power of the shell. The shell is denser and heavier and carries less bursting charge than a typical HE round.
-$technology_desc_projectile_shell_26;SAP shells carry a higher explosive payload due to the medium thickness of the shell walls. Their fuze has a medium delay and as a result they are still capable of penetrating heavy armor up to a certain extent and when they do, they have a more destructive effect. These shells might be highly ineffective against heavily armored battleships, but devastating against lightly armored warships.
-$technology_desc_projectile_shell_27;SAPBC are Armor Piercing shells equipped with a specially designed ballistic cap which is of a soft and light material. Simlarly as the SAP shell, it has a medium delay fuze and carries more bursting charge than a typical AP round. Its penetration power is decent enough to be a threat for any warship except the most heavily armored battleships.
+$technology_desc_projectile_shell_25;An improved CPC shell which has an specially designed ballistic cap which is of a soft and light material that improves ballistics and penetration power of the shell. The shell is denser and heavier and carries less bursting charge than a typical HE round.
+$technology_desc_projectile_shell_26;Semi armor piercing shells carry a higher explosive payload due to the medium thickness of the shell walls. Their fuze has a medium delay and as a result they are still capable of penetrating heavy armor up to a certain extent and when they do, they have a more destructive effect. These shells might be highly ineffective against heavily armored battleships, but devastating against lightly armored warships.
+$technology_desc_projectile_shell_33;Semi armor piercing equipped with a soft cap, to improve penetration, mainly at low angles. Similarly as the SAP shell, it has a medium delay fuze and carries more bursting charge than a typical AP round.
+$technology_desc_projectile_shell_27;Ballistic cap allow the cap underneath to have a less aerodynamic shape that provides greater penetration power at steep angles. Similarly as the SAP and SAPC shell, it has a medium delay fuze and carries more bursting charge than a typical AP round. Its penetration power is improved to be a threat for any warship except the most heavily armored battleships.
 $technology_desc_projectile_shell_28;A typical Armor Piercing shell has a specially hardened and shaped nose, thick walls and dense material to increase the ballistic properties and penetration power of the shell. The percussion fuze is located in the nose and has a delaying mechanism to detonate the shell after penetrating deep inside the steel protection of a warship.
 $technology_desc_projectile_shell_29;Against the face-hardened armor which can cause shells to shutter upon impact, the new armor piercing shells are designed to have a solid iron or steel cap at their tip making them more effective in armor penetration. The heavier and denser shell is having a slightly reduced bursting charge as a side-effect.
-$technology_desc_projectile_shell_30;The shape of the shell nose is aerodynamically improved providing greater penetration power. The shell is slightly heavier and has a reduced bursting charge.
+$technology_desc_projectile_shell_30;Ballistic cap allow the cap underneath to have a less aerodynamic shape often with sharp edges, which allows it to grip into armour even at high impact angles. The shell is slightly heavier and has a reduced bursting charge.
 $technology_desc_projectile_shell_31;An enhanced armor piercing cap increases the chances of the shell to pierce the armor and cause internal damage to an enemy ship. This type of shell is more effective against heavily armored ships.
 $technology_desc_projectile_shell_32;The construction material of shells is further improved, improving their ballistics and the explosive payload they can carry.
 $technology_desc_sub_surv_1;The submarine's hull receives some outer modules, like the ballast tanks which enhance its surface and diving speed.
@@ -2689,7 +2691,7 @@ $technology_desc_submarine_exp_3;A more complex periscope is developed, adequate
 $technology_desc_submarine_exp_4;Experimental submarine using a petrol engine to move on surface and electrical power while submerged, based on Holland Class VI submarine.
 $technology_desc_submarine_exp_5;Kerosene is a type of petrol fuel which provides more engine power.
 $technology_desc_submarine_exp_6;A Diesel engine is more reliable with much reduced flammability over Kerosene engines.
-$technology_desc_submarine_exp_7;The technology has matured to start producing the first war submarine, capable of surviving in multiple battle conditions. Up to two submarines can join a fighting group, based on the limited communication that can be executed onboard a submarine.
+$technology_desc_submarine_exp_7;The technology has matured to start producing the first war submarine, capable of surviving in multiple battle conditions.
 $technology_desc_submarine_hull_1;SSC class featuring, 2x bow torpedo tubes, 1x machine gun, Diesel-Electric Engines. [Range 945km *Base value]
 $technology_desc_submarine_hull_10;SC class submarine featuring, 6x bow torpedo tubes, 4x stern torpedo tubes, 1x 4-inch guns, Dual Diesel-Electric Engines. [Range 6510km *Base value]
 $technology_desc_submarine_hull_11;SC class submarine featuring, 4x bow torpedo tubes, 2x stern torpedo tubes, 1x 3.5-inch guns, 2x 5.9-inch guns, Advanced Diesel-Electric Engines. [Range 10010km *Base value]
@@ -2758,7 +2760,7 @@ $technology_desc_tactics_asw_6;When a ship is moored or otherwise stationed in t
 $technology_desc_tactics_asw_7;The newest torpedo nets have booms made of steel, replacing the older more vulnerable ones that were made of wood.
 $technology_desc_tactics_asw_8;Minesweepers are modified to protect the fleet so that they steam in line abreast and with their unleashed cables they can detect nearby submarines or destroy them, if the cables carry explosive charges. When a submarine is detected, it can be chased until it is forced to come to the surface and surrender. This is the minimum attack method against submarines.
 $technology_desc_tactics_asw_9;The depth charge is a new anti-submarine warfare weapon that can be fitted to destroyers and cruisers. It is intended to destroy a submarine by being dropped into the water nearby and detonating, subjecting the target to a powerful and destructive hydraulic shock.
-$technology_desc_tactics_comm_1;The ships can communicate with each other only with flag or light signals, thus their communication range is severely limited according to visibility.
+$technology_desc_tactics_comm_1;A signal lamp (sometimes called an Aldis lamp or a Morse lamp) is a visual signaling device for optical communication by flashes of a lamp, typically using Morse code. This allows better comunication between the ships at longer ranges.
 $technology_desc_tactics_comm_11;Encrypting our communication methods and also knowing how to analyze and decrypt enemy messages is a new science that aids our military operations, especially against submarines.
 $technology_desc_tactics_comm_16;Ports are equipped with radar and are able to trace enemy forces at longer distances.
 $technology_desc_tactics_comm_18;A specialized radio antenna can be mounted to submarines which extends their communications radius when they travel at sea surface. Countermeasures against submarines become expanded accordingly.
@@ -3124,7 +3126,7 @@ $technology_name_gun_mech_3;Enhanced turret cylinders
 $technology_name_gun_mech_30;Double turrets on destroyers
 $technology_name_gun_mech_31;Triple turrets on light cruisers
 $technology_name_gun_mech_32;Secondary triple turrets on destroyers
-$technology_name_gun_mech_54;Secondary quadruple turrets on destroyers.  NOTE: IN NAR only France, Britain, EUA and Russia have quads.
+$technology_name_gun_mech_54;Secondary quadruple turrets on destroyers.  NOTE: IN NAR only France, Britain, USA and Russia have quads.
 $technology_name_gun_mech_33;Naval Gun Barrels I
 $technology_name_gun_mech_34;Naval Gun Barrels II
 $technology_name_gun_mech_35;Naval Gun Barrels III
@@ -3298,7 +3300,7 @@ $technology_name_hull_strength_8;Dreadnought Improvements II
 $technology_name_hull_strength_9;Hull strapping
 $technology_name_hull_strength_end;Advanced hull materials
 $technology_name_projectile_explosive_1;Reduced shell rounds
-$technology_name_projectile_explosive_10;TNT I
+$technology_name_projectile_explosive_10;TNT
 $technology_name_projectile_explosive_13;Shellite
 $technology_name_projectile_explosive_15;TNA
 $technology_name_projectile_explosive_16;Composition B
@@ -3356,10 +3358,10 @@ $technology_name_projectile_shell_23;CP - Base Fuze Shell
 $technology_name_projectile_shell_24;CPC - Common Pointed Capped
 $technology_name_projectile_shell_25;CPBC - Common Pointed Ballistic Capped
 $technology_name_projectile_shell_26;SAP - Semi Armor Piercing Shell
-$technology_name_projectile_shell_27;SAPBC - Semi Armor Piercing Ballistic Cap Shell
+$technology_name_projectile_shell_33;SAPC - Semi-Armor Piercing Capped shell
+$technology_name_projectile_shell_27;SAPBC - Semi Armor Piercing Ballistic Capped Shell
 $technology_name_projectile_shell_28;AP - Armor Piercing Shell
 $technology_name_projectile_shell_29;APC - Armor Piercing Capped Shell
-$technology_name_projectile_shell_3;Standard AP/HE for Main Guns
 $technology_name_projectile_shell_30;APBC - Armor Piercing Ballistic Capped Shell
 $technology_name_projectile_shell_31;Improved APBC - Armor Piercing Ballistic Capped Shell
 $technology_name_projectile_shell_32;Advanced naval shells
@@ -3499,7 +3501,7 @@ $technology_name_tactics_asw_6;Anti-torpedo nets
 $technology_name_tactics_asw_7;Improved anti-torpedo nets
 $technology_name_tactics_asw_8;Modified Sweepers
 $technology_name_tactics_asw_9;Depth charges Type I
-$technology_name_tactics_comm_1;Flags communication
+$technology_name_tactics_comm_1;Signal lamp
 $technology_name_tactics_comm_10;Marine VHF radio VI
 $technology_name_tactics_comm_11;Cryptography I
 $technology_name_tactics_comm_12;Cryptography II
@@ -5323,7 +5325,7 @@ $technology_name_gun_layout_12_extra;8x large centreline turrets
 $technology_desc_gun_layout_12_extra;Further technology advancements raise the limit of maximum centreline big guns to 8x.
 $Ui_Constr_MaxArmor;Maximum Armor
 $technology_name_gun_mech_54;Quad turrets on light cruisers
-$technology_desc_gun_mech_54;Enables quad turrets for Light Cruisers. NOTE: IN NAR only France, Britain, EUA and Russia have quads.
+$technology_desc_gun_mech_54;Enables quad turrets for Light Cruisers. NOTE: IN NAR only France, Britain, USA, Russia and A-H have quads.
 $MissionData_Name_New_Mission_Patch_v14_1;All-purpose Light Cruisers
 $MissionData_Goal_New_Mission_Patch_v14_1;Attack a Battlecruiser and its escorts with your light cruisers
 $MissionData_Desc_New_Mission_Patch_v14_1;Germany entered the British waters with a powerful battlecruiser and four cruisers. You, as the British, can use only your light cruisers to deal with the threat. According to their design, the modern light cruisers may combine speed, maneuverability and large firepower but can become rather expensive. Utilizing effectively the available technology and money can provide the necessary means for victory.
