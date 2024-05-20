@@ -1,5 +1,5 @@
 ﻿//#define LOGHULLSTATS
-#define LOGHULLSCALES
+//#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
 
@@ -265,8 +265,6 @@ namespace UADRealism
             const float torpedoScale = 0.85f;
 
             // Pass 5: change part sizes
-            HashSet<PartModelData> rescaledPMDs = new HashSet<PartModelData>();
-            _PMDKVPs = new List<KeyValuePair<int, float>>();
             foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
@@ -303,14 +301,15 @@ namespace UADRealism
                     }
                 }
                 float origScale = data.scale;
-                if (minScaleRatio != float.MaxValue)
+                if (minScaleRatio == float.MaxValue)
+                    minScaleRatio = 1f;
+
+                // TODO: Should we scale up? For now,
+                // only scale down.
+                if (minScaleRatio < 1f)
                 {
-                    // TODO: Should we scale up? For now,
-                    // only scale down.
-                    if (minScaleRatio < 1f)
-                    {
-                        data.scale *= Mathf.Max(0.8f, minScaleRatio);
-                    }
+                    minScaleRatio = Mathf.Max(0.8f, minScaleRatio);
+                    data.scale *= minScaleRatio;
                 }
 #if LOGPARTSTATS
                 Melon<UADRealismMod>.Logger.Msg($"${num++}${data.name}${data.model}${minScaleRatio:F3}${minHullName}${origScale:F3}${data.scale:F3}");
@@ -319,6 +318,8 @@ namespace UADRealism
 
             // Pass 6: Rescale guns
             num = 1;
+            HashSet<PartModelData> rescaledPMDs = new HashSet<PartModelData>();
+            _PMDKVPs = new List<KeyValuePair<int, float>>();
 #if LOGGUNSTATS
             Melon<UADRealismMod>.Logger.Msg("time$order$name$partData$caliber$scaleRatio");
 #endif
