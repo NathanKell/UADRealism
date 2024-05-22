@@ -173,6 +173,14 @@ namespace UADRealism
             }
             return val / steps;
         }
+
+        public static float Range(float a, float b, System.Random rnd = null)
+        {
+            if (rnd == null)
+                return UnityEngine.Random.Range(a, b);
+
+            return (float)rnd.NextDouble() * (b - a) + a;
+        }
     }
 
     [RegisterTypeInIl2Cpp]
