@@ -181,6 +181,83 @@ namespace UADRealism
 
             return (float)rnd.NextDouble() * (b - a) + a;
         }
+
+        public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null)
+        {
+            if (dictionary.Count == 0)
+                return default(T);
+            float sum = 0f;
+            foreach (var kvp in dictionary)
+            {
+                if (kvp.Value < 0f)
+                    continue;
+
+                sum += kvp.Value;
+            }
+            if (sum == 0f)
+                return default(T);
+
+            float selector = Range(0f, sum, rnd);
+            float curSum = 0f;
+            foreach (var kvp in dictionary)
+            {
+                float val = kvp.Value;
+                if (val < 0f)
+                    val = 0f;
+                curSum += val;
+
+                if (selector > curSum)
+                    continue;
+
+                return kvp.Key;
+            }
+
+            // will never hit this, because selector can't be > sum.
+            // But VS complains not all paths return a value without it, heh.
+            return default(T);
+        }
+
+        private static List<int> _ShuffleIndices = new List<int>();
+        private static List<int> _ShuffleRemainingOptions = new List<int>();
+        public static void Shuffle<T>(this List<T> list)
+        {
+            int iC = list.Count;
+            for (int i = 0; i < iC; ++i)
+                _ShuffleRemainingOptions.Add(i);
+
+            for (int i = 0; i < iC; ++i)
+            {
+                int idx = UnityEngine.Random.Range(0, _ShuffleRemainingOptions.Count - 1);
+                _ShuffleIndices.Add(_ShuffleRemainingOptions[idx]);
+                _ShuffleRemainingOptions.RemoveAt(idx);
+            }
+
+            // Slightly wasteful, but this ensures
+            // we hit all elements.
+            for (int i = 0; i < iC; ++i)
+                ShuffleEx(list, i);
+
+            _ShuffleIndices.Clear();
+            _ShuffleRemainingOptions.Clear();
+        }
+
+        private static void ShuffleEx<T>(List<T> list, int idx)
+        {
+            if (_ShuffleIndices[idx] == -1)
+                return;
+
+            if (_ShuffleIndices[idx] == idx)
+            {
+                _ShuffleIndices[idx] = -1;
+                return;
+            }
+
+            int desired = _ShuffleIndices[idx];
+            _ShuffleIndices[idx] = -1;
+            T elem = list[idx];
+            ShuffleEx(list, desired);
+            list[desired] = elem;
+        }
     }
 
     [RegisterTypeInIl2Cpp]
