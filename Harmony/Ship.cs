@@ -15,9 +15,6 @@ namespace UADRealism
         internal static Ship.Store _ChangeHullShipStore = null;
         internal static Ship _ChangeHullShip = null;
         internal static bool _IsRefreshPatched = false;
-        
-        internal static bool _AboutToAdjustHullStats = false;
-        internal static bool _InAdjustHullStats = false;
 
         internal struct RefreshHullData
         {
@@ -37,28 +34,65 @@ namespace UADRealism
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.ChangeHull))]
-        internal static void Prefix_Ship_ChangeHull(Ship __instance, Ship.Store store = null)
+        internal static void Prefix_Ship_ChangeHull(Ship __instance, Ship.Store store, ref bool byHuman, out bool __state)
         {
             _IsChangeHull = true;
             _ChangeHullShipStore = store;
             _ChangeHullShip = __instance;
-            _AboutToAdjustHullStats = false;
-            _InAdjustHullStats = false;
+            __state = byHuman;
+            // This is gross. But we can't patch AdjustHullStats so we need to make
+            // it not run, and run something else ourselves. We should just be
+            // prefixing that, but it crashes (!) because apparently the runtime
+            // interop can't handle patching methods that take nullable arguments.
+            // Blergh. So instead we'll manually handle the "byHuman" case that
+            // invokes AdjustHullStats when we get to our postfix.
+
+            byHuman = false;
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.ChangeHull))]
-        internal static void Postfix_Ship_ChangeHull(Ship __instance, Ship.Store store = null)
+        internal static void Postfix_Ship_ChangeHull(Ship __instance, Ship.Store store, bool __state)
         {
+            // Stock code bug: shiptypes give speed min/max in knots, but code
+            // uses m/s. So we have to reset speedmax here. This uses the same
+            // random as the game.
+            __instance.speedMax = Mathf.Clamp(ModUtils.Range(0.9f, 1.1f) * __instance.hull.data.speedLimiter, __instance.shipType.speedMin, __instance.shipType.speedMax) * ShipStats.KnotsToMS;
+            SetShipBeamDraughtFineness(__instance);
+
+            if (__state) // i.e. if byHuman
+            {
+                float minT = __instance.TonnageMin();
+                float maxT = __instance.TonnageMax();
+                if (__instance.player != null)
+                {
+                    float tLim = __instance.player.TonnageLimit(__instance.shipType);
+                    maxT = Math.Min(maxT, tLim);
+                }
+                var t = Util.Range(0f, 1f);
+                __instance.SetTonnage(Mathf.Lerp(minT, maxT, Util.Range(0f, 1f)));
+
+                float oldSpeed = __instance.speedMax;
+
+                float year = __instance.GetYear(__instance);
+                // No idea why this code in stock does a remap-with-clamp and then clamps again. Leaving it as a monument to posterity.
+                float yearToMult = Mathf.Clamp(Util.Remap(year, 1890f, 1940f, 1.3f, 1.05f, true) * 0.5f, 0.45f, 0.65f);
+                AdjustHullStats(__instance, -1, 1f - yearToMult, new System.Func<bool>(() =>
+                {
+                    // same deal here with the double clamp.
+                    float remapped = Util.Remap(year, 1890f, 1940f, 1.33f, 1.1f, true);
+                    return (1f - Mathf.Clamp(remapped * 0.5f, 0.45f, 0.75f)) >= __instance.Weight() / __instance.Tonnage();
+
+                }));
+
+                // If our speed was adjusted, we should change hull geometry to optimize.
+                if (oldSpeed != __instance.speedMax)
+                    SetShipBeamDraughtFineness(__instance);
+            }
+
             _IsChangeHull = false;
             _ChangeHullShipStore = null;
             _ChangeHullShip = null;
-            _AboutToAdjustHullStats = false;
-            _InAdjustHullStats = false;
-
-            // Second pass, after speed adjustment
-            if (store == null)
-                SetShipBeamDraughtFineness(__instance);
 
             // This refresh may or may not be needed, but it won't really hurt.
             MelonCoroutines.Start(RefreshHullRoutine(__instance));
@@ -70,42 +104,12 @@ namespace UADRealism
         internal static void Postfix_GenerateArmor()
         {
             if (_IsChangeHull && _ChangeHullShipStore != null && _ChangeHullShip != null)
-                _ChangeHullShip.hullPartSizeZ = _ChangeHullShipStore.hullPartSizeZ;
-        }
-
-        // This is extremely gross. We have to patch both SetTonnage _and_ GetYear
-        // so that we can set fineness in ChangeHull before AdjustHullStats runs.
-        // We should just be prefixing that, but it crashes (!) because apparently
-        // the runtime interop can't handle patching methods that take nullable
-        // arguments. Blergh.
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(Ship.SetTonnage))]
-        internal static void Postfix_SetTonnage()
-        {
-            if (_IsChangeHull && !_AboutToAdjustHullStats && !_InAdjustHullStats)
-                _AboutToAdjustHullStats = true;
-        }
-
-        [HarmonyPrefix]
-        [HarmonyPatch(nameof(Ship.GetYear))]
-        internal static void Prefix_GetYear(Ship __instance)
-        {
-            if (!_InAdjustHullStats && _IsChangeHull && _AboutToAdjustHullStats)
             {
-                _InAdjustHullStats = true;
-
-                // If we're in ChangeHull, and we've got our bool set, and not loading
-                // from store, we should set fineness based on the speed set
-                if (_ChangeHullShipStore == null)
-                {
-                    // we need to set this now because AdjustHullStats also
-                    // calls GetYear a bunch.
-                    _AboutToAdjustHullStats = false;
-
-                    SetShipBeamDraughtFineness(__instance);
-                }
+                _ChangeHullShip.hullPartSizeZ = _ChangeHullShipStore.hullPartSizeZ;
+                _ChangeHullShip.hullPartSizeY = _ChangeHullShipStore.hullPartSizeY;
             }
         }
+        
 
         internal static void SetShipBeamDraughtFineness(Ship ship)
         {
@@ -533,261 +537,260 @@ namespace UADRealism
             __result = hp;
         }
 
-        // Reimplemented methods
-        internal static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, Il2CppSystem.Random rnd = null, float? limitArmor = null, float limitSpeed = 0f)
+        // Reimplemented methods, with tweaks
+
+        private static Dictionary<Ship.A, float> _AdjustPriorityArmorReduce = GenerateAdjustArmorPriorities(false);
+        private static Dictionary<Ship.A, float> _AdjustPriorityArmorIncrease = GenerateAdjustArmorPriorities(true);
+        private static Dictionary<AdjustHullStatsItem, float> _AdjustHullStatsOptions = new Dictionary<AdjustHullStatsItem, float>();
+        private static System.Array _OpRangeValues = null;
+        internal enum AdjustHullStatsItem
+        {
+            Speed,
+            Range,
+            Quarters,
+            Armor,
+            Empty
+        }
+
+        private static Dictionary<Ship.A, float> GenerateAdjustArmorPriorities(bool increase)
+        {
+            var armorPriority = new Dictionary<Ship.A, float>();
+            if (increase)
+            {
+                armorPriority.Add(Ship.A.Belt, 31);
+                armorPriority.Add(Ship.A.BeltBow, 18);
+                armorPriority.Add(Ship.A.BeltStern, 17);
+                armorPriority.Add(Ship.A.Deck, 18);
+                armorPriority.Add(Ship.A.DeckBow, 16);
+                armorPriority.Add(Ship.A.DeckStern, 15);
+                armorPriority.Add(Ship.A.ConningTower, 12);
+                armorPriority.Add(Ship.A.Superstructure, 12);
+                armorPriority.Add(Ship.A.TurretTop, 25);
+                armorPriority.Add(Ship.A.TurretSide, 25);
+                armorPriority.Add(Ship.A.Barbette, 25);
+                armorPriority.Add(Ship.A.InnerBelt_1st, 25);
+                armorPriority.Add(Ship.A.InnerBelt_2nd, 24);
+                armorPriority.Add(Ship.A.InnerBelt_3rd, 23);
+                armorPriority.Add(Ship.A.InnerDeck_1st, 25);
+                armorPriority.Add(Ship.A.InnerDeck_2nd, 24);
+                armorPriority.Add(Ship.A.InnerDeck_3rd, 23);
+            }
+            else
+            {
+                armorPriority.Add(Ship.A.Belt, 4);
+                armorPriority.Add(Ship.A.BeltBow, 10);
+                armorPriority.Add(Ship.A.BeltStern, 12);
+                armorPriority.Add(Ship.A.Deck, 7);
+                armorPriority.Add(Ship.A.DeckBow, 10);
+                armorPriority.Add(Ship.A.DeckStern, 12);
+                armorPriority.Add(Ship.A.ConningTower, 10);
+                armorPriority.Add(Ship.A.Superstructure, 10);
+                armorPriority.Add(Ship.A.TurretTop, 10);
+                armorPriority.Add(Ship.A.TurretSide, 10);
+                armorPriority.Add(Ship.A.Barbette, 10);
+                armorPriority.Add(Ship.A.InnerBelt_1st, 4);
+                armorPriority.Add(Ship.A.InnerBelt_2nd, 4);
+                armorPriority.Add(Ship.A.InnerBelt_3rd, 4);
+                armorPriority.Add(Ship.A.InnerDeck_1st, 5);
+                armorPriority.Add(Ship.A.InnerDeck_2nd, 5);
+                armorPriority.Add(Ship.A.InnerDeck_3rd, 5);
+            }
+
+            return armorPriority;
+        }
+
+        internal static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, System.Random rnd = null, float limitArmor = -1, float limitSpeed = 0f)
         {
             float year = ship.GetYear(ship);
-            bool atTarget = false;
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-            Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> priorityClone = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-            Il2CppSystem.Collections.Generic.Dictionary<string, float> thingsToChange = new Il2CppSystem.Collections.Generic.Dictionary<string, float>();
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> oldArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-            bool cldd = ship.shipType.name == "cl" || ship.shipType.name == "dd";
+            bool isCL = ship.shipType.name == "cl";
+            bool isLightCraft = ship.shipType.name == "tb" || ship.shipType.name == "dd";
+            bool cldd = isCL || isLightCraft;
 
             VesselEntity.OpRange minOpRange = VesselEntity.OpRange.VeryLow;
             if (ship.shipType.paramx.TryGetValue("range_min", out var minRange) && minRange.Count > 0)
             {
-                var enums = Enum.GetValues(typeof(VesselEntity.OpRange));
-                
-                foreach (var e in enums)
+                if (_OpRangeValues == null)
+                    _OpRangeValues = Enum.GetValues(typeof(VesselEntity.OpRange));
+
+                foreach (var e in _OpRangeValues)
                 {
                     var eStr = Util.ToStringShort(e.ToString()).ToLower();
-                    if (eStr == minRange[0])
+                    if (eStr == minRange[0].ToLower())
                     {
                         minOpRange = (VesselEntity.OpRange)e;
                         break;
                     }
                 }
             }
-            Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armorMinHint = null;
+
+            var armorMin = ship.shipType.armorMin;
+            if (armorMin <= 0)
+                armorMin = ship.shipType.armor;
+            float armorInches;
+            // All ships are expected to have a hint
             if (ship.shipType.paramx.TryGetValue("armor_min_hint", out var minArmorParam) && minArmorParam.Count > 0 && float.TryParse(minArmorParam[0], out var armorParam))
             {
-                var armorMin = ship.shipType.armorMin;
-                if (armorMin <= 0)
-                    armorMin = ship.shipType.armor;
+                armorInches = armorMin * armorParam;
+            }
+            else if (ship.shipType.name == "dd")
+            {
+                float armorVal = ship.shipType.armor;
+                float randMult = ModUtils.Range(1f, 1.3f, rnd);
+                float yearMult = Util.Remap(year, 1890f, 1940f, 1f, 0.85f, true);
 
-                armorMinHint = Ship.GenerateArmor(armorMin * armorParam * 25.4f, ship);
+                armorInches = armorVal * randMult * yearMult;
             }
             else
             {
-                if (ship.shipType.name == "dd")
-                {
-                    float armorVal = ship.shipType.armor;
-                    float randMult = Util.Range(1f, 1.3f, rnd);
-                    float yearMult = Util.Remap(year, 1890f, 1940f, 1f, 0.85f, true);
-
-                    armorMinHint = Ship.GenerateArmor(armorVal * 25.4f * randMult * yearMult, ship);
-                }
+                armorInches = armorMin * ModUtils.Range(1f, 1.2f, rnd);
             }
-            float limitMS = ship.hull.data.speedLimiter * ShipStats.KnotsToMS;
-            
+            var armorMinHint = Ship.GenerateArmor(armorInches * 25.4f, ship);
+
+            float hullSpeedMS = ship.hull.data.speedLimiter * ShipStats.KnotsToMS;
+
             float oldSpeed = ship.speedMax;
             Ship.CrewQuarters oldQuarters = ship.CurrentCrewQuarters;
-            oldArmor.Clear();
             foreach (var kvp in ship.armor)
-                oldArmor.Add(kvp.key, kvp.value);
+                oldArmor[kvp.Key] = kvp.Value;
+            var oldRange = ship.opRange < minOpRange ? minOpRange : ship.opRange;
 
-            if (delta < 0)
+            float minSpeed;
+            if (limitSpeed > 0f)
             {
-                float newSpeed;
-                if (limitSpeed > 0f)
-                {
-                    newSpeed = limitSpeed;
-                }
-                else
-                {
-                    float mult = cldd ? 0.95f : 0.79f;
-                    newSpeed = limitMS * Util.Remap(year, 1890f, 1940f, 1.035f, 0.9f, true) * mult;
-                }
-                ship.SetSpeedMax(newSpeed);
-                ship.CurrentCrewQuarters = Ship.CrewQuarters.Cramped;
-                
-                foreach (var kvp in ship.armor)
-                {
-                    float armorVal;
-                    float minForZone = ship.MinArmorForZone(kvp.key);
-                    if (armorMinHint == null)
-                        armorVal = minForZone;
-                    else
-                        armorVal = Mathf.Max(armorMinHint[kvp.key], minForZone);
-
-                    newArmor.Add(kvp.key, armorVal);
-                }
-                ship.SetArmor(newArmor);
-
-                atTarget = ship.Weight() <= targetWeight;
+                minSpeed = limitSpeed;
             }
             else
             {
-                float mult = cldd ? 1.15f : 0.9f;
+                float mult;
+                if (isLightCraft)
+                    mult = 0.92f;
+                else if (isCL)
+                    mult = 0.86f;
+                else
+                    mult = 0.79f;
+                minSpeed = hullSpeedMS * Util.Remap(year, 1890f, 1940f, 0.9f, 0.8f, true) * mult;
+            }
+            float maxMult = cldd ? 1.05f : 1.1f;
+            float maxSpeed = hullSpeedMS * maxMult * Util.Remap(year, 1890f, 1940f, 1.1f, 1.06f, true);
+            
+            float armorLimit = limitArmor > 0f ? limitArmor : ship.shipType.armorMax * 3f * 25.4f;
 
-                float speedL = limitMS * mult * Util.Remap(year, 1890f, 1940f, 1f, 1.12f, true);
-                ship.SetSpeedMax(speedL);
-                ship.CurrentCrewQuarters = Ship.CrewQuarters.Spacious;
+            bool canMakeTarget;
+            if (delta < 0)
+            {
+
+                ship.SetSpeedMax(minSpeed);
+                ship.CurrentCrewQuarters = Ship.CrewQuarters.Cramped;
+                ship.SetOpRange(minOpRange);
 
                 foreach (var kvp in ship.armor)
-                {
-                    float armorVal;
-                    float maxForZone = ship.MaxArmorForZone(kvp.key);
-                    if (limitArmor.HasValue)
-                        armorVal = limitArmor.Value;
-                    else
-                        armorVal = ship.shipType.armorMax * 3f * 25.4f;
+                    newArmor[kvp.Key] = Mathf.Max(armorMinHint[kvp.Key], ship.MinArmorForZone(kvp.Key));
 
-                    if (maxForZone < armorVal)
-                        armorVal = maxForZone;
-
-                    newArmor.Add(kvp.key, armorVal);
-                }
                 ship.SetArmor(newArmor);
 
-                atTarget = targetWeight * 0.997f <= ship.Weight();
+                canMakeTarget = ship.Weight() / ship.Tonnage() <= targetWeight;
             }
-            if (atTarget)
+            else
             {
-                ship.SetSpeedMax(oldSpeed);
-                ship.CurrentCrewQuarters = oldQuarters;
-                ship.SetArmor(oldArmor);
-                float speedStep = G.GameData.Param("speed_step", 0.5f);
-                Dictionary<Ship.A, int> armorPriority = new Dictionary<Ship.A, int>();
-                for(int j = 0; j < 699; ++j)
+                ship.SetSpeedMax(maxSpeed);
+                ship.CurrentCrewQuarters = Ship.CrewQuarters.Spacious;
+                ship.SetOpRange(VesselEntity.OpRange.VeryHigh);
+
+                foreach (var kvp in ship.armor)
+                    newArmor[kvp.Key] = Mathf.Min(limitArmor, ship.MaxArmorForZone(kvp.Key));
+
+                ship.SetArmor(newArmor);
+
+                canMakeTarget = targetWeight * 0.997f <= ship.Weight() / ship.Tonnage();
+            }
+
+            if (!canMakeTarget)
+                return;
+
+            minSpeed = Mathf.Max(minSpeed, ship.shipType.speedMin * ShipStats.KnotsToMS);
+            maxSpeed = Mathf.Min(maxSpeed, ship.shipType.speedMax * ShipStats.KnotsToMS);
+            oldSpeed = Ship.RoundSpeedToStep(oldSpeed);
+
+            // Reset
+            ship.SetSpeedMax(oldSpeed);
+            ship.CurrentCrewQuarters = oldQuarters;
+            ship.SetArmor(oldArmor);
+            ship.SetOpRange(oldRange);
+            
+            if (stopCondition())
+                return;
+
+            float speedStep = G.GameData.Param("speed_step", 0.5f);
+            Dictionary<Ship.A, float> armorPriority = delta > 0 ? _AdjustPriorityArmorIncrease : _AdjustPriorityArmorReduce;
+
+            for (int j = 0; j < 699; ++j)
+            {
+                float step = speedStep * delta * ShipStats.KnotsToMS;
+                float newSpeed = step + ship.speedMax;
+                newSpeed = Mathf.Clamp(newSpeed, minSpeed, maxSpeed);
+                newSpeed = Ship.RoundSpeedToStep(newSpeed);
+                Ship.CrewQuarters newQuarters = (Ship.CrewQuarters)Mathf.Clamp((int)ship.CurrentCrewQuarters + delta, (int)Ship.CrewQuarters.Cramped, (int)Ship.CrewQuarters.Spacious);
+                VesselEntity.OpRange newOpRange = (VesselEntity.OpRange)Mathf.Clamp((int)ship.opRange + delta, (int)minOpRange, (int)VesselEntity.OpRange.VeryHigh);
+
+                var randomA = ModUtils.RandomByWeights(armorPriority);
+                float minHint = armorMinHint == null ? ship.shipType.armorMin : armorMinHint[randomA];
+                float minArmor = Mathf.Max(minHint, ship.MinArmorForZone(randomA));
+                float maxArmor = Mathf.Min(armorLimit, ship.MaxArmorForZone(randomA));
+                float newArmorLevel = Mathf.Clamp((delta * G.settings.armorStep) * 25.4f + ship.armor[randomA], minArmor, maxArmor);
+                if (delta < 0)
+                    newArmorLevel = Mathf.Floor(newArmorLevel);
+                else
+                    newArmorLevel = Mathf.Ceil(newArmorLevel);
+                newArmor[randomA] = newArmorLevel;
+
+                _AdjustHullStatsOptions.Clear();
+                if (allowEditSpeed && newSpeed != ship.speedMax)
+                    _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Speed, delta > 0 ? 350f : 690f);
+                if (allowEditCrewQuarters && newQuarters != ship.CurrentCrewQuarters)
+                    _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Quarters, 150f);
+                if (allowEditArmor && !Util.DictionaryEquals(ship.armor, newArmor))
+                    _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Armor, delta > 0 ? 850f : 450f);
+                if (allowEditRange && newOpRange != ship.opRange)
+                    _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Range, delta > 0 ? 75f : 150f);
+
+                if (_AdjustHullStatsOptions.Count == 0)
+                    return;
+
+                // We're going to replace entries we pull and use with "empty"
+                // so that we don't screw with our weights. (If we just removed items,
+                // like stock, then quarters and range would be overrepresented.)
+                AdjustHullStatsItem thingToChange = AdjustHullStatsItem.Empty;
+                while ((thingToChange = ModUtils.RandomByWeights(_AdjustHullStatsOptions, rnd)) != AdjustHullStatsItem.Empty)
                 {
-                    oldSpeed = ship.speedMax;
-                    oldQuarters = ship.CurrentCrewQuarters;
-                    oldArmor.Clear();
-                    foreach (var kvp in ship.armor)
-                        oldArmor.Add(kvp.key, kvp.value);
-
-                    float step = speedStep * delta * ShipStats.KnotsToMS;
-                    float minSpeed;
-                    if (limitSpeed > 0f)
+                    float weight = _AdjustHullStatsOptions[thingToChange];
+                    _AdjustHullStatsOptions.Remove(thingToChange);
+                    if (_AdjustHullStatsOptions.TryGetValue(AdjustHullStatsItem.Empty, out var unusedWeight))
+                        weight += unusedWeight;
+                    _AdjustHullStatsOptions[AdjustHullStatsItem.Empty] = weight;
+                    switch (thingToChange)
                     {
-                        minSpeed = limitSpeed;
-                    }
-                    else
-                    {
-                        float mult = cldd ? 1.15f : 0.9f;
-                        float yearMult = Util.Remap(year, 1890f, 1940f, 0.99f, 1.21f, true);
-                        minSpeed = limitMS * mult * yearMult;
-                    }
-                    float newSpeed = step + ship.speedMax;
-                    float shiptypeSpeedMult = cldd ? 1.7f : 0.95f;
-                    float maxSpeed = Util.Remap(year, 1890f, 1940f, 1f, 1.05f, true) * limitMS * shiptypeSpeedMult;
-                    // This is a stock code bug: for non-CL/DD ships, as year approaches 1940, maxSpeed < minSpeed.
-                    newSpeed = Mathf.Clamp(newSpeed, minSpeed, maxSpeed);
-                    newSpeed = Ship.RoundSpeedToStep(newSpeed);
-                    newSpeed = Mathf.Clamp(newSpeed, ship.shipType.speedMin, ship.shipType.speedMax);
-                    Ship.CrewQuarters newQuarters = (Ship.CrewQuarters)Mathf.Clamp((int)ship.CurrentCrewQuarters + delta, (int)Ship.CrewQuarters.Cramped, (int)Ship.CrewQuarters.Spacious);
-                    VesselEntity.OpRange newOpRange = (VesselEntity.OpRange)Mathf.Clamp((int)ship.opRange + delta, (int)minOpRange, (int)VesselEntity.OpRange.VeryHigh);
-                    armorPriority.Clear();
-                    if (delta > 0)
-                    {
-                        armorPriority.Add(Ship.A.Belt, 31);
-                        armorPriority.Add(Ship.A.BeltBow, 18);
-                        armorPriority.Add(Ship.A.BeltStern, 17);
-                        armorPriority.Add(Ship.A.Deck, 18);
-                        armorPriority.Add(Ship.A.DeckBow, 16);
-                        armorPriority.Add(Ship.A.DeckStern, 15);
-                        armorPriority.Add(Ship.A.ConningTower, 12);
-                        armorPriority.Add(Ship.A.Superstructure, 12);
-                        armorPriority.Add(Ship.A.TurretTop, 25);
-                        armorPriority.Add(Ship.A.TurretSide, 25);
-                        armorPriority.Add(Ship.A.Barbette, 25);
-                        armorPriority.Add(Ship.A.InnerBelt_1st, 25);
-                        armorPriority.Add(Ship.A.InnerBelt_2nd, 24);
-                        armorPriority.Add(Ship.A.InnerBelt_3rd, 23);
-                        armorPriority.Add(Ship.A.InnerDeck_1st, 25);
-                        armorPriority.Add(Ship.A.InnerDeck_2nd, 24);
-                        armorPriority.Add(Ship.A.InnerDeck_3rd, 23);
-                    }
-                    else
-                    {
-                        armorPriority.Add(Ship.A.Belt, 4);
-                        armorPriority.Add(Ship.A.BeltBow, 10);
-                        armorPriority.Add(Ship.A.BeltStern, 12);
-                        armorPriority.Add(Ship.A.Deck, 7);
-                        armorPriority.Add(Ship.A.DeckBow, 10);
-                        armorPriority.Add(Ship.A.DeckStern, 12);
-                        armorPriority.Add(Ship.A.ConningTower, 10);
-                        armorPriority.Add(Ship.A.Superstructure, 10);
-                        armorPriority.Add(Ship.A.TurretTop, 10);
-                        armorPriority.Add(Ship.A.TurretSide, 10);
-                        armorPriority.Add(Ship.A.Barbette, 10);
-                        armorPriority.Add(Ship.A.InnerBelt_1st, 4);
-                        armorPriority.Add(Ship.A.InnerBelt_2nd, 4);
-                        armorPriority.Add(Ship.A.InnerBelt_3rd, 4);
-                        armorPriority.Add(Ship.A.InnerDeck_1st, 5);
-                        armorPriority.Add(Ship.A.InnerDeck_2nd, 5);
-                        armorPriority.Add(Ship.A.InnerDeck_3rd, 5);
-                    }
-                    priorityClone.Clear();
-                    foreach (var kvp in ship.armor)
-                        priorityClone.Add(kvp.key, armorPriority[kvp.key]);
-
-                    var randomA = Util.RandomByWeights<Ship.A>(priorityClone.Cast<Il2CppSystem.Collections.Generic.IEnumerable<Il2CppSystem.Collections.Generic.KeyValuePair<Ship.A, float>>>());
-                    float armorLevel = ship.armor[randomA];
-                    float minHint = armorMinHint == null ? ship.shipType.armorMin : armorMinHint[randomA];
-                    float minArmor = Mathf.Max(ship.MinArmorForZone(randomA), minHint);
-                    float armorLimit = limitArmor.HasValue ? limitArmor.Value : ship.shipType.armorMax * 3f * 25.4f;
-                    float maxArmor = Mathf.Min(armorLimit, ship.MaxArmorForZone(randomA));
-                    float newArmorLevel = (delta * G.settings.armorStep) * 25.4f + armorLevel;
-                    newArmorLevel = Mathf.Clamp(newArmorLevel, minArmor, maxArmor);
-                    if (delta < 0)
-                        newArmorLevel = Mathf.Floor(newArmorLevel);
-                    else
-                        newArmorLevel = Mathf.Ceil(newArmorLevel);
-                    ship.armor[randomA] = newArmorLevel;
-
-                    thingsToChange.Clear();
-                    float speedDictVal = delta > 0 ? 350f : 690f;
-                    if (allowEditSpeed)
-                        thingsToChange.Add("speed", newSpeed != ship.speedMax ? speedDictVal : 0f);
-                    if (allowEditCrewQuarters)
-                        thingsToChange.Add("crewQuarters", newQuarters != ship.CurrentCrewQuarters ? 150f : 0f);
-                    float armorDictVal = delta > 0 ? 850f : 450f;
-                    if (allowEditArmor)
-                        thingsToChange.Add("armor", !Util.DictionaryEquals(ship.armor, newArmor) ? armorDictVal : 0f);
-
-                    if (thingsToChange.Count == 0)
-                        return;
-
-                    // stock does < 700 but returns when i == 699...
-                    for (int i = 0; i < 699; ++i)
-                    {
-                        var thingToChange = Util.RandomByWeights(thingsToChange.Cast<Il2CppSystem.Collections.Generic.IEnumerable<Il2CppSystem.Collections.Generic.KeyValuePair<string, float>>>(), false, rnd);
-                        thingsToChange.Remove(thingToChange);
-                        switch (thingToChange)
-                        {
-                            case "speed":
-                                ship.SetSpeedMax(newSpeed);
-                                break;
-                            case "crewQuarters":
-                                ship.CurrentCrewQuarters = newQuarters;
-                                break;
-                            default:
-                                ship.SetArmor(ship.armor);
-                                break;
-                        }
-                        // decompile bug? do we really break here?
-                        if (delta <= 0)
+                        case AdjustHullStatsItem.Speed:
+                            ship.SetSpeedMax(newSpeed);
                             break;
-                        if (ship.Weight() <= ship.Tonnage() * 1.2f)
-                        {
-                            if (GameManager.IsMission)
-                                break;
-                            if (ship.player.isMain)
-                                break;
-                            if (BattleManager.Instance != null && ship == BattleManager.Instance.MissionMainShip)
-                                break;
-                            if (ship.Cost() <= ship.player.cash)
-                                break;
-                        }
-                        if (ship.speedMax >= oldSpeed)
-                            ship.SetSpeedMax(ship.speedMax);
-                        ship.CurrentCrewQuarters = oldQuarters;
+                        case AdjustHullStatsItem.Quarters:
+                            ship.CurrentCrewQuarters = newQuarters;
+                            break;
+                        case AdjustHullStatsItem.Range:
+                            ship.SetOpRange(newOpRange);
+                            break;
+                        default:
+                            ship.SetArmor(newArmor);
+                            break;
                     }
                     if (stopCondition())
                         return;
+
+                    // We have to manually reset this, since
+                    // we don't want to freshly clone all of ship.armor
+                    // every time.
+                    newArmor[randomA] = ship.armor[randomA];
                 }
             }
         }
