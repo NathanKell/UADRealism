@@ -293,7 +293,7 @@ namespace UADRealism
         {
             // no need to recalc stats
             //ship.CStats();
-            ship.hullPartSizeZ = val;
+            ship.SetFineness(val);
             ship.RefreshHull(false); // let it figure out
             // would change ship.stats[item]'s value here
             //ship.statEffectsCache.Clear();
@@ -303,7 +303,7 @@ namespace UADRealism
         {
             // no need to recalc stats
             //ship.CStats();
-            ship.hullPartSizeY = val;
+            ship.SetFreeboard(val);
             ship.RefreshHull(false); // let it figure out
             // would change ship.stats[item]'s value here
             //ship.statEffectsCache.Clear();
@@ -325,8 +325,8 @@ namespace UADRealism
                 var ship = G.ui.mainShip;
                 if (ship != null)
                 {
-                    _FineS.value = ship.hullPartSizeZ;
-                    _FreeS.value = (ship.hullPartSizeY - _MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
+                    _FineS.value = ship.GetFineness();
+                    _FreeS.value = (ship.GetFreeboard() - _MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
                     var hData = ShipStats.GetData(ship.hull.data);
                     if (hData == null)
                     {

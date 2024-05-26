@@ -234,7 +234,7 @@ namespace UADRealism
                 if (sMax > 33f && (hull.shipType.name != "dd" && hull.shipType.name != "tb"))
                     sMax = 33f;
 
-                float year = GetYear(hull);
+                float year = ShipM.GetYear(hull);
                 if (year < 0f)
                     year = 1915f;
 
@@ -287,7 +287,7 @@ namespace UADRealism
                 string minHullName = "(none)";
                 foreach(var hull in hulls)
                 {
-                    if (!IsPartAllowed(hull, hull.shipType, data))
+                    if (!ShipM.IsPartAllowedNoTech(hull, hull.shipType, data))
                         continue;
 
                     // This should never happen -- we precompute them all
@@ -477,92 +477,13 @@ namespace UADRealism
             }
         }
 
-        private static bool IsPartAllowed(PartData hull, ShipType sType, PartData part)
-        {
-            bool failsTest = false;
-            foreach (var needSet in part.needTags)
-            {
-                bool noOverlap = true;
-                foreach (var s in needSet)
-                {
-                    if (hull.paramx.ContainsKey(s))
-                    {
-                        noOverlap = false;
-                        break;
-                    }
-                }
-                if (noOverlap)
-                {
-                    failsTest = true;
-                    break;
-                }
-            }
-            if (failsTest)
-                return false;
-
-            foreach (var excludeSet in part.excludeTags)
-            {
-                bool noOverlap = true;
-                foreach (var s in excludeSet)
-                {
-                    if (hull.paramx.ContainsKey(s))
-                    {
-                        noOverlap = false;
-                        break;
-                    }
-                }
-                if (!noOverlap)
-                {
-                    failsTest = true;
-                    break;
-                }
-            }
-
-            if (failsTest)
-                return false;
-
-            if (part.isGun)
-            {
-                var calInch = part.GetCaliberInch();
-                if ((calInch < sType.mainFrom || sType.mainTo < calInch) && (calInch < sType.secFrom || sType.secTo < calInch))
-                    return false;
-
-                if (hull.maxAllowedCaliber > 0 && calInch > hull.maxAllowedCaliber)
-                    return false;
-
-                if (hull.paramx.ContainsKey("unique_guns"))
-                {
-                    return part.paramx.ContainsKey("unique");
-                }
-                else
-                {
-                    // Ignore max caliber for secondary guns from tech
-                    // Ignore barrel limits from tech
-                    return true;
-                }
-            }
-
-            // No need to check torpedo, since all paths lead to true.
-            //if (part.isTorpedo)
-            //{
-            //    if (part.paramx.ContainsKey("sub_torpedo"))
-            //        return true;
-            //    if (part.paramx.ContainsKey("deck_torpedo"))
-            //        return true;
-
-            //    // Ignore barrel limit by tech
-            //}
-
-            return true;
-        }
-
         public static HullStats GetScaledStats(Ship ship)
         {
             var hData = GetData(ship);
             if (hData == null)
                 return new HullStats();
 
-            int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, 1f - ship.hullPartSizeZ * 0.01f));
+            int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, 1f - ship.GetFineness() * 0.01f));
             return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, sec);
         }
 
@@ -603,35 +524,13 @@ namespace UADRealism
             return Mathf.Pow(desiredVol / (Vd * bmMult * drMult ), 1f / 3f);
         }
 
-        public static float GetYear(PartData hull)
-        {
-            foreach (var tech in G.GameData.technologies)
-            {
-                if (!tech.Value.effects.TryGetValue("unlock", out var eff))
-                    continue;
-
-                foreach (var lst in eff)
-                {
-                    foreach (var item in lst)
-                    {
-                        if (item == hull.name)
-                        {
-                            return tech.value.year;
-                        }
-                    }
-                }
-            }
-
-            return -1f;
-        }
-
         public static float GetAverageYear(HullData hData)
         {
             float year = 0f;
             float divisor = 0f;
             foreach (var hull in hData._hulls)
             {
-                float hYear = GetYear(hull);
+                float hYear = ShipM.GetYear(hull);
                 if (hYear < 0f)
                     continue;
 
@@ -656,7 +555,7 @@ namespace UADRealism
         public const float DefaultBdivT = 3f;
 
         public static float GetDesiredLdivB(Ship ship, float BdivT)
-            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, GetYear(ship.hull.data));
+            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, ShipM.GetYear(ship.hull.data));
 
         public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
         {
