@@ -258,6 +258,51 @@ namespace UADRealism
             ShuffleEx(list, desired);
             list[desired] = elem;
         }
+
+        public static string ArmorString(Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armor)
+        {
+            //return $"{armor[Ship.A.Belt]:F1}/{armor[Ship.A.BeltBow]:F1}/{armor[Ship.A.BeltStern]:F1}, {armor[Ship.A.Deck]:F1}/{armor[Ship.A.DeckBow]:F1}/{armor[Ship.A.DeckStern]:F1} "
+            //    + $"{armor[Ship.A.ConningTower]:F1}/{armor[Ship.A.Superstructure]:F1}, {armor[Ship.A.TurretSide]:F1}/{armor[Ship.A.TurretTop]:F1}/{armor[Ship.A.Barbette]:F1}, "
+            //    + $"{armor[Ship.A.InnerBelt_1st]:F1}/{armor[Ship.A.InnerBelt_2nd]:F1}/{armor[Ship.A.InnerBelt_3rd]:F1}, {armor[Ship.A.InnerDeck_1st]:F1}/{armor[Ship.A.InnerDeck_2nd]:F1}/{armor[Ship.A.InnerDeck_3rd]:F1}";
+            string s = "Armor:";
+            bool first = true;
+            foreach (var kvp in armor)
+            {
+                if (first)
+                    first = false;
+                else
+                    s += ",";
+                s += $" {kvp.Key}={kvp.Value:F1}";
+            }
+            return s;
+        }
+
+        public static float ArmorValue(this Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armor, Ship.A key)
+        {
+            armor.TryGetValue(key, out var val);
+            return val;
+        }
+
+        public static float ArmorValue(this Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.KeyValuePair<Ship.A, float>> armor, Ship.A key)
+        {
+            foreach (var kvp in armor)
+                if (kvp.Key == key)
+                    return kvp.Value;
+
+            return 0f;
+        }
+
+        public static void SetValue(this Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.KeyValuePair<Ship.A, float>> armor, Ship.A key, float value)
+        {
+            for (int i = armor.Count; i-- > 0;)
+            {
+                if (armor[i].Key == key)
+                {
+                    armor[i] = new Il2CppSystem.Collections.Generic.KeyValuePair<Ship.A, float>(key, value);
+                    return;
+                }
+            }
+        }
     }
 
     [RegisterTypeInIl2Cpp]
