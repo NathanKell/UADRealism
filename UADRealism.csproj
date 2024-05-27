@@ -81,6 +81,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Harmony\VesselEntity.cs" />
     <Compile Include="Harmony\Ui.cs" />
     <Compile Include="Harmony\GameData.cs" />
     <Compile Include="Harmony\Ship.cs" />

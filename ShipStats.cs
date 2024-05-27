@@ -483,8 +483,7 @@ namespace UADRealism
             if (hData == null)
                 return new HullStats();
 
-            int sec = Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, 1f - ship.GetFineness() * 0.01f));
-            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, sec);
+            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, ship.SectionsFromFineness());
         }
 
         public static HullStats GetScaledStats(HullData hData, float tonnage, float lengthToBeamPct, float beamToDraughtPct, int sections)
@@ -493,8 +492,8 @@ namespace UADRealism
             //Melon<UADRealismMod>.Logger.Msg($"Pre: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t.");
 
             float linearScale = GetHullScaleFactor(tonnage, newStats.Vd, lengthToBeamPct, beamToDraughtPct);
-            float bmMult = lengthToBeamPct * 0.01f + 1f;
-            float drMult = bmMult * (beamToDraughtPct * 0.01f + 1f);
+            float bmMult = 1f + lengthToBeamPct * 0.01f;
+            float drMult = bmMult * (1f + beamToDraughtPct * 0.01f);
             newStats.B *= bmMult * linearScale;
             newStats.beamBulge *= bmMult * linearScale;
             newStats.bulgeDepth *= drMult * linearScale;
@@ -878,6 +877,33 @@ namespace UADRealism
 #endif
 
             return (float)(Ps / 745.7d);
+        }
+
+        public static float OpRangeToPct(Ship.OpRange opRange)
+            => (8f + (int)opRange * 2f) * 0.01f;
+
+        public static int GetRange(Ship ship) => GetRange(ship, ship.opRange);
+
+        public static int GetRange(Ship ship, Ship.OpRange opRange)
+        {
+            float fuelTech = ship.TechR("fuel");
+            float effTech = ship.TechA("fuel_eff");
+            float statRange = ship.StatEffectPrivate("operating_range");
+            float year = ShipM.GetYear(ship.hull.data);
+            return GetRange(GetScaledStats(ship), GetHullFormSHPMult(ship), GetEngineIHPMult(ship),
+                // TODO: handle TB/DD differently?
+                Mathf.Min(ship.speedMax, (year > 1920f ? Util.Remap(year, 1920f, 1930f, 12f, 15f, true) : Util.Remap(year, 1890f, 1910f, 10f, 12f, true)) * KnotsToMS),
+                opRange, 1f / fuelTech * effTech * statRange);
+        }
+        
+        public static int GetRange(HullStats stats, float hullMult, float engineMult, float speedMS, Ship.OpRange opRange, float fuelMult)
+            => GetRange(stats, hullMult, engineMult, speedMS, fuelMult * stats.Vd * (1f / TonnesToCubicMetersWater) * OpRangeToPct(opRange));
+
+        public static int GetRange(HullStats stats, float hullMult, float engineMult, float speedMS, float effectiveTons)
+        {
+            float hpCruise = GetSHPRequired(stats, speedMS, false) * hullMult * engineMult;
+            const float fuelToKM = 524f;
+            return Mathf.RoundToInt(effectiveTons / hpCruise * speedMS * fuelToKM);
         }
 
         public static System.Collections.IEnumerator CalculateHullData()

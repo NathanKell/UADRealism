@@ -143,9 +143,7 @@ namespace UADRealism
             __state._tonnage = __instance.tonnage;
             __state._draught = __instance.draught;
 
-            float lerp = Mathf.Lerp(data.sectionsMin, data.sectionsMax, 1f - __instance.GetFineness() * 0.01f);
-            int secsToUse = Mathf.RoundToInt(lerp);
-            //Melon<UADRealismMod>.Logger.Msg($"Setting sections. sizeZ={__instance.GetFineness():F1} yields {lerp:F3}->{secsToUse}");
+            int secsToUse = __instance.SectionsFromFineness();
 
             if (__instance.hull.middles == null)
             {
@@ -429,6 +427,33 @@ namespace UADRealism
             float hp = SHP * ihpMult;
             //Debug.Log($"SHP calc for {__instance.GetNameUI()}: {hp:N0} {(ihpMult == 1f ? "SHP" : "IHP")}, stock {__result:N0}");
             __result = hp;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.GetMinRangeWhitStatEffectInKm))]
+        internal static bool Prefix_GetMinRangeWhitStatEffectInKm(Ship __instance, ref int __result)
+        {
+            __result = ShipStats.GetRange(__instance, Ship.OpRange.VeryLow);
+            return false;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.GetMaxRangeWhitStatEffectInKm))]
+        internal static bool Prefix_GetMaxRangeWhitStatEffectInKm(Ship __instance, ref int __result)
+        {
+            __result = ShipStats.GetRange(__instance, Ship.OpRange.VeryHigh);
+            return false;
+        }
+
+        //[HarmonyPrefix]
+        //[HarmonyPatch(nameof(Ship.PartMats))]
+        internal static bool Prefix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
+        {
+            if (!part.isHull)
+                return true;
+            
+            __result = ShipM.PartMats(__instance, part, calcCosts);
+            return false;
         }
     }
 }

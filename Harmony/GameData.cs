@@ -25,6 +25,30 @@ namespace UADRealism
                 if (kvp.Key != "ic")
                     kvp.Value.speedMin -= 2f;
             }
+
+            foreach (var kvp in __instance.stats)
+            {
+                switch (kvp.Key)
+                {
+                    case "beam":
+                    case "draught":
+                    case "hull_form":
+                        kvp.Value.effectx.Remove("operating_range");
+                        continue;
+                }
+
+                // The cleaner version of this code causes a IL2Cpp unhollower compile issue
+                // so we're doing this the slow and stupid way.
+                if (kvp.Key == "smoke_exhaust")
+                    continue;
+                if (!kvp.Value.effectx.ContainsKey("operating_range"))
+                    continue;
+
+                var eff = kvp.Value.effectx["operating_range"];
+                float k = eff.Key;
+                float v = eff.Value;
+                kvp.Value.effectx["operating_range"] = new Il2CppSystem.Collections.Generic.KeyValuePair<float, float>(k * 0.25f, v * 0.25f);
+            }
         }
     }
 }

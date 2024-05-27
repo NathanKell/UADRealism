@@ -335,7 +335,7 @@ namespace UADRealism
                     }
                     else
                     {
-                        var stats = hData._statsSet[ship.hull.middles.Count];
+                        var stats = hData._statsSet[ship.SectionsFromFineness()];
                         LdivB = stats.Lwl / (stats.B * (1f + ship.beam * 0.01f));
                         BdivT = stats.B / (stats.T * (1f + ship.draught * 0.01f)); // since draught is stored/set relative to beam
                     }
@@ -441,7 +441,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.hull.middles.Count];
+                    var stats = hData._statsSet[ship.SectionsFromFineness()];
                     __instance.textBeamEdit.text = (stats.Lwl / (stats.B * (1f + ship.beam * 0.01f))).ToString("F4");
                 }
             }
@@ -462,7 +462,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.hull.middles.Count];
+                    var stats = hData._statsSet[ship.SectionsFromFineness()];
                     if (float.TryParse(valueStr, out var val) && val != 0)
                     {
                         valueStr = (((stats.Lwl / val) / stats.B - 1f) * 100f).ToString();
@@ -486,7 +486,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.hull.middles.Count];
+                    var stats = hData._statsSet[ship.SectionsFromFineness()];
                     __instance.textDraughtEdit.text = (stats.B / (stats.T * (1f + ship.draught * 0.01f))).ToString("F4");
                 }
             }
@@ -507,7 +507,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.hull.middles.Count];
+                    var stats = hData._statsSet[ship.SectionsFromFineness()];
                     if (float.TryParse(valueStr, out var val) && val != 0)
                     {
                         valueStr = (((stats.B / val) / stats.T - 1f) * 100f).ToString();
