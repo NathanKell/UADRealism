@@ -12,8 +12,7 @@ namespace UADRealism
     internal class Patch_Ship
     {
         internal static bool _IsChangeHull = false;
-        internal static Ship.Store _ChangeHullShipStore = null;
-        internal static Ship _ChangeHullShip = null;
+        internal static bool _IsLoadingStore = false;
         internal static bool _IsRefreshPatched = false;
 
         internal struct RefreshHullData
@@ -37,8 +36,7 @@ namespace UADRealism
         internal static void Prefix_Ship_ChangeHull(Ship __instance, Ship.Store store, ref bool byHuman, out bool __state)
         {
             _IsChangeHull = true;
-            _ChangeHullShipStore = store;
-            _ChangeHullShip = __instance;
+            _IsLoadingStore = store != null;
             __state = byHuman;
             // This is gross. But we can't patch AdjustHullStats so we need to make
             // it not run, and run something else ourselves. We should just be
@@ -58,7 +56,20 @@ namespace UADRealism
             // uses m/s. So we have to reset speedmax here. This uses the same
             // random as the game.
             __instance.speedMax = Mathf.Clamp(ModUtils.Range(0.9f, 1.1f) * __instance.hull.data.speedLimiter, __instance.shipType.speedMin, __instance.shipType.speedMax) * ShipStats.KnotsToMS;
-            ShipM.SetShipBeamDraughtFineness(__instance);
+            if (!_IsLoadingStore)
+            {
+                ShipM.SetShipBeamDraughtFineness(__instance);
+            }
+            // We need to refresh the hull since beam/draught weren't applied when ChangeHull did so.
+            if (__instance.modelState == Ship.ModelState.Constructor || __instance.modelState == Ship.ModelState.Battle)
+            {
+                _IsChangeHull = false;
+                __instance.RefreshHull(false);
+                _IsChangeHull = true;
+                // and we should rerurn this.
+                __instance.hull.AddOrUpdatePlacedObjects();
+            }
+
 
             if (__state) // i.e. if byHuman
             {
@@ -69,45 +80,35 @@ namespace UADRealism
                     float tLim = __instance.player.TonnageLimit(__instance.shipType);
                     maxT = Math.Min(maxT, tLim);
                 }
-                var t = Util.Range(0f, 1f);
                 __instance.SetTonnage(Mathf.Lerp(minT, maxT, Util.Range(0f, 1f)));
 
                 float oldSpeed = __instance.speedMax;
 
                 float year = __instance.GetYear(__instance);
-                // No idea why this code in stock does a remap-with-clamp and then clamps again. Leaving it as a monument to posterity.
-                float yearToMult = Mathf.Clamp(Util.Remap(year, 1890f, 1940f, 1.3f, 1.05f, true) * 0.5f, 0.45f, 0.65f);
-                ShipM.AdjustHullStats(__instance, -1, 1f - yearToMult, new System.Func<bool>(() =>
+                float yearToMult = Util.Remap(year, 1890f, 1940f, 0.6f, 0.7f, true);
+                ShipM.AdjustHullStats(__instance, -1, yearToMult, new System.Func<bool>(() =>
                 {
-                    // same deal here with the double clamp.
-                    float remapped = Util.Remap(year, 1890f, 1940f, 1.33f, 1.1f, true);
-                    return (1f - Mathf.Clamp(remapped * 0.5f, 0.45f, 0.75f)) >= __instance.Weight() / __instance.Tonnage();
+                    float target = Util.Remap(year, 1890f, 1940f, 0.65f, 0.75f, true);
+                    return target >= __instance.Weight() / __instance.Tonnage();
 
                 }));
 
                 // If our speed was adjusted, we should change hull geometry to optimize.
                 if (oldSpeed != __instance.speedMax)
+                {
+                    _IsChangeHull = false;
                     ShipM.SetShipBeamDraughtFineness(__instance);
+                    _IsChangeHull = true;
+                    // and we should rerurn this.
+                    __instance.hull.AddOrUpdatePlacedObjects();
+                }
             }
 
             _IsChangeHull = false;
-            _ChangeHullShipStore = null;
-            _ChangeHullShip = null;
+            _IsLoadingStore = false;
 
             // This refresh may or may not be needed, but it won't really hurt.
-            MelonCoroutines.Start(RefreshHullRoutine(__instance));
-        }
-
-        //This runs right before ChangeHull loads from store
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(Ship.GenerateArmor))]
-        internal static void Postfix_GenerateArmor()
-        {
-            if (_IsChangeHull && _ChangeHullShipStore != null && _ChangeHullShip != null)
-            {
-                _ChangeHullShip.SetFineness(_ChangeHullShipStore.armor.ArmorValue(Ship.A.Invalid));
-                _ChangeHullShip.SetFreeboard(_ChangeHullShipStore.armor.ArmorValue(Ship.A.None));
-            }
+            //MelonCoroutines.Start(RefreshHullRoutine(__instance));
         }
 
         [HarmonyPrefix]
@@ -143,7 +144,7 @@ namespace UADRealism
             __state._tonnage = __instance.tonnage;
             __state._draught = __instance.draught;
 
-            int secsToUse = __instance.SectionsFromFineness();
+            int secsToUse = __instance.ModData().SectionsFromFineness();
 
             if (__instance.hull.middles == null)
             {
@@ -162,9 +163,9 @@ namespace UADRealism
 
             float scaleFactor = ShipStats.GetHullScaleFactor(__instance, hData._statsSet[secsToUse].Vd) / __instance.hull.model.transform.localScale.z;
             float oldScaleYLocal = __instance.hull.bow.GetParent().GetParent().transform.localScale.y;
-//#if LOGSHIP
+#if LOGSHIP
             Debug.Log($"{hData._key}: tonnage desired: {__instance.tonnage:F0} in ({data.tonnageMin:F0},{data.tonnageMax:F0}). Scale {scaleFactor:F3} (total {(scaleFactor * __instance.hull.model.transform.localScale.z):F3}). Vd for 1/1={hData._statsSet[secsToUse].Vd:F0}\nS={secsToUse} ({data.sectionsMin}-{data.sectionsMax}).");
-//#endif
+#endif
             __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
@@ -172,7 +173,7 @@ namespace UADRealism
             float bmMult = 1f + __instance.beam * 0.01f;
             // We don't scale the hull height based on draught, just beam
             // (to preserve beam/draught ratio). We'll scale Y based on freeboard.
-            float freeboardMult = (1f + __instance.GetFreeboard() * 0.01f);
+            float freeboardMult = (1f + __instance.ModData().Freeboard * 0.01f);
             __state._yPosScaling = bmMult * freeboardMult;
             __state._oldYScale = oldScaleYLocal * __instance.hull.bow.transform.localScale.y;
             __instance.draught = (__state._yPosScaling - 1f) * 100f;
@@ -199,14 +200,17 @@ namespace UADRealism
             }
             _hullSecitons.Clear();
 
-            float scaleRatio = __instance.hull.bow.GetParent().GetParent().transform.localScale.y * __instance.hull.bow.transform.localScale.y / __state._oldYScale;
-            foreach (Part p in __instance.parts)
+            if (!_IsLoadingStore)
             {
-                if (p == __instance.hull)
-                    continue;
-                // The above offset code makes sure the hull remains centered around the waterline, and the waterline is the origin
-                // so this should just work
-                p.transform.localPosition = new Vector3(p.transform.localPosition.x, p.transform.localPosition.y * scaleRatio, p.transform.localPosition.z);
+                float scaleRatio = __instance.hull.bow.GetParent().GetParent().transform.localScale.y * __instance.hull.bow.transform.localScale.y / __state._oldYScale;
+                foreach (Part p in __instance.parts)
+                {
+                    if (p == __instance.hull)
+                        continue;
+                    // The above offset code makes sure the hull remains centered around the waterline, and the waterline is the origin
+                    // so this should just work
+                    p.transform.localPosition = new Vector3(p.transform.localPosition.x, p.transform.localPosition.y * scaleRatio, p.transform.localPosition.z);
+                }
             }
 
             // Finally, make sure we have funnel mounts
@@ -411,6 +415,13 @@ namespace UADRealism
             //oldTurretArmors.Clear();
         }
 
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.ToStore))]
+        internal static void Postfix_ToStore(Ship __instance, ref Ship.Store __result)
+        {
+            __instance.ModData().ToStore(__result);
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.GetDamagePlanTooltipText))]
         internal static void Prefix_GetDamagePlanTooltipText(Ship __instance)
@@ -455,5 +466,18 @@ namespace UADRealism
             __result = ShipM.PartMats(__instance, part, calcCosts);
             return false;
         }
+
+        // This is used too many places to just patch one way.
+        //[HarmonyPrefix]
+        //[HarmonyPatch(nameof(Ship.SizeRatio))]
+        //internal static bool Prefix_SizeRatio(Ship __instance, ref float __result)
+        //{
+        //    if (__instance.cachedSizeRatio == -1f || !GameManager.IsBattle)
+        //        __instance.cachedSizeRatio = 0.006f * ShipStats.GetScaledStats(__instance).Lwl - 0.04f;
+
+        //    __result = __instance.cachedSizeRatio;
+
+        //    return false;
+        //}
     }
 }

@@ -17,7 +17,7 @@ namespace UADRealism
         public static void SetShipBeamDraughtFineness(Ship ship)
         {
             // First, set L/B from B/T
-            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.2f);
+            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.3f);
             float desiredLdivB = ShipStats.GetDesiredLdivB(ship, desiredBdivT);
             desiredLdivB *= 1f + ModUtils.DistributedRange(0.025f);
 
@@ -30,10 +30,15 @@ namespace UADRealism
             ship.SetDraught(finalDrPct, false);
 
             float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
-            ship.SetFineness(Mathf.Lerp(Patch_Ui._MinFineness, Patch_Ui._MaxFineness, 1f - t));
+            ship.ModData().SetFineness(Mathf.Lerp(ShipData._MinFineness, ShipData._MaxFineness, 1f - t));
 
-            // Also set freeboard
-            ship.SetFreeboard(Mathf.Lerp(Patch_Ui._MinFreeboard, Patch_Ui._MaxFreeboard, ModUtils.DistributedRange(0.5f) + 0.5f));
+            // Also set freeboard. Center it on 0.
+            float fbVal = ModUtils.DistributedRange(1f);
+            if (fbVal < 0f)
+                fbVal = Mathf.Lerp(0f, ShipData._MinFreeboard, -fbVal);
+            else
+                fbVal = Mathf.Lerp(0f, ShipData._MaxFreeboard, fbVal);
+            ship.ModData().SetFreeboard(fbVal);
 
             //Melon<UADRealismMod>.Logger.Msg($"Setting sizeZ={ship.GetFineness():F1} from {t:F3} from {bestSec} in {ship.hull.data.sectionsMin}-{ship.hull.data.sectionsMax}");
             if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
@@ -471,7 +476,7 @@ namespace UADRealism
 
                 float lbd = stats.Lwl * stats.B * stats.T;
                 float steelweight = lbd * (0.21f - 0.026f * Mathf.Log10(lbd)) * (1f + 0.025f * (stats.Lwl / stats.T - 12)) * (1f + (2f / 3f) * (stats.Cb - 0.7f));
-                steelweight *= 0.9f + (1f + ship.GetFreeboard() * 0.01f * 2f) * 0.1f;
+                steelweight *= 0.9f + (1f + ship.ModData().Freeboard * 0.01f * 2f) * 0.1f;
                 steelweight *= 1f + citPct * 0.1f;
                 float modifiedHullTechMult = Util.Remap(hullTechMult, 0.58f, 1f, 0.675f, 1f);
                 steelweight *= 2f * modifiedHullTechMult;
@@ -500,7 +505,7 @@ namespace UADRealism
                 // Armor
                 // Note: height estimate includes upper belt, for now. On AON ships that's obviously correct
                 // since there was one armor belt.
-                float beltHeightEstimate = Mathf.Sqrt(stats.B) * (1f + ship.GetFreeboard() * 0.01f * 0.25f);
+                float beltHeightEstimate = Mathf.Sqrt(stats.B) * (1f + ship.ModData().Freeboard * 0.01f * 0.25f);
                 float a = stats.Lwl * 0.5f;
                 float b = stats.B * 0.5f;
                 float ab = a + b;
@@ -887,23 +892,67 @@ namespace UADRealism
             return -1f;
         }
 
-        public static float GetFreeboard(this Ship ship)
-            => ship.armor.ArmorValue(Ship.A.None);
-
-        public static void SetFreeboard(this Ship ship, float freeboard)
+        public static ShipData ModData(this Ship ship)
         {
-            ship.armor[Ship.A.None] = freeboard;
+            var sd = ship.gameObject.GetComponent<ShipData>();
+            if (sd == null)
+                sd = ship.gameObject.AddComponent<ShipData>();
+
+            return sd;
+        }
+    }
+
+    [RegisterTypeInIl2Cpp]
+    public class ShipData : MonoBehaviour
+    {
+        public const float _MinFineness = 0f;
+        public const float _MaxFineness = 100f;
+        public const float _MinFreeboard = -30f;
+        public const float _MaxFreeboard = 45f;
+
+        public ShipData(IntPtr ptr) : base(ptr) { }
+
+        private float _freeboard = 0f;
+        private float _fineness = _MinFineness + (_MaxFineness - _MinFineness) * 0.5f;
+        private Ship _ship = null;
+
+        public float Freeboard => _freeboard;
+        public float Fineness => _fineness;
+
+        public void SetFreeboard(float fb)
+        {
+            _freeboard = fb;
+        }
+        public void SetFineness(float fn)
+        {
+            _fineness = fn;
         }
 
-        public static float GetFineness(this Ship ship)
-            => ship.armor.ArmorValue(Ship.A.Invalid);
-
-        public static void SetFineness(this Ship ship, float fineness)
+        public int SectionsFromFineness()
         {
-            ship.armor[Ship.A.Invalid] = fineness;
+            return Mathf.RoundToInt(Mathf.Lerp(_ship.hull.data.sectionsMin, _ship.hull.data.sectionsMax, 1f - _fineness * 0.01f));
         }
 
-        public static int SectionsFromFineness(this Ship ship)
-            => Mathf.RoundToInt(Mathf.Lerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, 1f - ship.GetFineness()* 0.01f));
-    }    
+        public void ToStore(Ship.Store store)
+        {
+            store.hullPartSizeZ = _fineness;
+            store.hullPartSizeY = _freeboard;
+        }
+
+        public void FromStore(Ship.Store store)
+        {
+            _fineness = store.hullPartSizeZ;
+            _freeboard = store.hullPartSizeY;
+
+            store.hullPartSizeZ = 0f;
+            store.hullPartSizeY = 0f;
+            store.hullPartMaxZ = 0f;
+            store.hullPartMinZ = 0f;
+        }
+
+        private void Awake()
+        {
+            _ship = gameObject.GetComponent<Ship>();
+        }
+    }
 }

@@ -483,7 +483,7 @@ namespace UADRealism
             if (hData == null)
                 return new HullStats();
 
-            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, ship.SectionsFromFineness());
+            return GetScaledStats(hData, ship.tonnage, ship.beam, ship.draught, ship.ModData().SectionsFromFineness());
         }
 
         public static HullStats GetScaledStats(HullData hData, float tonnage, float lengthToBeamPct, float beamToDraughtPct, int sections)
@@ -551,7 +551,7 @@ namespace UADRealism
 
         public const float KnotsToMS = 0.514444444f;
 
-        public const float DefaultBdivT = 3f;
+        public const float DefaultBdivT = 2.9f;
 
         public static float GetDesiredLdivB(Ship ship, float BdivT)
             => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, ShipM.GetYear(ship.hull.data));

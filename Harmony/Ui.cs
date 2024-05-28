@@ -24,11 +24,6 @@ namespace UADRealism
         private static Il2CppSystem.Nullable<Color> _ColorNumberN = new Il2CppSystem.Nullable<Color>(_ColorNumber);
         private static Il2CppSystem.Object[] _LocArray = new Il2CppSystem.Object[2];
 
-        public const float _MinFineness = 0f;
-        public const float _MaxFineness = 100f;
-        public const float _MinFreeboard = -30f;
-        public const float _MaxFreeboard = 45f;
-
         internal static Ship _ShipForEnginePower = null;
 
         [HarmonyPrefix]
@@ -111,8 +106,8 @@ namespace UADRealism
 
             _FineS.onValueChanged.RemoveAllListeners();
             _FineS.minValue = 0f;
-            _FineS.maxValue = _MaxFineness - _MinFineness;
-            _FineS.value = _MinFineness;
+            _FineS.maxValue = ShipData._MaxFineness - ShipData._MinFineness;
+            _FineS.value = ShipData._MinFineness;
             ui.sliderValues[_FineS] = _FineS.value;
             _FineS.onValueChanged.AddListener(new System.Action<float>(val =>
             {
@@ -131,7 +126,7 @@ namespace UADRealism
                         val = Mathf.Clamp(val, 0f, _FineS.maxValue);
                         float rounded = Mathf.RoundToInt(val);
 
-                        SetFineness(ship, _MinFineness + rounded);
+                        SetFineness(ship, ShipData._MinFineness + rounded);
                         G.ui.OnConShipChanged(true);
                         G.ui.RefreshConstructorInfo();
                     }
@@ -150,7 +145,7 @@ namespace UADRealism
 
             _FineText = _Fineness.GetChild("Text").GetComponent<UnityEngine.UI.Text>();
             var edit = _Fineness.GetChild("Edit").GetComponent<UnityEngine.UI.InputField>();
-            edit.text = (_MinFineness + _FineS.value).ToString("F0");
+            edit.text = (ShipData._MinFineness + _FineS.value).ToString("F0");
 
             var click = _FineText.GetComponent<OnClickH>();
             click.action = new System.Action<UnityEngine.EventSystems.PointerEventData>(pData =>
@@ -159,7 +154,7 @@ namespace UADRealism
                 edit.SetActiveX(true);
                 edit.Select();
                 edit.ActivateInputField();
-                edit.text = (_MinFineness + _FineS.value).ToString("F0");
+                edit.text = (ShipData._MinFineness + _FineS.value).ToString("F0");
                 G.ui.textFieldValues[edit] = edit.text;
             });
 
@@ -171,7 +166,7 @@ namespace UADRealism
                     var ship = G.ui.mainShip;
                     if (ship != null)
                     {
-                        val = Mathf.Clamp(val, _MinFineness, _MaxFineness);
+                        val = Mathf.Clamp(val, ShipData._MinFineness, ShipData._MaxFineness);
                         SetFineness(ship, val);
                         G.ui.OnConShipChanged(true);
                         G.ui.RefreshConstructorInfo();
@@ -212,7 +207,7 @@ namespace UADRealism
 
             _FreeS.onValueChanged.RemoveAllListeners();
             _FreeS.minValue = 0f;
-            _FreeS.maxValue = (_MaxFreeboard - _MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
+            _FreeS.maxValue = (ShipData._MaxFreeboard - ShipData._MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
             _FreeS.value = _FreeS.maxValue * 0.5f;
             ui.sliderValues[_FreeS] = _FreeS.value;
             _FreeS.onValueChanged.AddListener(new System.Action<float>(val =>
@@ -233,7 +228,7 @@ namespace UADRealism
                         float step = G.GameData.Param("beam_draught_step", 0.5f);
                         float rounded = Mathf.RoundToInt(step * val * 10f) * 0.1f;
 
-                        SetFreeboard(ship, _MinFreeboard + rounded);
+                        SetFreeboard(ship, ShipData._MinFreeboard + rounded);
                         G.ui.OnConShipChanged(true);
                         G.ui.RefreshConstructorInfo();
                     }
@@ -252,7 +247,7 @@ namespace UADRealism
 
             _FreeText = _Freeboard.GetChild("Text").GetComponent<UnityEngine.UI.Text>();
             var edit = _Freeboard.GetChild("Edit").GetComponent<UnityEngine.UI.InputField>();
-            edit.text = (_MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1");
+            edit.text = (ShipData._MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1");
 
             var click = _FreeText.GetComponent<OnClickH>();
             click.action = new System.Action<UnityEngine.EventSystems.PointerEventData>(pData =>
@@ -261,7 +256,7 @@ namespace UADRealism
                 edit.SetActiveX(true);
                 edit.Select();
                 edit.ActivateInputField();
-                edit.text = (_MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1");
+                edit.text = (ShipData._MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1");
                 G.ui.textFieldValues[edit] = edit.text;
             });
 
@@ -273,7 +268,7 @@ namespace UADRealism
                     var ship = G.ui.mainShip;
                     if (ship != null)
                     {
-                        val = Mathf.Clamp(val, _MinFreeboard, _MaxFreeboard);
+                        val = Mathf.Clamp(val, ShipData._MinFreeboard, ShipData._MaxFreeboard);
                         SetFreeboard(ship, val);
                         G.ui.OnConShipChanged(true);
                         G.ui.RefreshConstructorInfo();
@@ -293,7 +288,7 @@ namespace UADRealism
         {
             // no need to recalc stats
             //ship.CStats();
-            ship.SetFineness(val);
+            ship.ModData().SetFineness(val);
             ship.RefreshHull(false); // let it figure out
             // would change ship.stats[item]'s value here
             //ship.statEffectsCache.Clear();
@@ -303,7 +298,7 @@ namespace UADRealism
         {
             // no need to recalc stats
             //ship.CStats();
-            ship.SetFreeboard(val);
+            ship.ModData().SetFreeboard(val);
             ship.RefreshHull(false); // let it figure out
             // would change ship.stats[item]'s value here
             //ship.statEffectsCache.Clear();
@@ -325,8 +320,8 @@ namespace UADRealism
                 var ship = G.ui.mainShip;
                 if (ship != null)
                 {
-                    _FineS.value = ship.GetFineness();
-                    _FreeS.value = (ship.GetFreeboard() - _MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
+                    _FineS.value = ship.ModData().Fineness;
+                    _FreeS.value = (ship.ModData().Freeboard - ShipData._MinFreeboard) / G.GameData.Param("beam_draught_step", 0.5f);
                     var hData = ShipStats.GetData(ship.hull.data);
                     if (hData == null)
                     {
@@ -335,7 +330,7 @@ namespace UADRealism
                     }
                     else
                     {
-                        var stats = hData._statsSet[ship.SectionsFromFineness()];
+                        var stats = hData._statsSet[ship.ModData().SectionsFromFineness()];
                         LdivB = stats.Lwl / (stats.B * (1f + ship.beam * 0.01f));
                         BdivT = stats.B / (stats.T * (1f + ship.draught * 0.01f)); // since draught is stored/set relative to beam
                     }
@@ -350,7 +345,7 @@ namespace UADRealism
             _LocArray[1] = Ui.Colorize(_ColorNumberN, "*", false);
             _FineText.text = LocalizeManager.Localize("$Ui_Constr_FinenessDP01", _LocArray);
 
-            _LocArray[0] = Ui.Colorize(_ColorNumberN, (_MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1"), false);
+            _LocArray[0] = Ui.Colorize(_ColorNumberN, (ShipData._MinFreeboard + _FreeS.value * G.GameData.Param("beam_draught_step", 0.5f)).ToString("F1"), false);
             // TODO track change
             _LocArray[1] = Ui.Colorize(_ColorNumberN, "*", false);
             _FreeText.text = LocalizeManager.Localize("$Ui_Constr_FreeboardDP0Per1", _LocArray);
@@ -441,7 +436,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.SectionsFromFineness()];
+                    var stats = hData._statsSet[ship.ModData().SectionsFromFineness()];
                     __instance.textBeamEdit.text = (stats.Lwl / (stats.B * (1f + ship.beam * 0.01f))).ToString("F4");
                 }
             }
@@ -462,7 +457,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.SectionsFromFineness()];
+                    var stats = hData._statsSet[ship.ModData().SectionsFromFineness()];
                     if (float.TryParse(valueStr, out var val) && val != 0)
                     {
                         valueStr = (((stats.Lwl / val) / stats.B - 1f) * 100f).ToString();
@@ -486,7 +481,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.SectionsFromFineness()];
+                    var stats = hData._statsSet[ship.ModData().SectionsFromFineness()];
                     __instance.textDraughtEdit.text = (stats.B / (stats.T * (1f + ship.draught * 0.01f))).ToString("F4");
                 }
             }
@@ -507,7 +502,7 @@ namespace UADRealism
                 }
                 else
                 {
-                    var stats = hData._statsSet[ship.SectionsFromFineness()];
+                    var stats = hData._statsSet[ship.ModData().SectionsFromFineness()];
                     if (float.TryParse(valueStr, out var val) && val != 0)
                     {
                         valueStr = (((stats.B / val) / stats.T - 1f) * 100f).ToString();
