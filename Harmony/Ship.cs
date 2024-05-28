@@ -36,7 +36,12 @@ namespace UADRealism
         internal static void Prefix_Ship_ChangeHull(Ship __instance, Ship.Store store, ref bool byHuman, out bool __state)
         {
             _IsChangeHull = true;
-            _IsLoadingStore = store != null;
+            if (store != null)
+            {
+                _IsLoadingStore = true;
+                __instance.ModData().SetIgnoreNextPartYChange(true);
+            }
+
             __state = byHuman;
             // This is gross. But we can't patch AdjustHullStats so we need to make
             // it not run, and run something else ourselves. We should just be
@@ -59,14 +64,7 @@ namespace UADRealism
             if (!_IsLoadingStore)
             {
                 ShipM.SetShipBeamDraughtFineness(__instance);
-            }
-            // We need to refresh the hull since beam/draught weren't applied when ChangeHull did so.
-            if (__instance.modelState == Ship.ModelState.Constructor || __instance.modelState == Ship.ModelState.Battle)
-            {
-                _IsChangeHull = false;
-                __instance.RefreshHull(false);
-                _IsChangeHull = true;
-                // and we should rerurn this.
+                // and we should rerurn this since hull refreshed
                 __instance.hull.AddOrUpdatePlacedObjects();
             }
 
@@ -86,19 +84,17 @@ namespace UADRealism
 
                 float year = __instance.GetYear(__instance);
                 float yearToMult = Util.Remap(year, 1890f, 1940f, 0.6f, 0.7f, true);
-                ShipM.AdjustHullStats(__instance, -1, yearToMult, new System.Func<bool>(() =>
-                {
-                    float target = Util.Remap(year, 1890f, 1940f, 0.65f, 0.75f, true);
-                    return target >= __instance.Weight() / __instance.Tonnage();
+                //ShipM.AdjustHullStats(__instance, -1, yearToMult, new System.Func<bool>(() =>
+                //{
+                //    float target = Util.Remap(year, 1890f, 1940f, 0.65f, 0.75f, true);
+                //    return target >= __instance.Weight() / __instance.Tonnage();
 
-                }));
+                //}));
 
                 // If our speed was adjusted, we should change hull geometry to optimize.
                 if (oldSpeed != __instance.speedMax)
                 {
-                    _IsChangeHull = false;
                     ShipM.SetShipBeamDraughtFineness(__instance);
-                    _IsChangeHull = true;
                     // and we should rerurn this.
                     __instance.hull.AddOrUpdatePlacedObjects();
                 }
@@ -108,7 +104,9 @@ namespace UADRealism
             _IsLoadingStore = false;
 
             // This refresh may or may not be needed, but it won't really hurt.
-            //MelonCoroutines.Start(RefreshHullRoutine(__instance));
+            // It's to catch the case where ChangeHull runs _during_ a scene transition,
+            // i.e. before the scene is set to Constructor.
+            MelonCoroutines.Start(RefreshHullRoutine(__instance));
         }
 
         [HarmonyPrefix]
@@ -117,8 +115,6 @@ namespace UADRealism
         {
 
             __state = new RefreshHullData();
-            if (_IsChangeHull)
-                return;
 
             if (__instance == null || __instance.hull == null)
             {
@@ -168,6 +164,7 @@ namespace UADRealism
 #endif
             __instance.hull.bow.GetParent().GetParent().transform.localScale = Vector3.one * scaleFactor;
 
+            // We have to fake our tonnage so base RefreshHull sets the right number of sections
             float slider = Mathf.InverseLerp(data.sectionsMin - 0.499f, data.sectionsMax + 0.499f, secsToUse);
             __instance.tonnage = Mathf.Lerp(data.tonnageMin, data.tonnageMax, slider);
             float bmMult = 1f + __instance.beam * 0.01f;
@@ -193,6 +190,8 @@ namespace UADRealism
             __instance.tonnage = __state._tonnage;
 
             var hData = ShipStats.GetData(__instance.hull.data);
+
+            // Fix Y positions so the waterline is preserved (B/T changing shouldn't change waterline)
             _hullSecitons.AddRange(__instance.hull.hullSections);
             foreach (var sec in _hullSecitons)
             {
@@ -200,7 +199,9 @@ namespace UADRealism
             }
             _hullSecitons.Clear();
 
-            if (!_IsLoadingStore)
+            // If this is user-initiated, we should keep parts
+            // at deck-height
+            if (!_IsLoadingStore && !__instance.ModData().IgnoreNextPartYChange)
             {
                 float scaleRatio = __instance.hull.bow.GetParent().GetParent().transform.localScale.y * __instance.hull.bow.transform.localScale.y / __state._oldYScale;
                 foreach (Part p in __instance.parts)
@@ -212,12 +213,16 @@ namespace UADRealism
                     p.transform.localPosition = new Vector3(p.transform.localPosition.x, p.transform.localPosition.y * scaleRatio, p.transform.localPosition.z);
                 }
             }
+            __instance.ModData().SetIgnoreNextPartYChange(false);
 
-            // Finally, make sure we have funnel mounts
+            //// Finally, make sure we have funnel mounts
             _mounts.AddRange(__instance.hull.bow.GetComponentsInChildren<Mount>());
             _mounts.AddRange(__instance.hull.stern.GetComponentsInChildren<Mount>());
             foreach (var m in _mounts)
             {
+                if (m == null)
+                    continue;
+
                 if (!m.funnel && Mathf.Abs(m.gameObject.transform.localPosition.x) < 0.01f)
                 {
                     m.funnel = true;
