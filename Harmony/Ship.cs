@@ -461,8 +461,8 @@ namespace UADRealism
             return false;
         }
 
-        //[HarmonyPrefix]
-        //[HarmonyPatch(nameof(Ship.PartMats))]
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.PartMats))]
         internal static bool Prefix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
         {
             if (!part.isHull)

@@ -440,14 +440,14 @@ namespace UADRealism
             }
         }
 
-        public static float GetEngineMatsWeightCalculateValue(Ship ship)
+        public static float GetEngineMatsWeightCalculateValue(Ship ship, bool flaws)
         {
             var hp = ship.EnginePower();
             float techHP = ship.TechMax("hp");
             float techEngine = ship.TechR("engine");
             float techBoiler = ship.TechR("boiler");
             float weight = (0.45f * techBoiler + 0.55f * techEngine) * (hp / techHP);
-            if (!GameManager.IsCampaign)
+            if (!flaws || !GameManager.IsCampaign || !Ship.IsFlawsActive(ship))
                 return weight;
 
             foreach (var flaw in Ship.flawsDefectStats)
@@ -513,10 +513,11 @@ namespace UADRealism
 
                 float lbd = stats.Lwl * stats.B * stats.T;
                 float steelweight = lbd * (0.21f - 0.026f * Mathf.Log10(lbd)) * (1f + 0.025f * (stats.Lwl / stats.T - 12)) * (1f + (2f / 3f) * (stats.Cb - 0.7f));
-                steelweight *= 0.9f + (1f + ship.ModData().Freeboard * 0.01f * 2f) * 0.1f;
+                steelweight *= 0.9f + (1f + ship.ModData().Freeboard * 0.02f) * 0.1f;
                 steelweight *= 1f + citPct * 0.1f;
                 float modifiedHullTechMult = Util.Remap(hullTechMult, 0.58f, 1f, 0.675f, 1f);
-                steelweight *= 2f * modifiedHullTechMult;
+                //Melon<UADRealismMod>.Logger.Msg($"PartMats: Scantlings {scantlingStrength:F2}, tech {modifiedHullTechMult:F3}. Cit len {citadelLength:F1} / {stats.Lwl:F1}");
+                steelweight *= 1.65f * modifiedHullTechMult;
                 steelweight *= scantlingStrength;
 
                 Ship.MatInfo mat = new Ship.MatInfo();
@@ -528,7 +529,7 @@ namespace UADRealism
 
 
                 // engine
-                float engineWeight = GetEngineMatsWeightCalculateValue(ship);
+                float engineWeight = GetEngineMatsWeightCalculateValue(ship, false);
                 if (isTBDD)
                     engineWeight *= 0.8f;
 
@@ -548,17 +549,19 @@ namespace UADRealism
                 float ab = a + b;
                 float ab2 = ab * ab;
                 float h = (a - b) * (a - b) / ab2;
-                float quarterCircumf = Mathf.PI * ab * (1 + 3 * h / (10 + Mathf.Sqrt(4 - 3 * h)));
+                float halfCirc = Mathf.PI * ab * (1 + 3 * h / (10 + Mathf.Sqrt(4 - 3 * h))) * 0.5f;
+                float cornerCirc = stats.Lwl + stats.B;
+                halfCirc = 0.8f * halfCirc + 0.2f * cornerCirc;
                 const float ellipseCwp = Mathf.PI / 4f;
-                float shipSideLength = stats.Cwp > ellipseCwp ? Util.Remap(stats.Cwp, ellipseCwp, 1f, quarterCircumf, ab) : Util.Remap(stats.Cwp, 0.5f, ellipseCwp, Mathf.Sqrt(ab2), quarterCircumf, true);
-                shipSideLength *= 2f;
-                float armorCitadelLength = citadelLength + Mathf.Pow(1f - citPct, 1f - stats.Cwp) * stats.B; // from SpringSharp
+                float shipSideLength = stats.Cwp > ellipseCwp ? Util.Remap(stats.Cwp, ellipseCwp, 1f, halfCirc, cornerCirc)
+                    : Util.Remap(stats.Cwp, 0.5f, ellipseCwp, Mathf.Sqrt(a*a + b*b) * 2f, halfCirc, true);
+                float armorCitadelLength = citadelLength * shipSideLength / stats.Lwl;
                 armorCitadelLength = Mathf.Clamp(armorCitadelLength, 0.2f * shipSideLength, 0.8f * shipSideLength); // sanity
                 float armorExtLength = shipSideLength - armorCitadelLength;
-                float bowRatio = (ship.hullPartMaxZ - ship.GetDynamicCitadelMaxZ());
+                float bowRatio = ship.hullPartMaxZ - ship.GetDynamicCitadelMaxZ();
                 if (bowRatio < 0.1f)
                     bowRatio = 0.1f;
-                bowRatio = bowRatio / (bowRatio + ship.hullPartMinZ - ship.GetDynamicCitadelMinZ());
+                bowRatio = bowRatio / (bowRatio + Mathf.Abs(ship.hullPartMinZ - ship.GetDynamicCitadelMinZ()));
                 const float armorDensity = 7.86f; // grams / cubic centimeter or tonnes / cubic meter
 
                 float techArmor = ship.TechR("armor");
@@ -568,14 +571,14 @@ namespace UADRealism
                 techBelt = Util.Remap(techBelt, 0.75f, 1.25f, 0.96f, 1.06f);
                 techDeck = Util.Remap(techDeck, 0.75f, 1.25f, 0.96f, 1.06f);
                 float armorC = ship.TechR("armor_c") * 0.75f; // STS rather than face-hardened
-                float beltC = armorC * ship.TechR("belt_c") * (1f / 0.75f); // back to face-harended
-                float deckC = armorC * ship.TechR("deck_c");
+                float beltC = ship.TechR("belt_c") * (1f / 0.75f); // back to face-harended
+                float deckC = ship.TechR("deck_c");
 
                 float armorBaseCost = Mathf.Lerp(5f, 11f, tonnage / 200000f) * armorC;
 
-                float weightFaceHard = techArmor * techBelt * armorDensity;
+                float weightFaceHard = techArmor * techBelt * armorDensity * 0.001f;
                 float costFaceHard = armorBaseCost * beltC;
-                float weightSTS = techArmor * techDeck * armorDensity;
+                float weightSTS = techArmor * techDeck * armorDensity * 0.001f;
                 float costSTS = armorBaseCost * deckC;
 
                 // Belt
@@ -604,7 +607,7 @@ namespace UADRealism
                 mat.costMod = costFaceHard;
                 mats.Add(mat);
 
-                // Deck
+                //// Deck
                 float Awp = stats.Lwl * stats.B * stats.Cwp;
                 float extAreaRatio = 1f - citPct * Mathf.Sqrt(citPct);
 
@@ -628,6 +631,9 @@ namespace UADRealism
                 mat.weight = weightSTS * extAreaRatio * (1f - bowRatio) * Awp * ship.armor.ArmorValue(Ship.A.DeckStern);
                 mat.costMod = costSTS;
                 mats.Add(mat);
+
+                //Melon<UADRealismMod>.Logger.Msg($"Armor: C: {ship.GetDynamicCitadelMinZ():F1}-{ship.GetDynamicCitadelMaxZ():F1} vs {ship.hullPartMinZ:F1}-{ship.hullPartMaxZ:F1}. Bow {bowRatio:F3}. Belt: {armorCitadelLength:F1}x{beltHeightEstimate:F1}m. QC {halfCirc:F1}, QSL {shipSideLength:F1}, "
+                //    + $"Deck: Awp {Awp:F1}. Ratio {extAreaRatio:F3}");
 
                 var citArmor = ship.GetCitadelArmor();
                 if (citArmor != null)
@@ -660,41 +666,42 @@ namespace UADRealism
                         }
                         mats.Add(mat);
                     }
-
-                    // We'll estimate area as the 2/3rds power of weight.
-                    float ctAreaEstimate = 0f;
-                    float superstructureAreaEstimate = 0f;
-                    foreach (var p in ship.parts)
-                    {
-                        if (p.data.isTowerMain)
-                        {
-                            ctAreaEstimate = Mathf.Pow(p.data.weight * ship.TechWeightMod(p.data), 2f / 3f);
-                        }
-                        // Unlike stock, we count uptakes as superstructure
-                        else if (p.data.isTowerAny || p.data.isFunnel)
-                        {
-                            float areaEst = Mathf.Pow(p.data.weight * ship.TechWeightMod(p.data), 2f / 3f);
-                            // But uptakes aren't the whole funnel
-                            if (p.data.isFunnel)
-                                areaEst *= 0.25f;
-
-                            superstructureAreaEstimate += areaEst;
-                        }
-                    }
-                    mat = new Ship.MatInfo();
-                    mat.name = "armor_conning_tower";
-                    mat.mat = Ship.Mat.Armor;
-                    mat.weight = weightFaceHard * ctAreaEstimate * ship.armor.ArmorValue(Ship.A.ConningTower);
-                    mat.costMod = costFaceHard;
-                    mats.Add(mat);
-
-                    mat = new Ship.MatInfo();
-                    mat.name = "armor_superstructure";
-                    mat.mat = Ship.Mat.Armor;
-                    mat.weight = weightSTS * superstructureAreaEstimate * ship.armor.ArmorValue(Ship.A.Superstructure);
-                    mat.costMod = costSTS;
-                    mats.Add(mat);
                 }
+
+                // We'll estimate area as the 2/3rds power of weight.
+                float ctAreaEstimate = 0f;
+                float superstructureAreaEstimate = 0f;
+                foreach (var p in ship.parts)
+                {
+                    if (p.data.isTowerMain)
+                    {
+                        ctAreaEstimate = Mathf.Pow(p.data.weight * ship.TechWeightMod(p.data), 2f / 3f);
+                    }
+                    // Unlike stock, we count uptakes as superstructure
+                    else if (p.data.isTowerAny || p.data.isFunnel)
+                    {
+                        float areaEst = Mathf.Pow(p.data.weight * ship.TechWeightMod(p.data), 2f / 3f);
+                        // But uptakes aren't the whole funnel
+                        if (p.data.isFunnel)
+                            areaEst *= 0.25f;
+
+                        superstructureAreaEstimate += areaEst;
+                    }
+                }
+
+                mat = new Ship.MatInfo();
+                mat.name = "armor_conning_tower";
+                mat.mat = Ship.Mat.Armor;
+                mat.weight = weightFaceHard * ctAreaEstimate * ship.armor.ArmorValue(Ship.A.ConningTower);
+                mat.costMod = costFaceHard;
+                mats.Add(mat);
+
+                mat = new Ship.MatInfo();
+                mat.name = "armor_superstructure";
+                mat.mat = Ship.Mat.Armor;
+                mat.weight = weightSTS * superstructureAreaEstimate * ship.armor.ArmorValue(Ship.A.Superstructure);
+                mat.costMod = costSTS;
+                mats.Add(mat);
 
                 // Torpedo Defense System
                 float weightMultTDS = ship.TechR("anti_torp_weight") - 1f;
@@ -739,9 +746,6 @@ namespace UADRealism
             {
                 foreach (var mat in mats)
                 {
-                    if (mat.name == "engines")
-                        continue;
-
                     for (int i = 0; i < Ship.flawsDefectStats.Length; ++i)
                     {
                         Ship.FlawsStats flaw = Ship.flawsDefectStats[i];
@@ -759,71 +763,75 @@ namespace UADRealism
                 }
             }
 
-            if (!calcCosts)
-                return mats;
-
-            if (Ship.matCostsCache == null)
+            if (calcCosts)
             {
-                Ship.matCostsCache = new Il2CppSystem.Collections.Generic.Dictionary<Ship.Mat, float>();
-                
-                float cSteel = MonoBehaviourExt.Param("price_steel", 53f);
-                float cNickel = MonoBehaviourExt.Param("price_nickel", 1401f);
-                float cChrome = MonoBehaviourExt.Param("price_chrome", 765f);
-                float cMolyb = MonoBehaviourExt.Param("price_molybdenum", 9800f);
-                float cCopper = MonoBehaviourExt.Param("price_copper", 583f);
-                float cHull = MonoBehaviourExt.Param("price_hull", cSteel);
-                float cSurv = MonoBehaviourExt.Param("price_surv", cSteel);
-                float cNickelTimes_004 = cNickel * 0.04f;
-                float cArmor = MonoBehaviourExt.Param("price_armor", cSteel * 0.94f + cNickel * 0.04f + cChrome * 0.02f);
-                float cTurret = MonoBehaviourExt.Param("price_turret", cSteel);
-                float cBarrel = MonoBehaviourExt.Param("price_barrel", cSteel * 0.935f + cNickel * 0.04f + cChrome * 0.015f + cMolyb * 0.01f);
-                float cEngine = MonoBehaviourExt.Param("price_engine", cSteel * 0.9f + cCopper * 0.1f);
-                float cAntiTorp = MonoBehaviourExt.Param("price_anti_torp", cSteel);
-                float cFuel = MonoBehaviourExt.Param("price_fuel", 0f);
-                float cAmmo = MonoBehaviourExt.Param("price_armmo", 0f);
-                float cTorp = MonoBehaviourExt.Param("price_torpedoes", 0f);
-
-                Ship.matCostsCache.Add(Ship.Mat.Raw, -1f);
-                Ship.matCostsCache.Add(Ship.Mat.Steel, cSteel);
-                Ship.matCostsCache.Add(Ship.Mat.Hull, cHull);
-                Ship.matCostsCache.Add(Ship.Mat.Surv, cSurv);
-                Ship.matCostsCache.Add(Ship.Mat.Armor, cArmor);
-                Ship.matCostsCache.Add(Ship.Mat.Turret, cTurret);
-                Ship.matCostsCache.Add(Ship.Mat.Barrel, cBarrel);
-                Ship.matCostsCache.Add(Ship.Mat.Engine, cEngine);
-                Ship.matCostsCache.Add(Ship.Mat.AntiTorp, cAntiTorp);
-                Ship.matCostsCache.Add(Ship.Mat.Fuel, cFuel);
-                Ship.matCostsCache.Add(Ship.Mat.Ammo, cAmmo);
-                Ship.matCostsCache.Add(Ship.Mat.Torpedo, cTorp);
-            }
-
-            foreach (var mat in mats)
-            {
-                if (!Ship.matCostsCache.TryGetValue(mat.mat, out var cost))
-                    continue;
-
-                mat.cost = cost * mat.weight * mat.costMod;
-                if (!part.isHull)
-                    mat.cost *= part.costMod;
-
-                if (Ship.IsFlawsActive(ship))
+                if (Ship.matCostsCache == null)
                 {
-                    for (int i = 0; i < Ship.flawsDefectStats.Length; ++i)
+                    Ship.matCostsCache = new Il2CppSystem.Collections.Generic.Dictionary<Ship.Mat, float>();
+
+                    float cSteel = MonoBehaviourExt.Param("price_steel", 53f);
+                    float cNickel = MonoBehaviourExt.Param("price_nickel", 1401f);
+                    float cChrome = MonoBehaviourExt.Param("price_chrome", 765f);
+                    float cMolyb = MonoBehaviourExt.Param("price_molybdenum", 9800f);
+                    float cCopper = MonoBehaviourExt.Param("price_copper", 583f);
+                    float cHull = MonoBehaviourExt.Param("price_hull", cSteel);
+                    float cSurv = MonoBehaviourExt.Param("price_surv", cSteel);
+                    float cArmor = MonoBehaviourExt.Param("price_armor", cSteel * 0.94f + cNickel * 0.04f + cChrome * 0.02f);
+                    float cTurret = MonoBehaviourExt.Param("price_turret", cSteel);
+                    float cBarrel = MonoBehaviourExt.Param("price_barrel", cSteel * 0.935f + cNickel * 0.04f + cChrome * 0.015f + cMolyb * 0.01f);
+                    float cEngine = MonoBehaviourExt.Param("price_engine", cSteel * 0.9f + cCopper * 0.1f);
+                    float cAntiTorp = MonoBehaviourExt.Param("price_anti_torp", cSteel);
+                    float cFuel = MonoBehaviourExt.Param("price_fuel", 0f);
+                    float cAmmo = MonoBehaviourExt.Param("price_ammo", 0f);
+                    float cTorp = MonoBehaviourExt.Param("price_torpedoes", 0f);
+
+                    Ship.matCostsCache.Add(Ship.Mat.Raw, -1f);
+                    Ship.matCostsCache.Add(Ship.Mat.Steel, cSteel);
+                    Ship.matCostsCache.Add(Ship.Mat.Hull, cHull);
+                    Ship.matCostsCache.Add(Ship.Mat.Surv, cSurv);
+                    Ship.matCostsCache.Add(Ship.Mat.Armor, cArmor);
+                    Ship.matCostsCache.Add(Ship.Mat.Turret, cTurret);
+                    Ship.matCostsCache.Add(Ship.Mat.Barrel, cBarrel);
+                    Ship.matCostsCache.Add(Ship.Mat.Engine, cEngine);
+                    Ship.matCostsCache.Add(Ship.Mat.AntiTorp, cAntiTorp);
+                    Ship.matCostsCache.Add(Ship.Mat.Fuel, cFuel);
+                    Ship.matCostsCache.Add(Ship.Mat.Ammo, cAmmo);
+                    Ship.matCostsCache.Add(Ship.Mat.Torpedo, cTorp);
+                }
+
+                foreach (var mat in mats)
+                {
+                    if (!Ship.matCostsCache.TryGetValue(mat.mat, out var cost))
+                        continue;
+
+                    mat.cost = cost * mat.weight * mat.costMod;
+                    if (!part.isHull)
+                        mat.cost *= part.costMod;
+
+                    if (Ship.IsFlawsActive(ship))
                     {
-                        Ship.FlawsStats flaw = Ship.flawsDefectStats[i];
-                        if (ship.IsThisShipIsFlawsDefects(mat.name, flaw))
+                        for (int i = 0; i < Ship.flawsDefectStats.Length; ++i)
                         {
-                            float oldCost = mat.cost;
-                            ship.CStats();
-                            if (!G.GameData.stats.TryGetValue(flaw.ToString(), out var sData))
-                                continue;
-                            if (!ship.stats.TryGetValue(sData, out var sValue))
-                                continue;
-                            mat.cost = oldCost + sValue.basic * 0.01f * oldCost;
+                            Ship.FlawsStats flaw = Ship.flawsDefectStats[i];
+                            if (ship.IsThisShipIsFlawsDefects(mat.name, flaw))
+                            {
+                                float oldCost = mat.cost;
+                                ship.CStats();
+                                if (!G.GameData.stats.TryGetValue(flaw.ToString(), out var sData))
+                                    continue;
+                                if (!ship.stats.TryGetValue(sData, out var sValue))
+                                    continue;
+                                // This takes it back to what the weight would have been
+                                mat.cost = oldCost / (1 + sValue.basic * 0.01f);
+                            }
                         }
                     }
                 }
             }
+            //foreach (var mat in mats)
+            //{
+            //    Melon<UADRealismMod>.Logger.Msg($"Mat: {mat.name}, type {mat.mat}, {mat.weight:N1}t, ${mat.cost:N0} from {mat.costMod:F3}");
+            //}
 
             return mats;
         }
