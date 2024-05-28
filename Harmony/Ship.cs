@@ -83,13 +83,13 @@ namespace UADRealism
                 float oldSpeed = __instance.speedMax;
 
                 float year = __instance.GetYear(__instance);
-                float yearToMult = Util.Remap(year, 1890f, 1940f, 0.6f, 0.7f, true);
-                //ShipM.AdjustHullStats(__instance, -1, yearToMult, new System.Func<bool>(() =>
-                //{
-                //    float target = Util.Remap(year, 1890f, 1940f, 0.65f, 0.75f, true);
-                //    return target >= __instance.Weight() / __instance.Tonnage();
+                float targetWeight = Util.Remap(year, 1890f, 1940f, 0.6f, 0.7f, true);
+                ShipM.AdjustHullStats(__instance, -1, targetWeight, new System.Func<bool>(() =>
+                {
+                    float newTargetWeight = Util.Remap(year, 1890f, 1940f, 0.65f, 0.75f, true);
+                    return newTargetWeight >= __instance.Weight() / __instance.Tonnage();
 
-                //}));
+                }));
 
                 // If our speed was adjusted, we should change hull geometry to optimize.
                 if (oldSpeed != __instance.speedMax)

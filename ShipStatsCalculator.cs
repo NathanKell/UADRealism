@@ -517,11 +517,11 @@ namespace UADRealism
                                     {
                                         numPx = predictedPx;
                                         // handle output
-                                        //int pxStart = (_ResSideFront - numPx) / 2;
+                                        //int pxStart = (_TextureRes - numPx) / 2;
                                         //int pxEnd = pxStart + numPx - 1;
-                                        //for (int i = 0; i < _ResSideFront; ++i)
+                                        //for (int i = 0; i < _TextureRes; ++i)
                                         //{
-                                        //    pixels[row * _ResSideFront + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
+                                        //    pixels[row * _TextureRes + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
                                         //}
                                     }
                                 }
@@ -699,7 +699,7 @@ namespace UADRealism
                                     // that the beam is zeroing here).
                                     // TODO: Do the same thing for rudders we do for props in bottom view: if we go below last depth,
                                     // instead of just continuing at last depth, continue the _slope_.
-                                    //if (depthLimit || px.a == 0 || (!firstRowRed && col < _ResSideFront / 2 && IsFogged(px) && (r == 0 || pixels[(r - 1) * _ResSideFront + col].a > 0)))
+                                    //if (depthLimit || px.a == 0 || (!firstRowRed && col < _TextureRes / 2 && IsFogged(px) && (r == 0 || pixels[(r - 1) * _TextureRes + col].a > 0)))
                                     if (depthLimit || px.a == 0 || (!firstRowFog && col < _TextureRes / 2 && numFog > 0))
                                     {
                                         Vd += (startRow - r) * dispPerPx;
@@ -708,7 +708,7 @@ namespace UADRealism
 
                                         // handle output
                                         //for (int r2 = r; r2 >= 0; --r2)
-                                        //    pixels[r2 * _ResSideFront + col].a = 0;
+                                        //    pixels[r2 * _TextureRes + col].a = 0;
 
                                         break;
                                     }
@@ -740,7 +740,7 @@ namespace UADRealism
                             if (col == transomCol)
                             {
                                 stats.Catr = hasPx ? (_beamPixelCounts[col] * (_TextureRes - lastDepth)) / (float)(maxBeamPx * maxDepthPx) : 0;
-                                //Debug.Log($"Transom col {transomCol}, {_beamPixelCounts[col]}x{(_ResSideFront - lastDepth)} / midships {maxBeamPx}x{maxDepthPx} = {stats.Catr:F3}");
+                                //Debug.Log($"Transom col {transomCol}, {_beamPixelCounts[col]}x{(_TextureRes - lastDepth)} / midships {maxBeamPx}x{maxDepthPx} = {stats.Catr:F3}");
                             }
                         }
 

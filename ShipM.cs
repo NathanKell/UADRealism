@@ -102,9 +102,10 @@ namespace UADRealism
             return weight;
         }
 
-        private static Dictionary<Ship.A, float> _AdjustPriorityArmorReduce = GenerateAdjustArmorPriorities(false);
-        private static Dictionary<Ship.A, float> _AdjustPriorityArmorIncrease = GenerateAdjustArmorPriorities(true);
-        private static Dictionary<AdjustHullStatsItem, float> _AdjustHullStatsOptions = new Dictionary<AdjustHullStatsItem, float>();
+        private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorReduce = GenerateAdjustArmorPriorities(false);
+        private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorIncrease = GenerateAdjustArmorPriorities(true);
+        private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorLocal = new Dictionary<Ship.A, float>();
+        private static readonly Dictionary<AdjustHullStatsItem, float> _AdjustHullStatsOptions = new Dictionary<AdjustHullStatsItem, float>();
         private static System.Array _OpRangeValues = null;
         internal enum AdjustHullStatsItem
         {
@@ -162,7 +163,13 @@ namespace UADRealism
             return armorPriority;
         }
 
-        internal static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, System.Random rnd = null, float limitArmor = -1, float limitSpeed = 0f)
+        public static float RoundSpeedToStep(float speed)
+        {
+            float step = MonoBehaviourExt.Param("speed_step", 0.1f);
+            return Mathf.RoundToInt(speed / step * (1f / ShipStats.KnotsToMS)) * ShipStats.KnotsToMS * step;
+        }
+
+        public static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, System.Random rnd = null, float limitArmor = -1, float limitSpeed = 0f)
         {
             float year = ship.GetYear(ship);
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
@@ -219,7 +226,7 @@ namespace UADRealism
                 oldArmor[kvp.Key] = kvp.Value;
             var oldRange = ship.opRange < minOpRange ? minOpRange : ship.opRange;
 
-            Melon<UADRealismMod>.Logger.Msg($"Adjust. Old values: {oldSpeed:F1}/{oldQuarters}/{oldRange}. Armor {ModUtils.ArmorString(ship.armor)}");
+            //Melon<UADRealismMod>.Logger.Msg($"Adjust. Old values: {oldSpeed:F1}/{oldQuarters}/{oldRange}. Armor {ModUtils.ArmorString(ship.armor)}");
 
             float minSpeed;
             if (limitSpeed > 0f)
@@ -254,7 +261,7 @@ namespace UADRealism
                     newArmor[kvp.Key] = Mathf.Max(armorMinHint[kvp.Key], ship.MinArmorForZone(kvp.Key));
 
                 ship.SetArmor(newArmor);
-                Melon<UADRealismMod>.Logger.Msg($"Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
+                //Melon<UADRealismMod>.Logger.Msg($"Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
 
                 canMakeTarget = ship.Weight() / ship.Tonnage() <= targetWeight;
                 if (!canMakeTarget)
@@ -263,7 +270,7 @@ namespace UADRealism
                         newArmor[kvp.Key] = ship.MinArmorForZone(kvp.Key);
 
                     ship.SetArmor(newArmor);
-                    Melon<UADRealismMod>.Logger.Msg($"Trying again. Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
+                    //Melon<UADRealismMod>.Logger.Msg($"Trying again. Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
                     canMakeTarget = ship.Weight() / ship.Tonnage() <= targetWeight;
                 }
             }
@@ -286,80 +293,115 @@ namespace UADRealism
 
             minSpeed = Mathf.Max(minSpeed, ship.shipType.speedMin * ShipStats.KnotsToMS);
             maxSpeed = Mathf.Min(maxSpeed, ship.shipType.speedMax * ShipStats.KnotsToMS);
-            Melon<UADRealismMod>.Logger.Msg($"Min speed: {minSpeed:F1}, max {maxSpeed:F1}");
-            oldSpeed = Ship.RoundSpeedToStep(oldSpeed);
+            //Melon<UADRealismMod>.Logger.Msg($"Min speed: {minSpeed:F1}, max {maxSpeed:F1}");
+            oldSpeed = RoundSpeedToStep(oldSpeed);
 
             // Reset
             ship.SetSpeedMax(oldSpeed);
             ship.CurrentCrewQuarters = oldQuarters;
-            ship.SetArmor(oldArmor);
             ship.SetOpRange(oldRange);
-
-            foreach (var kvp in ship.armor)
-                newArmor[kvp.Key] = kvp.Value;
+            ship.SetArmor(oldArmor);
 
             if (stopCondition())
                 return;
 
-            float speedStep = G.GameData.Param("speed_step", 0.5f);
             Dictionary<Ship.A, float> armorPriority = delta > 0 ? _AdjustPriorityArmorIncrease : _AdjustPriorityArmorReduce;
+            float speedStep = MonoBehaviourExt.Param("speed_step", 0.5f) * delta * ShipStats.KnotsToMS;
 
             for (int j = 0; j < 699; ++j)
             {
-                float step = speedStep * delta * ShipStats.KnotsToMS;
-                float newSpeed = step + ship.speedMax;
+                // Copy armor over (since it might have changed)
+                newArmor.Clear();
+                // Recreate, since we might have touched citadel armor
+                foreach (var kvp in ship.armor)
+                    newArmor[kvp.Key] = kvp.Value;
+
+                float newSpeed = speedStep + ship.speedMax;
                 newSpeed = Mathf.Clamp(newSpeed, minSpeed, maxSpeed);
-                newSpeed = Ship.RoundSpeedToStep(newSpeed);
+                newSpeed = RoundSpeedToStep(newSpeed);
                 Ship.CrewQuarters newQuarters = (Ship.CrewQuarters)Mathf.Clamp((int)ship.CurrentCrewQuarters + delta, (int)Ship.CrewQuarters.Cramped, (int)Ship.CrewQuarters.Spacious);
                 VesselEntity.OpRange newOpRange = (VesselEntity.OpRange)Mathf.Clamp((int)ship.opRange + delta, (int)minOpRange, (int)VesselEntity.OpRange.VeryHigh);
 
-                var randomA = ModUtils.RandomByWeights(armorPriority);
-                float minHint = armorMinHint == null ? ship.shipType.armorMin : armorMinHint[randomA];
-                float minArmor = Mathf.Max(minHint, ship.MinArmorForZone(randomA));
-                float maxArmor = Mathf.Min(armorLimit, ship.MaxArmorForZone(randomA));
-                float newArmorLevel = Mathf.Clamp((delta * G.settings.armorStep) * 25.4f + ship.armor[randomA], minArmor, maxArmor);
-                if (delta < 0)
-                    newArmorLevel = Mathf.Floor(newArmorLevel);
-                else
-                    newArmorLevel = Mathf.Ceil(newArmorLevel);
-                newArmor[randomA] = newArmorLevel;
+                // We don't have to do all this work if we're not allowed to change armor anyway
+                bool armorFound = false;
+                if (allowEditArmor)
+                {
+                    // We need to find a valid armor zone. Note
+                    // due to citadel armor weirdness, we have
+                    // to do this fresh each time.
+                    foreach (var kvp in armorPriority)
+                    {
+                        float maxZone = ship.MaxArmorForZone(kvp.Key);
+                        if (maxZone > 0f)
+                        {
+                            armorMinHint.TryGetValue(kvp.Key, out var minHint);
+                            float minArmor = Mathf.Max(minHint, ship.MinArmorForZone(kvp.Key));
+                            float maxArmor = Mathf.Min(armorLimit, maxZone);
+                            float oldLevel = ship.armor.ContainsKey(kvp.Key) ? ship.armor[kvp.Key] : 0f; // trygetvalue is grumpy in IL2Cpp
+                            if ((delta > 0) ? (oldLevel < maxArmor) : (oldLevel > minArmor))
+                                _AdjustPriorityArmorLocal.Add(kvp.Key, kvp.Value);
+                        }
+                    }
+                    if(_AdjustPriorityArmorLocal.Count > 0)
+                    {
+                        var randomA = ModUtils.RandomByWeights(_AdjustPriorityArmorLocal);
+                        armorMinHint.TryGetValue(randomA, out var minHint);
+                        float minArmor = Mathf.Max(minHint, ship.MinArmorForZone(randomA));
+                        float maxArmor = Mathf.Min(armorLimit, ship.MaxArmorForZone(randomA));
+                        float oldLevel = ship.armor.ContainsKey(randomA) ? ship.armor[randomA] : 0f; // trygetvalue is grumpy in IL2Cpp
+                        float newArmorLevel = delta * 2.54f + oldLevel;
+                        if (delta < 0)
+                            newArmorLevel = Mathf.Floor(newArmorLevel);
+                        else
+                            newArmorLevel = Mathf.Ceil(newArmorLevel);
+                        newArmorLevel = Mathf.Clamp(newArmorLevel, minArmor, maxArmor);
+
+                        // by definition this check should be true because
+                        // we shouldn't have added the zone otherwise. But just in case.
+                        if (newArmorLevel != oldLevel)
+                        {
+                            armorFound = true;
+                            newArmor[randomA] = newArmorLevel;
+                        }
+                        _AdjustPriorityArmorLocal.Clear();
+                    }
+                }
 
                 _AdjustHullStatsOptions.Clear();
                 if (allowEditSpeed && newSpeed != ship.speedMax)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Speed, delta > 0 ? 350f : 690f);
                 if (allowEditCrewQuarters && newQuarters != ship.CurrentCrewQuarters)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Quarters, 150f);
-                if (allowEditArmor && !Util.DictionaryEquals(ship.armor, newArmor))
+                if (armorFound)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Armor, delta > 0 ? 850f : 450f);
                 if (allowEditRange && newOpRange != ship.opRange)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Range, delta > 0 ? 75f : 400f);
 
-                string newValues = "Potentials:";
-                foreach (var kvp in _AdjustHullStatsOptions)
-                {
-                    string val = null;
-                    switch (kvp.Key)
-                    {
-                        case AdjustHullStatsItem.Armor:
-                            val = $" A:{ship.armor[randomA]:F1}->{newArmor[randomA]:F1}";
-                            break;
-                        case AdjustHullStatsItem.Speed:
-                            val = $" S:{ship.speedMax:F1}->{newSpeed:F1}";
-                            break;
-                        case AdjustHullStatsItem.Range:
-                            val = $" R:{ship.opRange}->{newOpRange}";
-                            break;
-                        default:
-                            val = $" C:{ship.CurrentCrewQuarters}->{newQuarters}";
-                            break;
-                    }
-                    newValues += val;
-                }
-                Melon<UADRealismMod>.Logger.Msg(newValues);
+                //string newValues = "Potentials:";
+                //foreach (var kvp in _AdjustHullStatsOptions)
+                //{
+                //    string val = null;
+                //    switch (kvp.Key)
+                //    {
+                //        case AdjustHullStatsItem.Armor:
+                //            val = $" A:{ship.armor[randomA]:F1}->{newArmor[randomA]:F1}";
+                //            break;
+                //        case AdjustHullStatsItem.Speed:
+                //            val = $" S:{ship.speedMax:F1}->{newSpeed:F1}";
+                //            break;
+                //        case AdjustHullStatsItem.Range:
+                //            val = $" R:{ship.opRange}->{newOpRange}";
+                //            break;
+                //        default:
+                //            val = $" C:{ship.CurrentCrewQuarters}->{newQuarters}";
+                //            break;
+                //    }
+                //    newValues += val;
+                //}
+                //Melon<UADRealismMod>.Logger.Msg(newValues);
 
                 if (_AdjustHullStatsOptions.Count == 0)
                     return;
-
 
                 // We're going to replace entries we pull and use with "empty"
                 // so that we don't screw with our weights. (If we just removed items,
@@ -376,29 +418,24 @@ namespace UADRealism
                     {
                         case AdjustHullStatsItem.Speed:
                             ship.SetSpeedMax(newSpeed);
-                            Melon<UADRealismMod>.Logger.Msg($"Picked speed");
+                            //Melon<UADRealismMod>.Logger.Msg($"Picked speed");
                             break;
                         case AdjustHullStatsItem.Quarters:
                             ship.CurrentCrewQuarters = newQuarters;
-                            Melon<UADRealismMod>.Logger.Msg($"Picked quarters");
+                            //Melon<UADRealismMod>.Logger.Msg($"Picked quarters");
                             break;
                         case AdjustHullStatsItem.Range:
                             ship.SetOpRange(newOpRange);
-                            Melon<UADRealismMod>.Logger.Msg($"Picked range");
+                            //Melon<UADRealismMod>.Logger.Msg($"Picked range");
                             break;
                         default:
                             ship.SetArmor(newArmor);
-                            Melon<UADRealismMod>.Logger.Msg($"Picked armor");
+                            //Melon<UADRealismMod>.Logger.Msg($"Picked armor");
                             break;
                     }
-                    Melon<UADRealismMod>.Logger.Msg($"Checking: {ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
+                    //Melon<UADRealismMod>.Logger.Msg($"Checking: {ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
                     if (stopCondition())
                         return;
-
-                    // We have to manually reset this, since
-                    // we don't want to freshly clone all of ship.armor
-                    // every time.
-                    newArmor[randomA] = ship.armor[randomA];
                 }
             }
         }
@@ -435,7 +472,7 @@ namespace UADRealism
             if (part.isHull)
             {
                 var stats = ShipStats.GetScaledStats(ship);
-                float year = ShipM.GetYear(part);
+                float year = GetYear(part);
 
                 float tonnage = ship.Tonnage();
                 float hullTechMult = ship.TechR("hull");
@@ -486,7 +523,7 @@ namespace UADRealism
                 mat.name = "hull";
                 mat.mat = Ship.Mat.Hull;
                 mat.weight = steelweight;
-                mat.costMod = ship.TechCostMod(part) * Mathf.Lerp(1.55f, 12.5f, ship.Tonnage() / 150000f) * 0.0675f; // stock
+                mat.costMod = ship.TechCostMod(part) * Mathf.Lerp(1.55f, 12.5f, tonnage / 150000f) * 0.0675f; // stock
                 mats.Add(mat);
 
 
@@ -499,7 +536,7 @@ namespace UADRealism
                 mat.name = "engines";
                 mat.mat = Ship.Mat.Engine;
                 mat.weight = engineWeight;
-                mat.costMod = ship.TechR("engine_c") * Mathf.Lerp(1f, 12.5f, ship.Tonnage() / 150000f); // stock
+                mat.costMod = ship.TechR("engine_c") * Mathf.Lerp(1f, 12.5f, tonnage / 150000f); // stock
                 mats.Add(mat);
 
                 // Armor
@@ -534,7 +571,7 @@ namespace UADRealism
                 float beltC = armorC * ship.TechR("belt_c") * (1f / 0.75f); // back to face-harended
                 float deckC = armorC * ship.TechR("deck_c");
 
-                float armorBaseCost = Mathf.Lerp(5f, 11f, ship.Tonnage() / 200000f) * armorC;
+                float armorBaseCost = Mathf.Lerp(5f, 11f, tonnage / 200000f) * armorC;
 
                 float weightFaceHard = techArmor * techBelt * armorDensity;
                 float costFaceHard = armorBaseCost * beltC;
@@ -667,25 +704,25 @@ namespace UADRealism
                 float areaTDS = citadelLength * 2f * depthTDS;
                 const float maxTDSDensity = 0.2f;
                 const float maxTDSThickMult = 0.06f * 0.0254f;
-                float weightTDS = (volumeTDS * maxTDSDensity * modifiedHullTechMult + maxTDSThickMult * Mathf.Sqrt(ship.Tonnage()) * areaTDS * weightSTS) * weightMultTDS;
+                float weightTDS = (volumeTDS * maxTDSDensity * modifiedHullTechMult + maxTDSThickMult * Mathf.Sqrt(tonnage) * areaTDS * weightSTS) * weightMultTDS;
                 mat = new Ship.MatInfo();
                 mat.name = "antitorpedo";
                 mat.mat = Ship.Mat.AntiTorp;
                 mat.weight = weightTDS;
-                mat.costMod = 0.6f * Mathf.Lerp(1f, 3f, ship.Tonnage() / 100000f) + 0.4f * costSTS; // stock, but use STS cost too
+                mat.costMod = 0.6f * Mathf.Lerp(1f, 3f, tonnage / 100000f) + 0.4f * costSTS; // stock, but use STS cost too
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
                 mat.name = "op_range";
                 mat.mat = Ship.Mat.Fuel;
-                mat.weight = ship.Tonnage() * ShipStats.OpRangeToPct(ship.opRange);
+                mat.weight = tonnage * ShipStats.OpRangeToPct(ship.opRange);
                 mat.costMod = ship.TechR("fuel_c");
                 mats.Add(mat);
 
                 // Handle survivability mostly like stock
                 float survMinMult = MonoBehaviourExt.Param("w_survivability_min", 0f);
                 float survMaxMult = MonoBehaviourExt.Param("w_survivability_max", 10f);
-                float survWeight = modifiedHullTechMult * ship.Tonnage() * scantlingStrength
+                float survWeight = modifiedHullTechMult * tonnage * scantlingStrength
                     * 0.01f * Util.Remap((int)ship.survivability, (int)Ship.Survivability.VeryLow, (int)Ship.Survivability.VeryHigh, survMinMult, survMaxMult);
                 mat = new Ship.MatInfo();
                 mat.name = "survivability";
