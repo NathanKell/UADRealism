@@ -240,7 +240,7 @@ namespace UADRealism
         private static readonly List<Bounds> _sectionBounds = new List<Bounds>();
 
         private static readonly int _CameraLayerInt = LayerMask.NameToLayer("VisibilityFog_unused");
-        private const int _TextureRes = 512;
+        private const int _TextureRes = 256;
 
         private Camera _camera;
         private RenderTexture _renderTexture;

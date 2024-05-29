@@ -461,15 +461,12 @@ namespace UADRealism
             Patch_Ui._ShipForEnginePower = __instance;
         }
 
-        [HarmonyPostfix]
+        [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.EnginePower))]
-        internal static void Postfix_EnginePower(Ship __instance, ref float __result)
+        internal static bool Prefix_EnginePower(Ship __instance, ref float __result)
         {
-            float SHP = ShipStats.GetSHPRequired(__instance);
-            float ihpMult = ShipStats.GetEngineIHPMult(__instance);
-            float hp = SHP * ihpMult;
-            //Debug.Log($"SHP calc for {__instance.GetNameUI()}: {hp:N0} {(ihpMult == 1f ? "SHP" : "IHP")}, stock {__result:N0}");
-            __result = hp;
+            __result = ShipStats.GetHPRequired(__instance);
+            return false;
         }
 
         [HarmonyPrefix]
@@ -489,14 +486,36 @@ namespace UADRealism
         }
 
         [HarmonyPrefix]
-        [HarmonyPatch(nameof(Ship.PartMats))]
-        internal static bool Prefix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
+        [HarmonyPatch(nameof(Ship.GetEngineMatsWeightCalculateValue))]
+        internal static bool Prefix_GetEngineMatsWeightCalculateValue(Ship __instance, ref float __result)
         {
+            __result = ShipM.GetEngineMatsWeightCalculateValue(__instance, true);
+            return false;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.PartMats))]
+        internal static bool Prefix_PartMats(Ship __instance, PartData part, ref bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
+        {
+            // We'll always calc costs so we can cache results.
+            calcCosts = true;
+
+            // For now we only patch hull
             if (!part.isHull)
                 return true;
             
-            __result = ShipM.PartMats(__instance, part, calcCosts);
+            __result = ShipM.PartMats(__instance, part);
+            if (__instance.matsCache != null)
+                __instance.matsCache[__instance.hull] = __result;
             return false;
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.PartMats))]
+        internal static void Postfix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
+        {
+            if (__instance.matsCache != null)
+                __instance.matsCache[__instance.hull] = __result;
         }
 
         // This is used too many places to just patch one way.

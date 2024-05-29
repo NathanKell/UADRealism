@@ -466,7 +466,7 @@ namespace UADRealism
             return weight;
         }
 
-        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> PartMats(Ship ship, PartData part, bool calcCosts)
+        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> PartMats(Ship ship, PartData part)
         {
             Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats = new Il2CppSystem.Collections.Generic.List<Ship.MatInfo>();
             if (part.isHull)
@@ -739,9 +739,6 @@ namespace UADRealism
                 mats.Add(mat);
             }
 
-            foreach (var mat in mats)
-                mat.part = part;
-
             if (Ship.IsFlawsActive(ship))
             {
                 foreach (var mat in mats)
@@ -757,76 +754,62 @@ namespace UADRealism
                                 continue;
                             if (!ship.stats.TryGetValue(sData, out var sValue))
                                 continue;
-                            mat.weight = curWeight + sValue.basic * 0.01f * curWeight;
+
+                            float flawMult = 1f + sValue.basic * 0.01f;
+                            mat.weight = curWeight * flawMult;
+                            // Normalize cost to unflawed
+                            mat.costMod /= flawMult;
+                            // Increase cost slightly regardless of direction of flaw
+                            mat.costMod *= Mathf.Abs(flawMult - 1f) * 0.25f + 1f;
                         }
                     }
                 }
             }
-
-            if (calcCosts)
+            // We'll always calc costs
+            if (Ship.matCostsCache == null)
             {
-                if (Ship.matCostsCache == null)
-                {
-                    Ship.matCostsCache = new Il2CppSystem.Collections.Generic.Dictionary<Ship.Mat, float>();
+                Ship.matCostsCache = new Il2CppSystem.Collections.Generic.Dictionary<Ship.Mat, float>();
 
-                    float cSteel = MonoBehaviourExt.Param("price_steel", 53f);
-                    float cNickel = MonoBehaviourExt.Param("price_nickel", 1401f);
-                    float cChrome = MonoBehaviourExt.Param("price_chrome", 765f);
-                    float cMolyb = MonoBehaviourExt.Param("price_molybdenum", 9800f);
-                    float cCopper = MonoBehaviourExt.Param("price_copper", 583f);
-                    float cHull = MonoBehaviourExt.Param("price_hull", cSteel);
-                    float cSurv = MonoBehaviourExt.Param("price_surv", cSteel);
-                    float cArmor = MonoBehaviourExt.Param("price_armor", cSteel * 0.94f + cNickel * 0.04f + cChrome * 0.02f);
-                    float cTurret = MonoBehaviourExt.Param("price_turret", cSteel);
-                    float cBarrel = MonoBehaviourExt.Param("price_barrel", cSteel * 0.935f + cNickel * 0.04f + cChrome * 0.015f + cMolyb * 0.01f);
-                    float cEngine = MonoBehaviourExt.Param("price_engine", cSteel * 0.9f + cCopper * 0.1f);
-                    float cAntiTorp = MonoBehaviourExt.Param("price_anti_torp", cSteel);
-                    float cFuel = MonoBehaviourExt.Param("price_fuel", 0f);
-                    float cAmmo = MonoBehaviourExt.Param("price_ammo", 0f);
-                    float cTorp = MonoBehaviourExt.Param("price_torpedoes", 0f);
+                float cSteel = MonoBehaviourExt.Param("price_steel", 53f);
+                float cNickel = MonoBehaviourExt.Param("price_nickel", 1401f);
+                float cChrome = MonoBehaviourExt.Param("price_chrome", 765f);
+                float cMolyb = MonoBehaviourExt.Param("price_molybdenum", 9800f);
+                float cCopper = MonoBehaviourExt.Param("price_copper", 583f);
+                float cHull = MonoBehaviourExt.Param("price_hull", cSteel);
+                float cSurv = MonoBehaviourExt.Param("price_surv", cSteel);
+                float cArmor = MonoBehaviourExt.Param("price_armor", cSteel * 0.94f + cNickel * 0.04f + cChrome * 0.02f);
+                float cTurret = MonoBehaviourExt.Param("price_turret", cSteel);
+                float cBarrel = MonoBehaviourExt.Param("price_barrel", cSteel * 0.935f + cNickel * 0.04f + cChrome * 0.015f + cMolyb * 0.01f);
+                float cEngine = MonoBehaviourExt.Param("price_engine", cSteel * 0.9f + cCopper * 0.1f);
+                float cAntiTorp = MonoBehaviourExt.Param("price_anti_torp", cSteel);
+                float cFuel = MonoBehaviourExt.Param("price_fuel", 0f);
+                float cAmmo = MonoBehaviourExt.Param("price_ammo", 0f);
+                float cTorp = MonoBehaviourExt.Param("price_torpedoes", 0f);
 
-                    Ship.matCostsCache.Add(Ship.Mat.Raw, -1f);
-                    Ship.matCostsCache.Add(Ship.Mat.Steel, cSteel);
-                    Ship.matCostsCache.Add(Ship.Mat.Hull, cHull);
-                    Ship.matCostsCache.Add(Ship.Mat.Surv, cSurv);
-                    Ship.matCostsCache.Add(Ship.Mat.Armor, cArmor);
-                    Ship.matCostsCache.Add(Ship.Mat.Turret, cTurret);
-                    Ship.matCostsCache.Add(Ship.Mat.Barrel, cBarrel);
-                    Ship.matCostsCache.Add(Ship.Mat.Engine, cEngine);
-                    Ship.matCostsCache.Add(Ship.Mat.AntiTorp, cAntiTorp);
-                    Ship.matCostsCache.Add(Ship.Mat.Fuel, cFuel);
-                    Ship.matCostsCache.Add(Ship.Mat.Ammo, cAmmo);
-                    Ship.matCostsCache.Add(Ship.Mat.Torpedo, cTorp);
-                }
+                Ship.matCostsCache.Add(Ship.Mat.Raw, -1f);
+                Ship.matCostsCache.Add(Ship.Mat.Steel, cSteel);
+                Ship.matCostsCache.Add(Ship.Mat.Hull, cHull);
+                Ship.matCostsCache.Add(Ship.Mat.Surv, cSurv);
+                Ship.matCostsCache.Add(Ship.Mat.Armor, cArmor);
+                Ship.matCostsCache.Add(Ship.Mat.Turret, cTurret);
+                Ship.matCostsCache.Add(Ship.Mat.Barrel, cBarrel);
+                Ship.matCostsCache.Add(Ship.Mat.Engine, cEngine);
+                Ship.matCostsCache.Add(Ship.Mat.AntiTorp, cAntiTorp);
+                Ship.matCostsCache.Add(Ship.Mat.Fuel, cFuel);
+                Ship.matCostsCache.Add(Ship.Mat.Ammo, cAmmo);
+                Ship.matCostsCache.Add(Ship.Mat.Torpedo, cTorp);
+            }
 
-                foreach (var mat in mats)
-                {
-                    if (!Ship.matCostsCache.TryGetValue(mat.mat, out var cost))
-                        continue;
+            foreach (var mat in mats)
+            {
+                mat.part = part;
 
-                    mat.cost = cost * mat.weight * mat.costMod;
-                    if (!part.isHull)
-                        mat.cost *= part.costMod;
+                if (!Ship.matCostsCache.TryGetValue(mat.mat, out var cost))
+                    continue;
 
-                    if (Ship.IsFlawsActive(ship))
-                    {
-                        for (int i = 0; i < Ship.flawsDefectStats.Length; ++i)
-                        {
-                            Ship.FlawsStats flaw = Ship.flawsDefectStats[i];
-                            if (ship.IsThisShipIsFlawsDefects(mat.name, flaw))
-                            {
-                                float oldCost = mat.cost;
-                                ship.CStats();
-                                if (!G.GameData.stats.TryGetValue(flaw.ToString(), out var sData))
-                                    continue;
-                                if (!ship.stats.TryGetValue(sData, out var sValue))
-                                    continue;
-                                // This takes it back to what the weight would have been
-                                mat.cost = oldCost / (1 + sValue.basic * 0.01f);
-                            }
-                        }
-                    }
-                }
+                mat.cost = cost * mat.weight * mat.costMod;
+                if (!part.isHull)
+                    mat.cost *= part.costMod;
             }
             //foreach (var mat in mats)
             //{

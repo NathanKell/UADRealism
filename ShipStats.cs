@@ -206,7 +206,7 @@ namespace UADRealism
                     float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
                     var stats = GetScaledStats(hData, tng, 0, 0, sections);
                     float shpMult = GetHullFormSHPMult(data);
-                    float shp = GetSHPRequired(stats, data.speedLimiter * KnotsToMS, false) * shpMult;
+                    float shp = GetSHPRequired(stats, data.speedLimiter * KnotsToMS, false);
 #if LOGHULLSTATS
                     Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{shpMult:F2}");
 #endif
@@ -707,6 +707,8 @@ namespace UADRealism
             float shp = GetSHPRequired(GetScaledStats(ship), ship.speedMax);
             return shp * GetHullFormSHPMult(ship);
         }
+
+        public static float GetHPRequired(Ship ship) => GetSHPRequired(ship) * GetEngineIHPMult(ship);
 
 #if LOGSHP
         private static int _LastLogFrame = -1;
