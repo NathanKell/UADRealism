@@ -325,6 +325,33 @@ namespace UADRealism
 
         private static List<float> oldTurretArmors = new List<float>();
 
+        // We're going to use this to fix HP in CStats
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.CalcInstability))]
+        internal static void Prefix_CalcInstability(Ship __instance, bool force)
+        {
+            if (force)
+                return;
+
+            var fbSV = new Ship.StatValue();
+            fbSV.basic = Util.Remap(__instance.ModData().Freeboard, ShipData._MinFreeboard, ShipData._MaxFreeboard, 0f, 100f);
+            __instance.stats_[G.GameData.stats["freeboard"]] = fbSV;
+
+            // We're inside Ship.CStats and we just computed smoke_exhaust and fcap.
+            // But they use the stock HP calcs, bleh. So we recompute
+            __instance.stats_.TryGetValue(G.GameData.stats["fcap"], out var fcapSV);
+            if (fcapSV == null)
+                return;
+
+            __instance.stats_.TryGetValue(G.GameData.stats["smoke_exhaust"], out var smokeSV);
+            if (smokeSV == null)
+                return;
+
+            float hpTofcap = MonoBehaviourExt.Param("engine_hp_to_fcap", 0.001f);
+            float fcap = fcapSV.total;
+            smokeSV.basic = 100f * Mathf.Clamp(fcap / (hpTofcap * ShipStats.GetHPRequired(__instance)), 0f, 3f);
+        }
+
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.CalcInstability))]
         internal static void Postfix_CalcInstability(Ship __instance)

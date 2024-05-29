@@ -5383,4 +5383,6 @@ $Ui_EnginePower_SHP;SHP
 $Ui_EnginePower_kIHP;kIHP
 $Ui_EnginePower_kSHP;kSHP
 $Ui_Constr_FreeboardDP0Per1;Freeboard: {0}%{1}
-$tooltip_con_freeboard;*Freeboard*: The more freeboard a hull has, the better the ship will be at seakeeping and the drier the deck, particularly forward. High freeboard will decrease metastatic height, however, putting the ship at higher risk of capsizing from floading.
+$tooltip_con_freeboard;*Freeboard*: The more freeboard a hull has, the better the ship will be at seakeeping and the drier the deck, particularly forward. It will also increase the angle of heel required to capsize. High freeboard will decrease metacentric height, however, due to increased topweight, putting the ship at higher risk of capsizing from flooding.
+$Stats_name_freeboard;Freeboard
+$Stats_desc_freeboard;Freeboard has a major impact on seakeeping and dryness, leading to higher sustained speed in rough seas and lower accuracy penalties. It also increases the safe heeling angle. Freeboard also has a minor effect on hull weight and on metacentric height due to increased topweight.

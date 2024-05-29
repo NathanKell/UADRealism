@@ -289,19 +289,25 @@ namespace UADRealism
             // no need to recalc stats
             //ship.CStats();
             ship.ModData().SetFineness(val);
-            ship.RefreshHull(false); // let it figure out
+            if (ship.hull != null && ship.hull.middles != null && ship.ModData().SectionsFromFineness() != ship.hull.middles.Count)
+                ship.RefreshHull(false);
             // would change ship.stats[item]'s value here
             //ship.statEffectsCache.Clear();
         }
 
         private static void SetFreeboard(Ship ship, float val)
         {
-            // no need to recalc stats
-            //ship.CStats();
+            ship.CStats();
             ship.ModData().SetFreeboard(val);
+            if (ship.stats_.TryGetValue(G.GameData.stats["freeboard"], out var svFB))
+            {
+                svFB.basic = Util.Remap(val, ShipData._MinFreeboard, ShipData._MaxFreeboard, 0f, 100f);
+                if (ship.statEffectsCache != null)
+                    ship.statEffectsCache.Clear();
+            }
+            else
+                Debug.LogError("Didn't find stat `freeboard` in ship stats!");
             ship.RefreshHull(false); // let it figure out
-            // would change ship.stats[item]'s value here
-            //ship.statEffectsCache.Clear();
         }
 
         private static void UpdateSliders()
