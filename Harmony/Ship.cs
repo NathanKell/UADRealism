@@ -495,8 +495,22 @@ namespace UADRealism
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.PartMats))]
-        internal static bool Prefix_PartMats(Ship __instance, PartData part, ref bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
+        internal static bool Prefix_PartMats(Ship __instance, PartData part, ref bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result, out bool __state)
         {
+            // Always use cache if available
+            var cachedList = GetCachedPartMats(__instance, part);
+            if (cachedList != null)
+            {
+                __result = cachedList;
+                // Parts that are neither hull nor tower
+                // are often duplicated. So we'll update all parts
+                // sharing this data.
+                __state = !part.isHull && !part.isTowerAny;
+                return false;
+            }
+
+            __state = true;
+
             // We'll always calc costs so we can cache results.
             calcCosts = true;
 
@@ -505,17 +519,45 @@ namespace UADRealism
                 return true;
             
             __result = ShipM.PartMats(__instance, part);
-            if (__instance.matsCache != null)
-                __instance.matsCache[__instance.hull] = __result;
             return false;
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.PartMats))]
-        internal static void Postfix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result)
+        internal static void Postfix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result, bool __state)
         {
-            if (__instance.matsCache != null)
-                __instance.matsCache[__instance.hull] = __result;
+            if (__state)
+                CachePartMats(__instance, part, __result);
+        }
+
+        private static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> GetCachedPartMats(Ship ship, PartData data)
+        {
+            if (ship.matsCache == null)
+                return null;
+
+            foreach (var part in ship.matsCache.Keys)
+                if (part.data == data)
+                    return ship.matsCache[part];
+
+            return null;
+        }
+
+        private static void CachePartMats(Ship ship, PartData data, Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            if (data == ship.hull.data)
+            {
+                ship.matsCache[ship.hull] = mats;
+                return;
+            }
+
+            foreach (var part in ship.parts)
+            {
+                if (part.data == data)
+                    ship.matsCache[part] = mats;
+            }
         }
 
         // This is used too many places to just patch one way.
