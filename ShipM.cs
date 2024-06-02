@@ -738,6 +738,94 @@ namespace UADRealism
                 mat.costMod = 1f;
                 mats.Add(mat);
             }
+            else if (data.isBarbette)
+            {
+                if (ship.barbetteEmployedPartTemp == null)
+                    ship.barbetteEmployedPartTemp = new Il2CppSystem.Collections.Generic.List<Part>();
+                else
+                    ship.barbetteEmployedPartTemp.Clear();
+                ship.barbettePartTemp = null;
+                ship.barbetteArmorTempCalc = 0f;
+
+                List<Part> barbetteParts = new List<Part>();
+                ship.barbettePartTemp = null;
+                foreach (var p in ship.parts)
+                {
+                    if (!p.data.isBarbette || p.data != data)
+                        continue;
+                    if (p.mountBarbette == null)
+                        continue;
+                    if (p.mountBarbette.employedPart == null)
+                        continue;
+
+                    if (ship.barbettePartTemp == null)
+                        ship.barbettePartTemp = p;
+
+                    barbetteParts.Add(p);
+                }
+                foreach (var b in barbetteParts)
+                {
+                    foreach (var p in ship.parts)
+                    {
+                        if (!p.data.isGun)
+                            continue;
+
+                        if (0.2f < Mathf.Abs(p.transform.position.x - b.transform.position.x))
+                            continue;
+
+                        if ((data.size * 2f) > Mathf.Abs(p.transform.position.z - b.transform.position.z))
+                            ship.barbetteEmployedPartTemp.Add(p);
+                    }
+                }
+                float bWeight = 0f;
+                Part employedPart = null;
+                if (ship.barbettePartTemp == null)
+                {
+                    bWeight = ship.TechWeightMod(data) * data.weight;
+                }
+                else
+                {
+                    // This shouldn't happen, but stock checks
+                    if (ship.barbetteEmployedPartTemp == null)
+                    {
+                        if (ship.barbettePartTemp != null)
+                        {
+                            employedPart = ship.barbettePartTemp.mount.employedPart;
+                        }
+                        else
+                        {
+                            bWeight = data.weight;
+                        }
+                    }
+                    else
+                    {
+                        if (ship.barbetteEmployedPartTemp.Count > 0)
+                        {
+                            float gunArmor = 0f;
+                            foreach (var g in ship.barbetteEmployedPartTemp)
+                            {
+                                var ga = ship.GetGunArmor(g);
+                                if (ga.barbetteArmor > gunArmor)
+                                    gunArmor = ga.barbetteArmor;
+                            }
+                            employedPart = ship.barbetteEmployedPartTemp[0];
+                        }
+                        else
+                        {
+                            if (ship.barbettePartTemp != null)
+                            {
+                                employedPart = ship.barbettePartTemp.mount.employedPart;
+                            }
+                        }
+                    }
+                }
+                if (employedPart != null)
+                {
+                    var ga = ship.GetGunArmor(employedPart);
+                    ship.barbetteArmorTempCalc = ga.barbetteArmor;
+
+                }
+            }
 
             if (Ship.IsFlawsActive(ship))
             {
