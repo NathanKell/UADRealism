@@ -84,6 +84,8 @@ namespace UADRealism
                 // Let's reget each time just in case.
                 kvp.Value.statsx.Add(__instance.stats["freeboard"], 0f);
             }
+
+            Database.FillDatabase();
         }
     }
 }

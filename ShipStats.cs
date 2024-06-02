@@ -234,7 +234,7 @@ namespace UADRealism
                 if (sMax > 33f && (hull.shipType.name != "dd" && hull.shipType.name != "tb"))
                     sMax = 33f;
 
-                float year = ShipM.GetYear(hull);
+                float year = Database.GetYear(hull);
                 if (year < 0f)
                     year = 1915f;
 
@@ -529,7 +529,7 @@ namespace UADRealism
             float divisor = 0f;
             foreach (var hull in hData._hulls)
             {
-                float hYear = ShipM.GetYear(hull);
+                float hYear = Database.GetYear(hull);
                 if (hYear < 0f)
                     continue;
 
@@ -554,7 +554,7 @@ namespace UADRealism
         public const float DefaultBdivT = 2.9f;
 
         public static float GetDesiredLdivB(Ship ship, float BdivT)
-            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, ShipM.GetYear(ship.hull.data));
+            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, Database.GetYear(ship.hull.data));
 
         public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
         {
@@ -891,7 +891,7 @@ namespace UADRealism
             float fuelTech = ship.TechR("fuel");
             float effTech = ship.TechA("fuel_eff");
             float statRange = ship.StatEffectPrivate("operating_range");
-            float year = ShipM.GetYear(ship.hull.data);
+            float year = Database.GetYear(ship.hull.data);
             return GetRange(GetScaledStats(ship), GetHullFormSHPMult(ship), GetEngineIHPMult(ship),
                 // TODO: handle TB/DD differently?
                 Mathf.Min(ship.speedMax, (year > 1920f ? Util.Remap(year, 1920f, 1930f, 12f, 15f, true) : Util.Remap(year, 1890f, 1910f, 10f, 12f, true)) * KnotsToMS),

@@ -45,63 +45,6 @@ namespace UADRealism
                 ship.RefreshHull(false);
         }
 
-        private static float[] turretBarrelCountWeightMults = new float[5];
-        private static float GetTurretBaseWeight(Ship ship, PartData data)
-        {
-            turretBarrelCountWeightMults[1] = 1f;
-            turretBarrelCountWeightMults[1] = G.GameData.Param("w_turret_barrels_2", 1.8f);
-            turretBarrelCountWeightMults[2] = G.GameData.Param("w_turret_barrels_3", 2.48f);
-            turretBarrelCountWeightMults[3] = G.GameData.Param("w_turret_barrels_4", 3.1f);
-            turretBarrelCountWeightMults[4] = G.GameData.Param("w_turret_barrels_5", 3.6f);
-
-            var gunData = G.GameData.GunData(data);
-            float baseWeight = gunData.BaseWeight(ship, data);
-            float techWeightMod = ship.TechWeightMod(data);
-            // This is just used for cost
-            //var tc = Patch_GunData.FindMatchingTurretCaliber(ship, data);
-            //float minLengthParam, techLengthLimit;
-            //if (data.GetCaliberInch() > 2f)
-            //{
-            //    minLengthParam = G.GameData.Param("min_gun_length_mod", -20f);
-            //    techLengthLimit = ship.TechMax("tech_gun_length_limit");
-            //}
-            //else
-            //{
-            //    minLengthParam = G.GameData.Param("min_casemate_length_mod", -10f);
-            //    techLengthLimit = isCasemate ? ship.TechMax("tech_gun_length_limit_casemates") : ship.TechMax("tech_gun_length_limit_small");
-            //}
-
-            float barrelMult = turretBarrelCountWeightMults[Util.Clamp(data.barrels - 1, 0, 4)];
-            float casemateMult = data.mounts.Contains("casemate") ? MonoBehaviourExt.Param("w_turret_casemate_mod", 0.75f) : 1f;
-            float turretWeight = baseWeight * techWeightMod * barrelMult * casemateMult;
-            return turretWeight;
-        }
-
-        private static float BarbetteWeight(Ship ship, Part part, PartData data)
-        {
-            Ship.TurretArmor armorData = null;
-            bool isCasemate = Ship.IsCasemateGun(data);
-            foreach (var ta in ship.shipTurretArmor)
-            {
-                if (ta.turretPartData.GetCaliber() == data.GetCaliber() && ta.isCasemateGun == isCasemate)
-                {
-                    armorData = ta;
-                    break;
-                }
-            }
-
-            if (armorData == null)
-                return 0f;
-
-
-
-            float thickLerp = Mathf.Lerp(1.0f, 3.0f, (armorData.barbetteArmor / 25.4f) / 15.0f);
-            float weightParam = MonoBehaviourExt.Param("w_armor_barbette_turret", 0.029999999f);
-            float tech = ship.TechR("armor");
-            float weight = armorData.barbetteArmor * thickLerp / 25.4f * weightParam * GetTurretBaseWeight(ship, data) * tech;
-            return weight;
-        }
-
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorReduce = GenerateAdjustArmorPriorities(false);
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorIncrease = GenerateAdjustArmorPriorities(true);
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorLocal = new Dictionary<Ship.A, float>();
@@ -466,13 +409,104 @@ namespace UADRealism
             return weight;
         }
 
-        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> PartMats(Ship ship, PartData part)
+        private static float[] _TurretBarrelCountWeightMults = null;
+
+        private static float GetTurretBarrelWeightMult(PartData data)
+        {
+            if (_TurretBarrelCountWeightMults == null)
+            {
+                _TurretBarrelCountWeightMults = new float[5];
+                _TurretBarrelCountWeightMults[0] = 1f;
+                _TurretBarrelCountWeightMults[1] = MonoBehaviourExt.Param("w_turret_barrels_2", 1.8f);
+                _TurretBarrelCountWeightMults[2] = MonoBehaviourExt.Param("w_turret_barrels_3", 2.48f);
+                _TurretBarrelCountWeightMults[3] = MonoBehaviourExt.Param("w_turret_barrels_4", 3.1f);
+                _TurretBarrelCountWeightMults[4] = MonoBehaviourExt.Param("w_turret_barrels_5", 3.6f);
+            }
+
+            return _TurretBarrelCountWeightMults[Util.Clamp(data.barrels - 1, 0, 4)];
+        }
+
+        public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
+        {
+            bool isCasemate = Ship.IsCasemateGun(data);
+            foreach (var ta in ship.shipTurretArmor)
+                if (ta.turretPartData.caliber == data.caliber && ta.isCasemateGun == isCasemate)
+                    return ta;
+
+            return null;
+        }
+
+        public static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData data)
+        {
+            bool isCasemate = Ship.IsCasemateGun(data);
+            foreach (var tc in ship.shipGunCaliber)
+                if (tc.turretPartData.caliber == data.caliber && isCasemate == tc.isCasemateGun)
+                    return tc;
+
+            return null;
+        }
+
+        private const float _TurretLengthMult = 1.55f;
+        private const float _TurretCalBigExp = 0.65f;
+        private const float _TurretCalSmallExp = 1.5f;
+        // Normalized to Iowa 16in/50
+        private static readonly float _TurretCalBigMult = 15.44f / (Mathf.Pow(16f * 25.4f, _TurretCalBigExp) * _TurretLengthMult * TurretBarrelsLengthHeightMult(3f));
+        private static readonly float _TurretCalSmallMult = Mathf.Pow(6f * 25.4f, _TurretCalBigExp) * _TurretCalBigMult / Mathf.Pow(6f * 25.4f, _TurretCalSmallExp);
+        private const float _TurretBarrelsWidthPow = 0.4f;
+        private static readonly float _TurretCalBarrelsWidthOffset = 1f - Mathf.Pow(2f, _TurretBarrelsWidthPow);
+
+        public static float TurretBaseWidth(float cal, float year)
+            => Mathf.Lerp(Mathf.Pow(cal, _TurretCalSmallExp) * _TurretCalSmallMult * Util.Remap(year, 1900f, 1930f, 0.5f, 1f, true),
+                Mathf.Pow(cal, _TurretCalBigExp) * _TurretCalBigMult, Mathf.InverseLerp(6f * 25.4f, 7f * 25.4f, cal));
+
+        public static float TurretBaseHeight(float cal)
+            => (Mathf.Pow(cal, 0.35f) * 0.12f + 1.8f) * (cal < 5f * 25.4f ? cal * (1f / (5f * 25.4f)) : 1f);
+
+        public static float TurretBarrelsWidthMult(float barrelsF)
+            => Mathf.Pow(barrelsF, _TurretBarrelsWidthPow) + _TurretCalBarrelsWidthOffset;
+
+        public static float TurretBarrelsLengthHeightMult(float barrelsF)
+            => Mathf.Pow(barrelsF, 0.125f);
+
+        private struct BarbetteData
+        {
+            public float _width;
+            public float _turretWeight;
+            public float _armor;
+        }
+
+        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> PartMats(Ship ship, PartData data)
         {
             Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats = new Il2CppSystem.Collections.Generic.List<Ship.MatInfo>();
-            if (part.isHull)
+
+            // Armor vars are used in multiple cases so we have to declare here.
+            float weightFaceHard = 0f, costFaceHard = 0f, weightSTS = 0f, costSTS = 0f;
+
+            if (data.isHull || data.isGun)
+            {
+                const float armorDensity = 7.86f; // grams / cubic centimeter or tonnes / cubic meter
+                float techArmor = ship.TechR("armor");
+                float techBelt = ship.TechR("belt");
+                float techDeck = ship.TechR("deck");
+                techArmor = Util.Remap(techArmor, 0.75f, 1.25f, 0.96f, 1.06f);
+                techBelt = Util.Remap(techBelt, 0.75f, 1.25f, 0.96f, 1.06f);
+                techDeck = Util.Remap(techDeck, 0.75f, 1.25f, 0.96f, 1.06f);
+                float armorC = ship.TechR("armor_c") * 0.75f; // STS rather than face-hardened
+                float beltC = ship.TechR("belt_c") * (1f / 0.75f); // back to face-harended
+                float deckC = ship.TechR("deck_c");
+
+                float armorBaseCost = Mathf.Lerp(5f, 11f, ship.Tonnage() / 200000f) * armorC;
+
+                weightFaceHard = techArmor * techBelt * armorDensity * 0.001f;
+                costFaceHard = armorBaseCost * beltC;
+                weightSTS = techArmor * techDeck * armorDensity * 0.001f;
+                costSTS = armorBaseCost * deckC;
+            }
+
+            if (data.isHull)
             {
                 var stats = ShipStats.GetScaledStats(ship);
-                float year = GetYear(part);
+                float year = Database.GetYear(data);
 
                 float tonnage = ship.Tonnage();
                 float hullTechMult = ship.TechR("hull");
@@ -498,7 +532,7 @@ namespace UADRealism
                         scantlingStrength = scantlingBB;
                         break;
                     case "cl":
-                        scantlingStrength = part.nameUi.Contains("Semi-") ? scantlingCruiser : Util.Remap(year, 1890f, 1920f, scantlingCL, scantlingCruiser, true);
+                        scantlingStrength = data.nameUi.Contains("Semi-") ? scantlingCruiser : Util.Remap(year, 1890f, 1920f, scantlingCL, scantlingCruiser, true);
                         break;
                     case "ca":
                         scantlingStrength = Util.Remap(year, 1910f, 1925f, scantlingACR, scantlingCruiser, true);
@@ -524,7 +558,7 @@ namespace UADRealism
                 mat.name = "hull";
                 mat.mat = Ship.Mat.Hull;
                 mat.weight = steelweight;
-                mat.costMod = ship.TechCostMod(part) * Mathf.Lerp(1.55f, 12.5f, tonnage / 150000f) * 0.0675f; // stock
+                mat.costMod = ship.TechCostMod(data) * Mathf.Lerp(1.55f, 12.5f, tonnage / 150000f) * 0.0675f; // stock
                 mats.Add(mat);
 
 
@@ -554,7 +588,7 @@ namespace UADRealism
                 halfCirc = 0.8f * halfCirc + 0.2f * cornerCirc;
                 const float ellipseCwp = Mathf.PI / 4f;
                 float shipSideLength = stats.Cwp > ellipseCwp ? Util.Remap(stats.Cwp, ellipseCwp, 1f, halfCirc, cornerCirc)
-                    : Util.Remap(stats.Cwp, 0.5f, ellipseCwp, Mathf.Sqrt(a*a + b*b) * 2f, halfCirc, true);
+                    : Util.Remap(stats.Cwp, 0.5f, ellipseCwp, Mathf.Sqrt(a * a + b * b) * 2f, halfCirc, true);
                 float armorCitadelLength = citadelLength * shipSideLength / stats.Lwl;
                 armorCitadelLength = Mathf.Clamp(armorCitadelLength, 0.2f * shipSideLength, 0.8f * shipSideLength); // sanity
                 float armorExtLength = shipSideLength - armorCitadelLength;
@@ -562,24 +596,6 @@ namespace UADRealism
                 if (bowRatio < 0.1f)
                     bowRatio = 0.1f;
                 bowRatio = bowRatio / (bowRatio + Mathf.Abs(ship.hullPartMinZ - ship.GetDynamicCitadelMinZ()));
-                const float armorDensity = 7.86f; // grams / cubic centimeter or tonnes / cubic meter
-
-                float techArmor = ship.TechR("armor");
-                float techBelt = ship.TechR("belt");
-                float techDeck = ship.TechR("deck");
-                techArmor = Util.Remap(techArmor, 0.75f, 1.25f, 0.96f, 1.06f);
-                techBelt = Util.Remap(techBelt, 0.75f, 1.25f, 0.96f, 1.06f);
-                techDeck = Util.Remap(techDeck, 0.75f, 1.25f, 0.96f, 1.06f);
-                float armorC = ship.TechR("armor_c") * 0.75f; // STS rather than face-hardened
-                float beltC = ship.TechR("belt_c") * (1f / 0.75f); // back to face-harended
-                float deckC = ship.TechR("deck_c");
-
-                float armorBaseCost = Mathf.Lerp(5f, 11f, tonnage / 200000f) * armorC;
-
-                float weightFaceHard = techArmor * techBelt * armorDensity * 0.001f;
-                float costFaceHard = armorBaseCost * beltC;
-                float weightSTS = techArmor * techDeck * armorDensity * 0.001f;
-                float costSTS = armorBaseCost * deckC;
 
                 // Belt
                 mat = new Ship.MatInfo();
@@ -738,93 +754,265 @@ namespace UADRealism
                 mat.costMod = 1f;
                 mats.Add(mat);
             }
-            else if (data.isBarbette)
+            else if (data.isGun)
             {
-                if (ship.barbetteEmployedPartTemp == null)
-                    ship.barbetteEmployedPartTemp = new Il2CppSystem.Collections.Generic.List<Part>();
-                else
-                    ship.barbetteEmployedPartTemp.Clear();
-                ship.barbettePartTemp = null;
-                ship.barbetteArmorTempCalc = 0f;
+                ship.CheckCaliberOnShip();
 
-                List<Part> barbetteParts = new List<Part>();
-                ship.barbettePartTemp = null;
-                foreach (var p in ship.parts)
+                var gunData = G.GameData.GunData(data);
+                float baseWeight = gunData.BaseWeight(ship, data);
+                float techWeightMod = ship.TechWeightMod(data);
+                var tc = FindMatchingTurretCaliber(ship, data);
+                float minLengthParam, maxLengthParam, techLengthLimit;
+                bool isCasemate = Ship.IsCasemateGun(data);
+                // Stock is weird here, it uses casemate params in wrong place.
+                if (isCasemate)
                 {
-                    if (!p.data.isBarbette || p.data != data)
-                        continue;
-                    if (p.mountBarbette == null)
-                        continue;
-                    if (p.mountBarbette.employedPart == null)
-                        continue;
-
-                    if (ship.barbettePartTemp == null)
-                        ship.barbettePartTemp = p;
-
-                    barbetteParts.Add(p);
-                }
-                foreach (var b in barbetteParts)
-                {
-                    foreach (var p in ship.parts)
-                    {
-                        if (!p.data.isGun)
-                            continue;
-
-                        if (0.2f < Mathf.Abs(p.transform.position.x - b.transform.position.x))
-                            continue;
-
-                        if ((data.size * 2f) > Mathf.Abs(p.transform.position.z - b.transform.position.z))
-                            ship.barbetteEmployedPartTemp.Add(p);
-                    }
-                }
-                float bWeight = 0f;
-                Part employedPart = null;
-                if (ship.barbettePartTemp == null)
-                {
-                    bWeight = ship.TechWeightMod(data) * data.weight;
+                    minLengthParam = MonoBehaviourExt.Param("min_casemate_length_mod", -10f);
+                    maxLengthParam = MonoBehaviourExt.Param("max_casemate_length_mod", 10f);
+                    techLengthLimit = ship.TechMax("tech_gun_length_limit_casemates", maxLengthParam);
                 }
                 else
                 {
-                    // This shouldn't happen, but stock checks
-                    if (ship.barbetteEmployedPartTemp == null)
+                    minLengthParam = MonoBehaviourExt.Param("min_gun_length_mod", -20f);
+                    maxLengthParam = MonoBehaviourExt.Param("max_gun_length_mod", 20f);
+                    techLengthLimit = data.GetCaliberInch() > 2f ? ship.TechMax("tech_gun_length_limit", maxLengthParam) : ship.TechMax("tech_gun_length_limit_small", maxLengthParam);
+                }
+
+                float barrelMult = GetTurretBarrelWeightMult(data);
+                float casemateMult = isCasemate ? MonoBehaviourExt.Param("w_turret_casemate_mod", 0.75f) : 1f;
+                float turretWeight = baseWeight * techWeightMod * barrelMult * casemateMult;
+
+                float costMod = ship.TechCostMod(data);
+                // To avoid the weird effect (seen in stock) of making guns cheaper over time,
+                // we split this remap in half.
+                if (tc != null)
+                    costMod += tc.length > 0f ?
+                        Util.Remap(tc.length, 0f, techLengthLimit, 0f, MonoBehaviourExt.Param("gun_length_extra_cost_max", 0.3f))
+                        : Util.Remap(tc.length, minLengthParam, 0f, MonoBehaviourExt.Param("gun_length_extra_cost_min", -0.2f), 0f);
+
+                var mat = new Ship.MatInfo();
+                mat.name = "turret";
+                mat.mat = Ship.Mat.Turret;
+                mat.weight = turretWeight;
+                mat.costMod = costMod;
+                mats.Add(mat);
+
+                int gunGrade = ship.TechGunGrade(data, true);
+                float barrelWeight = gunData.BarrelWeight(ship, data, gunGrade);
+                float barrelsF = (float)data.barrels;
+                mat = new Ship.MatInfo();
+                mat.name = "turret_barrels";
+                mat.weight = data.barrels * barrelWeight;
+                mat.mat = Ship.Mat.Barrel;
+                mat.costMod = costMod;
+                mats.Add(mat);
+
+                var ta = ship.GetGunArmor(null, data, null);
+                if (ta != null)
+                {
+                    float cal = data.caliber;
+                    if (tc != null)
+                        cal += tc.diameter;
+                    float aTop, aFace, aSides;
+                    string sideMat;
+                    string topMat;
+                    float barrelWidthMult;
+                    float gunYear = Database.GetGunYear(Mathf.RoundToInt(data.caliber * (1f / 25.4f)), gunGrade);
+                    float barbetteWidth = TurretBaseWidth(cal, gunYear);
+                    if (isCasemate)
                     {
-                        if (ship.barbettePartTemp != null)
-                        {
-                            employedPart = ship.barbettePartTemp.mount.employedPart;
-                        }
-                        else
-                        {
-                            bWeight = data.weight;
-                        }
+                        cal *= 0.001f;
+                        aFace = 360f * cal; // i.e. faceplate 33x wide, 11x tall the caliber
+                        aTop = aFace * 2.5f;
+                        aSides = 0f;
+                        sideMat = "casemate_gun_side_armor_weight_threshold";
+                        topMat = "casemate_gun_top_armor_weight_threshold";
+                        barrelWidthMult = 1f;
                     }
                     else
                     {
-                        if (ship.barbetteEmployedPartTemp.Count > 0)
+                        // hacky guesstimate of turret top and turret sides
+                        float calInch = cal * (1f / 25.4f);
+                        bool isSmall = cal < 25.4f * 7f;
+                        bool isCyl = !isSmall && gunYear < 1900;
+                        barrelWidthMult = TurretBarrelsWidthMult(barrelsF);
+                        bool isMain = ship.IsMainCal(data);
+                        if (isMain)
                         {
-                            float gunArmor = 0f;
-                            foreach (var g in ship.barbetteEmployedPartTemp)
-                            {
-                                var ga = ship.GetGunArmor(g);
-                                if (ga.barbetteArmor > gunArmor)
-                                    gunArmor = ga.barbetteArmor;
-                            }
-                            employedPart = ship.barbetteEmployedPartTemp[0];
+                            sideMat = "armor_turret";
+                            topMat = "armor_turret_top";
                         }
                         else
                         {
-                            if (ship.barbettePartTemp != null)
-                            {
-                                employedPart = ship.barbettePartTemp.mount.employedPart;
-                            }
+                            sideMat = "small_gun_side_armor_weight_threshold";
+                            topMat = "small_gun_top_armor_weight_threshold";
+                        }
+                        if (isCyl)
+                        {
+                            float radius = 0.25f + cal * 0.013f * barrelWidthMult;
+                            aTop = Mathf.PI * radius * radius;
+                            float sidesArea = Mathf.PI * radius * 2f * (cal * 12f);
+                            aFace = 0.25f * sidesArea;
+                            aSides = sidesArea - aFace;
+                            barbetteWidth *= barrelWidthMult;
+                        }
+                        else
+                        {
+                            float barrelScale = TurretBarrelsLengthHeightMult(barrelsF);
+                            float length = barrelScale * 1.55f * barbetteWidth;
+                            float height = barrelScale * TurretBaseHeight(cal);
+                            barbetteWidth *= barrelWidthMult;
+
+                            float frontSlopeMult = Util.Remap(gunYear, 1895f, 1925f, 1f, 1.25f, true);
+
+                            aTop = barbetteWidth * length;
+                            aFace = frontSlopeMult * barbetteWidth * height;
+                            aSides = barbetteWidth * height + length * 2f * height;
+                            aSides *= GetSideArmorRatio(gunYear, cal); // small guns have only face shields, and some guns have open backs.
                         }
                     }
-                }
-                if (employedPart != null)
-                {
-                    var ga = ship.GetGunArmor(employedPart);
-                    ship.barbetteArmorTempCalc = ga.barbetteArmor;
 
+                    aFace *= 1f - barrelWidthMult * 0.1f; // gunports
+
+                    // The game makes a distinction here between small guns and big guns
+                    // (i.e. ACR/BB/BC grade and smaller). We don't, because armor is armor.
+
+                    mat = new Ship.MatInfo();
+                    mat.name = sideMat;
+                    mat.mat = Ship.Mat.Armor;
+                    mat.weight = (aFace * weightFaceHard + aSides * weightSTS) * ta.sideTurretArmor;
+                    mat.costMod = (aFace * costFaceHard + aSides * costSTS) / (aFace + aSides);
+                    mats.Add(mat);
+
+                    mat = new Ship.MatInfo();
+                    mat.name = topMat;
+                    mat.mat = Ship.Mat.Armor;
+                    mat.weight = aTop * weightSTS * ta.topTurretArmor;
+                    mat.costMod = costSTS;
+                    mats.Add(mat);
+
+                    float totalBarbWeight = 0f;
+                    int totalParts = 0;
+                    foreach (var p in ship.parts)
+                    {
+                        if (p.data != data)
+                            continue;
+
+                        ++totalParts;
+                        float barbHeight = ship.hull.transform.InverseTransformPoint(p.transform.position).z;
+                        float barbArea = barbHeight * Mathf.PI * barbetteWidth * (0.5f + 0.25f * 0.75f + 0.25f * 0.5f);
+                        totalBarbWeight += barbArea * weightFaceHard * ta.barbetteArmor;
+                    }
+                    mat = new Ship.MatInfo();
+                    mat.name = "armor_turret_barbette";
+                    mat.mat = Ship.Mat.Armor;
+                    mat.weight = totalBarbWeight / (float)totalParts;
+                    mat.costMod = costFaceHard;
+                    mats.Add(mat);
                 }
+
+                float ammoAmount = gunData.ammo * ship.TechA("ammo_amount");
+                mat = new Ship.MatInfo();
+                mat.name = "ammo";
+                mat.mat = Ship.Mat.Ammo;
+                mat.weight = ammoAmount * Part.AvgShellWeight(gunData, data, ship);
+                mat.costMod = ship.ShellCost(data);
+            }
+            else if (data.isBarbette)
+            {
+                List<Part> barbettePartsOfData = new List<Part>();
+                foreach (var p in ship.parts)
+                    if (p.data == data)
+                        barbettePartsOfData.Add(p);
+
+                // failure case
+                if (barbettePartsOfData.Count == 0)
+                {
+                    var mat = new Ship.MatInfo();
+                    mat.name = "barbette";
+                    mat.mat = Ship.Mat.Hull;
+                    mat.weight = ship.TechWeightMod(data) * data.weight;
+                    mat.cost = ship.TechCostMod(data) * data.cost;
+                    mats.Add(mat);
+                }
+                else
+                {
+                    Dictionary<PartData, BarbetteData> gunTurretWeights = new Dictionary<PartData, BarbetteData>();
+                    float totalWeight = 0f;
+                    float totalCost = 0f;
+                    foreach (var b in barbettePartsOfData)
+                    {
+                        var mounts = b.GetComponentsInChildren<Mount>();
+                        float barbetteZ = ship.hull.transform.InverseTransformPoint(b.transform.position).z;
+                        foreach (var m in mounts)
+                        {
+                            if (m == null)
+                                continue;
+                            if (!m.barbette)
+                                continue;
+                            if (m.employedPart == null || !m.employedPart.data.isGun)
+                                continue;
+
+                            if (!gunTurretWeights.TryGetValue(m.employedPart.data, out var bData))
+                            {
+                                float tWeight = 0f;
+                                var gMats = ship.PartMats(m.employedPart.data, true);
+                                foreach (var mt in gMats)
+                                {
+                                    if (mt.name == "ammo" || mt.name == "armor_turret_barbette")
+                                        continue;
+                                    tWeight += mt.weight;
+                                }
+                                float cal = m.employedPart.data.caliber;
+                                int gunYear = Database.GetGunYear(Mathf.RoundToInt(cal * (1f / 25.4f)), ship.TechGunGrade(m.employedPart.data));
+                                var tc = FindMatchingTurretCaliber(ship, m.employedPart.data);
+                                if (tc != null)
+                                    cal += tc.diameter;
+                                float barbetteWidth = TurretBaseWidth(cal, gunYear) * TurretBarrelsWidthMult(m.employedPart.data.barrels);
+                                var ga = ship.GetGunArmor(m.employedPart);
+                                bData = new BarbetteData()
+                                {
+                                    _width = barbetteWidth,
+                                    _turretWeight = tWeight,
+                                    _armor = ga.barbetteArmor
+                                };
+                                gunTurretWeights.Add(m.employedPart.data, bData);
+                            }
+                            float barbHeight = Math.Max(0f, ship.hull.transform.InverseTransformPoint(m.employedPart.transform.position).z - barbetteZ);
+                            float structWeight = (1f + barbHeight / bData._width * 0.5f) * bData._turretWeight * 0.05f;
+                            totalWeight += structWeight;
+                            totalCost += b.data.cost + structWeight * 100f;
+                            // Don't add armor here, we do it all on the guns.
+                        }
+                    }
+                    float recip = 1f / barbettePartsOfData.Count;
+                    var mat = new Ship.MatInfo();
+                    mat.name = "barbette";
+                    mat.mat = Ship.Mat.Hull;
+                    mat.weight = totalWeight * recip * ship.TechWeightMod(data);
+                    mat.cost = totalCost * recip * ship.TechCostMod(data);
+                    mats.Add(mat);
+                }
+            }
+            else if (data.isTorpedo)
+            {
+                var torpData = G.GameData.TorpedosData(data);
+                var torpMult = G.GameData.GetTorpedosDataValue(data, 0f, ship);
+                var mat = new Ship.MatInfo();
+                mat.name = "torpedo";
+                mat.weight = torpData.baseTorpWeight * torpMult * ship.TechWeightMod(data);
+                mat.mat = Ship.Mat.Torpedo;
+                mat.costMod = torpData.baseTorpCost * torpMult * ship.TechCostMod(data);
+                mats.Add(mat);
+            }
+            else
+            {
+                var mat = new Ship.MatInfo();
+                mat.name = "part";
+                mat.weight = data.weight * ship.TechWeightMod(data);
+                mat.mat = Ship.Mat.Raw;
+                mat.costMod = 1f;
+                mats.Add(mat);
             }
 
             if (Ship.IsFlawsActive(ship))
@@ -890,14 +1078,14 @@ namespace UADRealism
 
             foreach (var mat in mats)
             {
-                mat.part = part;
+                mat.part = data;
 
                 if (!Ship.matCostsCache.TryGetValue(mat.mat, out var cost))
                     continue;
-
-                mat.cost = cost * mat.weight * mat.costMod;
-                if (!part.isHull)
-                    mat.cost *= part.costMod;
+                if (mat.cost == 0f)
+                    mat.cost = cost * mat.weight * mat.costMod;
+                if (!data.isHull && mat.mat != Ship.Mat.Armor)
+                    mat.cost *= data.costMod;
             }
             //foreach (var mat in mats)
             //{
@@ -905,6 +1093,17 @@ namespace UADRealism
             //}
 
             return mats;
+        }
+
+        public static float GetSideArmorRatio(float gunYear, float gunCaliber)
+        {
+            if (gunCaliber >= 6f * 25.4f)
+                return 1f;
+
+            if (gunCaliber < 4f * 25.4f)
+                return 0f;
+
+            return Util.Remap(gunCaliber, 4f * 25.4f, 6f * 25.4f, Util.Remap(gunYear, 1910f, 1940f, 0.125f, 1f, true), Util.Remap(gunYear, 1890f, 1920f, 0.25f, 1f, true));
         }
 
         public static bool IsPartAllowedNoTech(PartData hull, ShipType sType, PartData part)
@@ -984,28 +1183,6 @@ namespace UADRealism
             //}
 
             return true;
-        }
-
-        public static float GetYear(PartData hull)
-        {
-            foreach (var tech in G.GameData.technologies)
-            {
-                if (!tech.Value.effects.TryGetValue("unlock", out var eff))
-                    continue;
-
-                foreach (var lst in eff)
-                {
-                    foreach (var item in lst)
-                    {
-                        if (item == hull.name)
-                        {
-                            return tech.value.year;
-                        }
-                    }
-                }
-            }
-
-            return -1f;
         }
 
         public static ShipData ModData(this Ship ship)

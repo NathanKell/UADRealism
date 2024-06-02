@@ -510,13 +510,6 @@ namespace UADRealism
             }
 
             __state = true;
-
-            // We'll always calc costs so we can cache results.
-            calcCosts = true;
-
-            // For now we only patch hull
-            if (!part.isHull)
-                return true;
             
             __result = ShipM.PartMats(__instance, part);
             return false;

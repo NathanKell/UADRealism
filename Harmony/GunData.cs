@@ -39,22 +39,6 @@ namespace UADRealism
             return newExtraDiam * 25.4f;
         }
 
-        internal static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData partData)
-        {
-            bool isCasemate = Ship.IsCasemateGun(partData);
-            Ship.TurretCaliber tc = null;
-            foreach (var cal in ship.shipGunCaliber)
-            {
-                if (cal.turretPartData.GetCaliberInch() == partData.GetCaliberInch() && isCasemate == cal.isCasemateGun)
-                {
-                    tc = cal;
-                    break;
-                }
-            }
-
-            return tc;
-        }
-
         private static GunData GetOtherCaliberData(PartData partData, Ship.TurretCaliber tc)
         {
             var gunsData = G.GameData.guns;
@@ -90,7 +74,7 @@ namespace UADRealism
             if (ship == null || ship.shipGunCaliber == null || partData == null || func == null)
                 return true;
 
-            var tc = FindMatchingTurretCaliber(ship, partData);
+            var tc = ShipM.FindMatchingTurretCaliber(ship, partData);
             if (tc == null)
             {
                 // Not gonna bother to log this, because the TC _will_ be null
@@ -137,7 +121,7 @@ namespace UADRealism
                 return true;
             }
 
-            var tc = FindMatchingTurretCaliber(ship, partData);
+            var tc = ShipM.FindMatchingTurretCaliber(ship, partData);
             if (tc == null)
             {
                 // Not gonna bother to log this, because the TC _will_ be null

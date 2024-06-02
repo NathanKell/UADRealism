@@ -87,6 +87,7 @@
     <Compile Include="Harmony\Ship.cs" />
     <Compile Include="Harmony\Part.cs" />
     <Compile Include="Harmony\GunData.cs" />
+    <Compile Include="Database.cs" />
     <Compile Include="ShipM.cs" />
     <Compile Include="ShipStats.cs" />
     <Compile Include="ShipStatsCalculator.cs" />
