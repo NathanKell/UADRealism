@@ -32,6 +32,7 @@ namespace UADRealism
                                 {
                                     if (G.GameData.parts.TryGetValue(v, out var pData))
                                     {
+                                        //Melon<UADRealismMod>.Logger.Msg($"Part {pData.name} needs tech {kvpT.key} of year {kvpT.Value.year}");
                                         _PartTechs[pData.name] = kvpT.Key;
                                         _PartYears[pData.name] = kvpT.Value.year;
                                     }
@@ -46,6 +47,7 @@ namespace UADRealism
                                 if (!int.TryParse(effList[1], out var grade))
                                     continue;
                                 int cal = Mathf.RoundToInt(calF);
+                                //Melon<UADRealismMod>.Logger.Msg($"Gun of {cal}in, grade {grade} needs tech {kvpT.key} of year {kvpT.Value.year}");
                                 _GunGradeTechs[cal, grade] = kvpT.Key;
                                 _GunGradeYears[cal, grade] = kvpT.Value.year;
                             }
@@ -54,6 +56,7 @@ namespace UADRealism
                 }
                 if (kvpT.Value.componentx != null)
                 {
+                    //Melon<UADRealismMod>.Logger.Msg($"Component {kvpT.Value.componentx.name} needs tech {kvpT.key} of year {kvpT.Value.year}");
                     _ComponentTechs[kvpT.Value.componentx.name] = kvpT.Key;
                     _ComponentYears[kvpT.Value.componentx.name] = kvpT.Value.year;
                 }
@@ -75,6 +78,11 @@ namespace UADRealism
 
         public static int GetGunYear(int caliberInch, int grade)
         {
+            if (caliberInch < 0 || caliberInch >= _GunGradeYears.GetLength(0) || grade < 0 || grade >= _GunGradeYears.GetLength(1))
+            {
+                Melon<UADRealismMod>.Logger.Error($"Tried to get Gun Grade Year for caliber {caliberInch}, grade {grade}");
+                return -1;
+            }
             return _GunGradeYears[caliberInch, grade];
         }
     }

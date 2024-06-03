@@ -468,6 +468,14 @@ namespace UADRealism
         public static float TurretBarrelsLengthHeightMult(float barrelsF)
             => Mathf.Pow(barrelsF, 0.125f);
 
+        public static float ArmorBeltHeight(Ship ship)
+        {
+            // TODO: Use scaledStats.B instead of size? Would avoid bulges.
+            // Does make it somewhat slower though.
+            return Mathf.Sqrt(ship.hullSize.size.x) * (1f + ship.ModData().Freeboard * 0.01f * 0.25f);
+            // ALSO: eventually separate main belt, lower & upper casemate, etc.
+        }
+
         private struct BarbetteData
         {
             public float _width;
@@ -577,7 +585,7 @@ namespace UADRealism
                 // Armor
                 // Note: height estimate includes upper belt, for now. On AON ships that's obviously correct
                 // since there was one armor belt.
-                float beltHeightEstimate = Mathf.Sqrt(stats.B) * (1f + ship.ModData().Freeboard * 0.01f * 0.25f);
+                float beltHeightEstimate = ArmorBeltHeight(ship);
                 float a = stats.Lwl * 0.5f;
                 float b = stats.B * 0.5f;
                 float ab = a + b;
@@ -757,7 +765,8 @@ namespace UADRealism
             else if (data.isGun)
             {
                 ship.CheckCaliberOnShip();
-
+                //Melon<UADRealismMod>.Logger.Msg($"Getting gun mats for partdata {data.name}");
+                //Melon<UADRealismMod>.Logger.Msg($"Has gunID {data.GetGunDataId(ship)} (noship {data.GetGunDataId(null)})");
                 var gunData = G.GameData.GunData(data);
                 float baseWeight = gunData.BaseWeight(ship, data);
                 float techWeightMod = ship.TechWeightMod(data);
@@ -775,16 +784,22 @@ namespace UADRealism
                 {
                     minLengthParam = MonoBehaviourExt.Param("min_gun_length_mod", -20f);
                     maxLengthParam = MonoBehaviourExt.Param("max_gun_length_mod", 20f);
-                    techLengthLimit = data.GetCaliberInch() > 2f ? ship.TechMax("tech_gun_length_limit", maxLengthParam) : ship.TechMax("tech_gun_length_limit_small", maxLengthParam);
+                    float calIn = data.caliber;
+                    if (tc != null)
+                        calIn += tc.diameter;
+                    calIn *= 1f / 25.4f;
+                    techLengthLimit = calIn > 2f ? ship.TechMax("tech_gun_length_limit", maxLengthParam) : ship.TechMax("tech_gun_length_limit_small", maxLengthParam);
                 }
 
                 float barrelMult = GetTurretBarrelWeightMult(data);
-                float casemateMult = isCasemate ? MonoBehaviourExt.Param("w_turret_casemate_mod", 0.75f) : 1f;
-                float turretWeight = baseWeight * techWeightMod * barrelMult * casemateMult;
+                float turretWeight = baseWeight * techWeightMod * barrelMult;
+                if (isCasemate)
+                    turretWeight *= MonoBehaviourExt.Param("w_turret_casemate_mod", 0.75f);
 
                 float costMod = ship.TechCostMod(data);
                 // To avoid the weird effect (seen in stock) of making guns cheaper over time,
-                // we split this remap in half.
+                // we split this remap in half. (Otherwise the halfway-point between min and
+                // max length will move as max length increases.)
                 if (tc != null)
                     costMod += tc.length > 0f ?
                         Util.Remap(tc.length, 0f, techLengthLimit, 0f, MonoBehaviourExt.Param("gun_length_extra_cost_max", 0.3f))
@@ -807,22 +822,23 @@ namespace UADRealism
                 mat.costMod = costMod;
                 mats.Add(mat);
 
-                var ta = ship.GetGunArmor(null, data, null);
+                var ta = FindMatchingTurretArmor(ship, data);
                 if (ta != null)
                 {
                     float cal = data.caliber;
-                    if (tc != null)
-                        cal += tc.diameter;
                     float aTop, aFace, aSides;
                     string sideMat;
                     string topMat;
                     float barrelWidthMult;
-                    float gunYear = Database.GetGunYear(Mathf.RoundToInt(data.caliber * (1f / 25.4f)), gunGrade);
+                    int calInch = Mathf.RoundToInt(cal * (1f / 25.4f));
+                    float gunYear = Database.GetGunYear(calInch, gunGrade);
+                    //Melon<UADRealismMod>.Logger.Msg($"Gun {cal:F2} ({calInch}) of grade {gunGrade} has year {gunYear:F0}");
+                    if (tc != null)
+                        cal += tc.diameter;
                     float barbetteWidth = TurretBaseWidth(cal, gunYear);
                     if (isCasemate)
                     {
-                        cal *= 0.001f;
-                        aFace = 360f * cal; // i.e. faceplate 33x wide, 11x tall the caliber
+                        aFace = 360f * cal * 0.001f; // i.e. faceplate 33x wide, 11x tall the caliber
                         aTop = aFace * 2.5f;
                         aSides = 0f;
                         sideMat = "casemate_gun_side_armor_weight_threshold";
@@ -832,7 +848,6 @@ namespace UADRealism
                     else
                     {
                         // hacky guesstimate of turret top and turret sides
-                        float calInch = cal * (1f / 25.4f);
                         bool isSmall = cal < 25.4f * 7f;
                         bool isCyl = !isSmall && gunYear < 1900;
                         barrelWidthMult = TurretBarrelsWidthMult(barrelsF);
@@ -851,7 +866,7 @@ namespace UADRealism
                         {
                             float radius = 0.25f + cal * 0.013f * barrelWidthMult;
                             aTop = Mathf.PI * radius * radius;
-                            float sidesArea = Mathf.PI * radius * 2f * (cal * 12f);
+                            float sidesArea = Mathf.PI * radius * 2f * (cal * 0.012f);
                             aFace = 0.25f * sidesArea;
                             aSides = sidesArea - aFace;
                             barbetteWidth *= barrelWidthMult;
@@ -868,7 +883,7 @@ namespace UADRealism
                             aTop = barbetteWidth * length;
                             aFace = frontSlopeMult * barbetteWidth * height;
                             aSides = barbetteWidth * height + length * 2f * height;
-                            aSides *= GetSideArmorRatio(gunYear, cal); // small guns have only face shields, and some guns have open backs.
+                            aSides *= GetSideArmorRatio(cal, gunYear); // small guns have only face shields, and some guns have open backs.
                         }
                     }
 
@@ -893,13 +908,16 @@ namespace UADRealism
 
                     float totalBarbWeight = 0f;
                     int totalParts = 0;
+                    float beltHeight = ArmorBeltHeight(ship) * 0.5f; // assume half above waterline.
                     foreach (var p in ship.parts)
                     {
                         if (p.data != data)
                             continue;
 
                         ++totalParts;
-                        float barbHeight = ship.hull.transform.InverseTransformPoint(p.transform.position).z;
+                        float barbHeight = ship.hull.transform.InverseTransformPoint(p.transform.position).z - beltHeight;
+                        if (barbHeight <= 0f)
+                            continue;
                         float barbArea = barbHeight * Mathf.PI * barbetteWidth * (0.5f + 0.25f * 0.75f + 0.25f * 0.5f);
                         totalBarbWeight += barbArea * weightFaceHard * ta.barbetteArmor;
                     }
@@ -917,6 +935,9 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Ammo;
                 mat.weight = ammoAmount * Part.AvgShellWeight(gunData, data, ship);
                 mat.costMod = ship.ShellCost(data);
+                mats.Add(mat);
+
+                //Melon<UADRealismMod>.Logger.Msg($"Done getting gun mats");
             }
             else if (data.isBarbette)
             {
@@ -1095,7 +1116,7 @@ namespace UADRealism
             return mats;
         }
 
-        public static float GetSideArmorRatio(float gunYear, float gunCaliber)
+        public static float GetSideArmorRatio(float gunCaliber, float gunYear)
         {
             if (gunCaliber >= 6f * 25.4f)
                 return 1f;

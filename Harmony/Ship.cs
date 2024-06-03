@@ -109,6 +109,8 @@ namespace UADRealism
             MelonCoroutines.Start(RefreshHullRoutine(__instance));
         }
 
+        private static readonly List<Part> _GunMatsToClear = new List<Part>();
+
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.RefreshHull))]
         internal static void Prefix_Ship_RefreshHull(Ship __instance, ref bool updateSections, out RefreshHullData __state)
@@ -128,6 +130,24 @@ namespace UADRealism
                 Melon<UADRealismMod>.Logger.BigError("hull PartData null!");
                 return;
             }
+
+            // We are probably going to change hull geometry.
+            // That means we need to remove from cache any parts
+            // that rely on hull geometry for their weight (i.e.
+            // barbette heights). The hull will get updated regardless.
+            if (__instance.matsCache != null)
+            {
+                foreach (var kvp in __instance.matsCache)
+                {
+                    if (kvp.Key.data.isGun)
+                        _GunMatsToClear.Add(kvp.Key);
+                }
+                foreach (var p in _GunMatsToClear)
+                    __instance.matsCache.Remove(p);
+                _GunMatsToClear.Clear();
+                __instance.weightsValid = false;
+            }
+
             var hData = ShipStats.GetData(data);
             if (hData == null)
             {
@@ -526,7 +546,10 @@ namespace UADRealism
         private static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> GetCachedPartMats(Ship ship, PartData data)
         {
             if (ship.matsCache == null)
+            {
+                ship.matsCache = new Il2CppSystem.Collections.Generic.Dictionary<Part, Il2CppSystem.Collections.Generic.List<Ship.MatInfo>>();
                 return null;
+            }
 
             foreach (var part in ship.matsCache.Keys)
                 if (part.data == data)
