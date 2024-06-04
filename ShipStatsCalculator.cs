@@ -292,7 +292,7 @@ namespace UADRealism
             return px.r > 200 && px.g < 100 && px.b < 100;
         }
 
-        public HullStats GetStats(GameObject obj, Bounds bounds, bool isDDHull)
+        public HullStats GetStats(GameObject obj, Bounds bounds, HullData hData)
         {
             var stats = new HullStats();
 
@@ -447,6 +447,10 @@ namespace UADRealism
                             stats.Cm = Am / (stats.B * draught) * 0.67f + stats.Cm * 0.33f;
                         }
 
+                        // Correct. Have to base this on ship type (ugh)
+                        // which we encode as average Cb.
+                        stats.Cm = ShipStats.RemapGameCm(stats.Cm, hData._desiredCb, hData._year);
+
                         break;
 
                     case ShipViewDir.Bottom:
@@ -557,12 +561,7 @@ namespace UADRealism
 
                         // Try to scale Cm based on fineness of hull which we'll guess from
                         // the bow length vs the beam.
-                        // This is because the Cm values ingame are kinda bad for the hulls, rather too low.
-                        // For destroyers (or TBs), though, they are broadly correct.
-                        if (!isDDHull)
-                        {
-                            stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, 0.25f, 0.5f, true));
-                        }
+                        stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, hData._isDDHull ? 0.625f : 0.25f, hData._isDDHull ? 0.75f : 0.5f, true));
 
                         // Detect transom
                         float minTransomWidth = stats.beamBulge * 0.25f; // otherwise can detect small cruiser sterns
@@ -821,10 +820,12 @@ namespace UADRealism
         public static System.Collections.IEnumerator ProcessHullData(HullData hData)
         {
             var data = hData._hulls[0];
+            ShipStats.SetAverageYearAndCb(hData);
+
             var part = Instance.SpawnPart(data);
             //part.gameObject.AddComponent<LogMB>();
             part.enabled = false;
-            hData.yPos = part.bow.transform.localPosition.y;
+            hData._yPos = part.bow.transform.localPosition.y;
 
             int count = hData._sectionsMax + 1;
             hData._statsSet = new HullStats[count];
@@ -849,44 +850,33 @@ namespace UADRealism
                 // Calc the stats for this layout. Note that scaling dimensions will only
                 // linearly change stats, it won't require a recalc.
                 var shipBounds = Instance.GetShipBounds(part.model.gameObject);
-                var stats = Instance.GetStats(part.model.gameObject, shipBounds, hData._isDDHull);
+                var stats = Instance.GetStats(part.model.gameObject, shipBounds, hData);
 
                 if (stats.Vd == 0f)
                     stats.Vd = 1f;
 
-                float powCm = 1f;
-                float powCwp = 1f;
-                float powCb = 1f;
-                if (hData._isDDHull)
-                {
-                    float year = ShipStats.GetAverageYear(hData);
-
-                    powCm = Util.Remap(year, 1900, 1925, 1f, 0.7f, true);
-                    powCb = Util.Remap(year, 1900, 1925, 1.5f, 1f, true);
-                    powCwp = Util.Remap(year, 1890, 1930, 2f, 1.3f, true);
-
-                    hData._year = year;
-                }
+                // Fudge numbers to deal with the fact that the hull models
+                // have various issues (too blocky, mostly).
+                stats.Cwp = Util.Remap(stats.Cwp, 0.5f, 0.85f, 0.5f, Util.Remap(hData._desiredCb, 0.38f, 0.55f, 0.67f, 0.8f, true));
+                stats.Cb = ShipStats.RemapGameCb(stats.Cb, hData._desiredCb);
 
                 // Recompute. For zero-section case, check if destroyer and fudge numbers.
                 // If not, reset based on sec0 which has best resolution for beam/draught/Cm/etc
                 if (secCount == 0)
                 {
-                    if (hData._isDDHull)
-                    {
-                        stats.Cm = Mathf.Pow(stats.Cm, powCm);
-                    }
+                    // Clamp the Cwp in this section. We won't clamp
+                    // for the higher section counts, just average with this.
+                    if (stats.Cwp > 0.8f)
+                        stats.Cwp = 0.8f + (stats.Cwp - 0.8f) * 0.1f;
+
                     sec0Draught = stats.T;
                     sec0Beam = stats.B;
                     sec0BulgeDepth = stats.bulgeDepth;
                 }
                 else
                 {
-                    stats.Cb = stats.Vd / (stats.Lwl * sec0Beam * sec0Draught);
                     stats.Cm = hData._statsSet[0].Cm;
                     stats.Cwp *= stats.B / sec0Beam;
-                    stats.Cp = stats.Cb / stats.Cm;
-                    stats.Cvp = stats.Cb / stats.Cwp;
                     stats.Catr = hData._statsSet[0].Catr;
                     stats.B = sec0Beam;
                     stats.T = sec0Draught;
@@ -897,41 +887,21 @@ namespace UADRealism
                     stats.bowLength = hData._statsSet[0].bowLength;
                 }
 
-                if (hData._isDDHull)
+                // Adding sections makes things too blocky. We'll average
+                // our primary coefficients vs the non-blocky case.
+                if (secCount != 0)
                 {
-                    float oldCb = stats.Cb;
-                    stats.Cb = Mathf.Pow(stats.Cb, powCb);
-                    stats.Cwp = Mathf.Pow(stats.Cwp, powCwp);
-                    stats.Cp = stats.Cb / stats.Cm;
-                    stats.Cvp = stats.Cb / stats.Cwp;
-                    float vMult = stats.Cb / oldCb;
-                    stats.Vd *= vMult;
-                    stats.Cv *= vMult;
+                    stats.Cwp = stats.Cwp * 0.5f + hData._statsSet[0].Cwp * 0.5f;
+                    stats.Cb = stats.Cb * 0.5f + hData._statsSet[0].Cb * 0.5f;
                 }
+                
+                // Recompute secondary stats based on primary.
+                stats.Vd = stats.Cb * stats.Lwl * stats.B * stats.T;
+                stats.Cp = stats.Cb / stats.Cm;
+                stats.Cvp = stats.Cb / stats.Cwp;
+                stats.Cv = 100f * stats.Vd / (stats.Lwl * stats.Lwl * stats.Lwl);
 
-                // Correct for really weird high-draught hull models
-                // (and, in Monitor's case, too low draught)
-                float BdivT = stats.B / stats.T;
-                float tMult = 1f;
-                if (BdivT < 2.25f)
-                {
-                    if (BdivT < 1.6f)
-                        tMult = (1f / 2f);
-                    else
-                        tMult = (1f / 1.5f);
-                }
-                else if(BdivT > 4f)
-                {
-                    tMult = (1f / 0.8f);
-                }
-                if (tMult != 1f)
-                {
-                    stats.bulgeDepth *= tMult;
-                    stats.Cv *= tMult;
-                    stats.T *= tMult;
-                    stats.Vd *= tMult;
-                }
-
+                // Assign
                 hData._statsSet[secCount] = stats;
 
 #if LOGSTATS

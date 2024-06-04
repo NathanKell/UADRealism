@@ -215,7 +215,7 @@ namespace UADRealism
             _hullSecitons.AddRange(__instance.hull.hullSections);
             foreach (var sec in _hullSecitons)
             {
-                sec.transform.localPosition = new Vector3(sec.transform.localPosition.x, hData.yPos * __state._yPosScaling, sec.transform.localPosition.z);
+                sec.transform.localPosition = new Vector3(sec.transform.localPosition.x, hData._yPos * __state._yPosScaling, sec.transform.localPosition.z);
             }
             _hullSecitons.Clear();
 

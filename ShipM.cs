@@ -476,6 +476,15 @@ namespace UADRealism
             // ALSO: eventually separate main belt, lower & upper casemate, etc.
         }
 
+        public static float BarbetteWeight(Ship ship, Part p, float beltHeight, float barbetteWidth, float weightFaceHard, Ship.TurretArmor ta)
+        {
+            float barbHeight = ship.hull.transform.InverseTransformPoint(p.transform.position).z - beltHeight * 0.5f; // assume half above waterline
+            if (barbHeight <= 0f)
+                return 0f;
+            float barbArea = barbHeight * Mathf.PI * barbetteWidth * (0.5f + 0.25f * 0.75f + 0.25f * 0.5f);
+            return barbArea * weightFaceHard * ta.barbetteArmor;
+        }
+
         //private struct BarbetteData
         //{
         //    public float _width;
@@ -483,14 +492,14 @@ namespace UADRealism
         //    public float _armor;
         //}
 
-        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> PartMats(Ship ship, PartData data)
+        public struct ArmorData
         {
-            Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats = new Il2CppSystem.Collections.Generic.List<Ship.MatInfo>();
+            public float _weightFaceHard;
+            public float _costFaceHard;
+            public float _weightSTS;
+            public float _costSTS;
 
-            // Armor vars are used in multiple cases so we have to declare here.
-            float weightFaceHard = 0f, costFaceHard = 0f, weightSTS = 0f, costSTS = 0f;
-
-            if (data.isHull || data.isGun)
+            public ArmorData(Ship ship)
             {
                 const float armorDensity = 7.86f; // grams / cubic centimeter or tonnes / cubic meter
                 float techArmor = ship.TechR("armor");
@@ -505,10 +514,27 @@ namespace UADRealism
 
                 float armorBaseCost = Mathf.Lerp(5f, 11f, ship.Tonnage() / 200000f) * armorC;
 
-                weightFaceHard = techArmor * techBelt * armorDensity * 0.001f;
-                costFaceHard = armorBaseCost * beltC;
-                weightSTS = techArmor * techDeck * armorDensity * 0.001f;
-                costSTS = armorBaseCost * deckC;
+                _weightFaceHard = techArmor * techBelt * armorDensity * 0.001f;
+                _costFaceHard = armorBaseCost * beltC;
+                _weightSTS = techArmor * techDeck * armorDensity * 0.001f;
+                _costSTS = armorBaseCost * deckC;
+            }
+        }
+
+        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> PartMats(Ship ship, PartData data)
+        {
+            Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats = new Il2CppSystem.Collections.Generic.List<Ship.MatInfo>();
+
+            // Armor vars are used in multiple cases so we have to declare here.
+            float weightFaceHard = 0f, costFaceHard = 0f, weightSTS = 0f, costSTS = 0f;
+
+            if (data.isHull || data.isGun)
+            {
+                var armorData = new ArmorData(ship);
+                weightFaceHard = armorData._weightFaceHard;
+                weightSTS = armorData._weightSTS;
+                costFaceHard = armorData._costFaceHard;
+                costSTS = armorData._costSTS;
             }
 
             if (data.isHull)
@@ -908,18 +934,14 @@ namespace UADRealism
 
                     float totalBarbWeight = 0f;
                     int totalParts = 0;
-                    float beltHeight = ArmorBeltHeight(ship) * 0.5f; // assume half above waterline.
+                    float beltHeight = ArmorBeltHeight(ship);
                     foreach (var p in ship.parts)
                     {
                         if (p.data != data)
                             continue;
 
                         ++totalParts;
-                        float barbHeight = ship.hull.transform.InverseTransformPoint(p.transform.position).z - beltHeight;
-                        if (barbHeight <= 0f)
-                            continue;
-                        float barbArea = barbHeight * Mathf.PI * barbetteWidth * (0.5f + 0.25f * 0.75f + 0.25f * 0.5f);
-                        totalBarbWeight += barbArea * weightFaceHard * ta.barbetteArmor;
+                        totalBarbWeight += BarbetteWeight(ship, p, beltHeight, barbetteWidth, weightFaceHard, ta);
                     }
                     mat = new Ship.MatInfo();
                     mat.name = "armor_turret_barbette";

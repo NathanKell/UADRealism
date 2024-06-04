@@ -1,4 +1,4 @@
-﻿//#define LOGHULLSTATS
+﻿#define LOGHULLSTATS
 //#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
@@ -21,7 +21,9 @@ namespace UADRealism
         public HullStats[] _statsSet;
         public bool _isDDHull = false;
         public float _year;
-        public float yPos;
+        public float _desiredCb;
+        public float _yPos;
+       
     }
 
     public struct HullStats
@@ -176,10 +178,53 @@ namespace UADRealism
             // Pass 2: Spawn and render the hull models, calculating stats
             yield return CalculateHullData();
 
+            // Pass 2.5: Correct for really weird high-draught hull models
+            // (and, in Monitor's case, too low draught). In the process,
+            // sanify B/T values.
+            float minBT = 100f, maxBT = 0f, avgBT = 0f;
+            float hCount = 0f;
+            foreach (var kvp in _HullModelData)
+            {
+                float BdivT = kvp.Value._statsSet[0].B / kvp.Value._statsSet[0].T;
+                if (BdivT < minBT)
+                    minBT = BdivT;
+                if (BdivT > maxBT)
+                    maxBT = BdivT;
+
+                avgBT += BdivT;
+                ++hCount;
+            }
+            if (hCount > 0f)
+                avgBT /= hCount;
+            foreach (var kvp in _HullModelData)
+            {
+                for (int i = kvp.Value._statsSet.Length; i-- > 0;)
+                {
+                    var stats = kvp.Value._statsSet[i];
+                    float BdivT = stats.B / stats.T;
+
+                    float newBT;
+                    if (BdivT < avgBT)
+                        newBT = Util.Remap(BdivT, minBT, avgBT, 2.25f, 2.8f, true);
+                    else
+                        newBT = Util.Remap(BdivT, avgBT, maxBT, 2.8f, 3.75f, true);
+
+                    float tMult = BdivT / newBT;
+                    if (tMult < 0.99f || tMult > 1.01f)
+                    {
+                        stats.bulgeDepth *= tMult;
+                        stats.Cv *= tMult;
+                        stats.T *= tMult;
+                        stats.Vd *= tMult;
+                        kvp.Value._statsSet[i] = stats;
+                    }
+                }
+            }
+
             // Pass 3: Set starting scales for all hull parts, compute scale ratios
             int num = 1;
 #if LOGHULLSTATS
-            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
+            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,dCb,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
 #endif
             List<PartData> hulls = new List<PartData>();
             foreach (var kvp in gameData.parts)
@@ -208,7 +253,7 @@ namespace UADRealism
                     float shpMult = GetHullFormSHPMult(data);
                     float shp = GetSHPRequired(stats, data.speedLimiter * KnotsToMS, false);
 #if LOGHULLSTATS
-                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{shpMult:F2}");
+                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name.Replace(',', '&')},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._desiredCb:F3},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{shpMult:F2}");
 #endif
                     ++num;
                 }
@@ -523,25 +568,35 @@ namespace UADRealism
             return Mathf.Pow(desiredVol / (Vd * bmMult * drMult ), 1f / 3f);
         }
 
-        public static float GetAverageYear(HullData hData)
+        public static void SetAverageYearAndCb(HullData hData)
         {
             float year = 0f;
-            float divisor = 0f;
+            float Cb = 0f;
+            float yrDiv = 0f;
+            float cbDiv = 0f;
             foreach (var hull in hData._hulls)
             {
+                ++cbDiv;
                 float hYear = Database.GetYear(hull);
                 if (hYear < 0f)
+                {
+                    Cb += GetDesiredCb(hull.shipType.name, 1915f);
                     continue;
+                }
 
+                Cb += GetDesiredCb(hull.shipType.name, year);
                 year += hYear;
-                ++divisor;
+                ++yrDiv;
             }
-            if (divisor > 0)
-                year /= divisor;
+            if (yrDiv > 0)
+                year /= yrDiv;
             else
                 year = 1915f;
+            
+            Cb /= cbDiv;
 
-            return year;
+            hData._year = year;
+            hData._desiredCb = Cb;
         }
 
         // water at 15C, standard salinity
@@ -556,30 +611,89 @@ namespace UADRealism
         public static float GetDesiredLdivB(Ship ship, float BdivT)
             => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, Database.GetYear(ship.hull.data));
 
-        public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
+        public static float GetDesiredCb(string sType, float year)
         {
             float Cb = 0.65f;
             switch (sType)
             {
                 case "tb":
                 case "dd":
-                    Cb = Util.Remap(year, 1890f, 1920f, 0.38f, 0.54f, true);
+                    Cb = Util.Remap(year, 1903f, 1930f, 0.38f, 0.5f, true);
                     break;
 
                 case "cl":
-                case "ic":
-                    Cb = 0.55f;
+                    Cb = Util.Remap(year, 1890f, 1930f, 0.5f, 0.615f, true);
                     break;
 
                 case "bc":
+                    Cb = Util.Remap(year, 1890f, 1930f, 0.55f, 0.59f, true);
+                    break;
                 case "ca":
-                    Cb = 0.6f;
+                    Cb = Util.Remap(year, 1890f, 1930f, 0.55f, 0.6f, true);
                     break;
 
                 case "bb":
-                    Cb = Util.Remap(year, 1890f, 1930f, 0.65f, 0.62f, true);
+                    Cb = Util.Remap(year, 1910f, 1930f, 0.64f, 0.616f, true);
+                    break;
+
+                case "ic":
+                    Cb = 0.66f;
                     break;
             }
+            return Cb;
+        }
+
+        public static float GetDesiredCm(float Cb, float year)
+        {
+            float desiredCp = Mathf.Pow(Cb, 1.25f) * 0.8f + 0.2f;
+            if(Cb < 1.1f * 0.55f)
+                desiredCp += Mathf.Pow(1.1f - Cb * (1f / 0.55f), 1.5f) * 0.3f;
+
+            float oldCm = Cb / desiredCp;
+            float CbPow = Cb * Cb; // ^2
+            CbPow *= CbPow; // ^4
+            CbPow *= CbPow; // ^8
+            float modCmLowCb = Mathf.Pow(oldCm, 1.5f) - 4f * CbPow - 0.02f;
+            float modCmHighCb = 1f - Mathf.Pow(1f - oldCm, 1.75f);
+            float modCm = Util.Remap(Cb, 0.5f, 0.56f, modCmLowCb, modCmHighCb, true);
+            return Util.Remap(year, 1910f, 1930f, oldCm, modCm, true);
+        }
+
+        public static float RemapGameCm(float Cm, float avgCb, float year)
+        {
+            float desiredCm = GetDesiredCm(avgCb, year);
+            float minCm = desiredCm * 0.97f;
+            float maxCm = Math.Min(1f - Mathf.Pow(1 - desiredCm, 1.5f) - 0.0015f, desiredCm + 0.03f);
+            return Util.Remap(Cm, 0.85f, 0.997f, minCm, maxCm, true);
+        }
+
+        public static float RemapGameCb(float Cb, float avgCb)
+        {
+            //float portionCb = avgCb * 0.05f;
+            //float minCb = avgCb - portionCb;
+            //if (Cb < minCb)
+            //{
+            //    float excess = minCb / Cb - 1f;
+            //    return Math.Max(Cb, minCb - Mathf.Lerp(0f, portionCb, excess * 10f));
+            //}
+            //portionCb = Util.Remap(avgCb, 0.57f, 0.63f, portionCb, avgCb * 0.02f, true);
+            //float maxCb = avgCb + portionCb;
+            //if (Cb > maxCb)
+            //{
+            //    float excess = Cb / maxCb - 1f;
+            //    return Math.Min(Cb, maxCb + Mathf.Lerp(0f, portionCb, excess * 10f));
+            //}
+
+            //return Cb;
+            Cb = Util.Remap(Cb, avgCb * 0.6f - 0.1f, avgCb * 1.4f + 0.1f, avgCb * 0.94f, avgCb * Util.Remap(avgCb, 0.57f, 0.63f, 1.1f, 1.05f, true), true);
+            if (avgCb <= 0.5f)
+                Cb *= Util.Remap(avgCb, 0.38f, 0.5f, Util.Remap(Cb, 0.33f, 0.55f, 1f, 0.8f, true), Util.Remap(Cb, 0.33f, 0.55f, 1.3f, 1f, true));
+            return Cb;
+        }
+
+        public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
+        {
+            float Cb = GetDesiredCb(sType, year);
 
             float blockVolume = Vd / Cb;
 
