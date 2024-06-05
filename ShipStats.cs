@@ -1,4 +1,4 @@
-﻿#define LOGHULLSTATS
+﻿//#define LOGHULLSTATS
 //#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
@@ -9,6 +9,7 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using System.IO;
 
 namespace UADRealism
 {
@@ -24,7 +25,6 @@ namespace UADRealism
         public float _desiredCb;
         public float _hullNumber;
         public float _yPos;
-       
     }
 
     public struct HullStats
@@ -62,6 +62,8 @@ namespace UADRealism
 
     public static class ShipStats
     {
+        const int _Version = 1;
+
         private static bool _isRenderingHulls = false;
         public static bool _IsRenderingHulls => _isRenderingHulls;
         
@@ -123,10 +125,24 @@ namespace UADRealism
             yield return null;
             yield return null;
 
-            var gameData = G.GameData;
             Il2CppSystem.Diagnostics.Stopwatch sw = new Il2CppSystem.Diagnostics.Stopwatch();
             sw.Start();
             Melon<UADRealismMod>.Logger.Msg("Processing Hulls in GameData");
+
+            yield return HullSteps();
+            yield return PartSteps();
+
+            var time = sw.Elapsed;
+            Melon<UADRealismMod>.Logger.Msg($"Total time: {time}");
+
+            _LoadingDone = true;
+            G.ui.CompleteLoadingScreen();
+        }
+
+        private static System.Collections.IEnumerator HullSteps()
+        {
+            var gameData = G.GameData;
+            int totalHulls = 0;
 
             // Pass 1: Figure out the min and max sections used for each model.
             // (and deal with beam/draught coefficients)
@@ -135,6 +151,8 @@ namespace UADRealism
                 var data = kvp.Value;
                 if (!data.isHull)
                     continue;
+
+                ++totalHulls;
 
                 var origData = new OriginalHullData()
                 {
@@ -174,6 +192,13 @@ namespace UADRealism
                     hData._hulls.Add(data);
                 }
                 _HullToHullData[data.name] = hData;
+            }
+
+            // Try to load from disk
+            if (LoadData(totalHulls))
+            {
+                SaveData(totalHulls);
+                yield break;
             }
 
             foreach (var kvp in _HullModelData)
@@ -232,14 +257,11 @@ namespace UADRealism
 #if LOGHULLSTATS
             Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,HN,dCb,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
 #endif
-            List<PartData> hulls = new List<PartData>();
             foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
                 if (!data.isHull)
                     continue;
-
-                hulls.Add(data);
 
                 // _now_ we set min sections to 0
                 data.sectionsMin = 0;
@@ -265,15 +287,32 @@ namespace UADRealism
                 }
             }
 
+            SaveData(totalHulls);
+        }
+
+        private static System.Collections.IEnumerator PartSteps()
+        {
+            var gameData = G.GameData;
+            List<PartData> hulls = new List<PartData>();
 
             // Pass 4: Compute hull scale ratios
-            num = 1;
             Dictionary<PartData, float> hullToScaleRatio = new Dictionary<PartData, float>();
+            int num = 1;
 #if LOGHULLSCALES
             Melon<UADRealismMod>.Logger.Msg("time,order,name,scaleRatio,origB,origBeamMin,newB,Secs,L/B,Cp,CpDesired,Year,Kn");
+#else
+            // to suppress a warning
+            ++num;
+            --num;
 #endif
-            foreach (var hull in hulls)
+            foreach (var kvp in gameData.parts)
             {
+                var hull = kvp.Value;
+                if (!hull.isHull)
+                    continue;
+
+                hulls.Add(hull);
+
                 var hData = GetData(hull);
                 if (hData == null)
                 {
@@ -336,7 +375,7 @@ namespace UADRealism
                 // Hate to do n^2 but we don't have a lookup, stock does hashset overlaps.
                 float minScaleRatio = float.MaxValue;
                 string minHullName = "(none)";
-                foreach(var hull in hulls)
+                foreach (var hull in hulls)
                 {
                     if (!ShipM.IsPartAllowedNoTech(hull, hull.shipType, data))
                         continue;
@@ -366,6 +405,8 @@ namespace UADRealism
                 Melon<UADRealismMod>.Logger.Msg($"${num++}${data.name}${data.model}${minScaleRatio:F3}${minHullName}${origScale:F3}${data.scale:F3}");
 #endif
             }
+
+            yield return null;
 
             // Pass 6: Rescale guns
             num = 1;
@@ -433,7 +474,7 @@ namespace UADRealism
             {
                 if (kvp.value == null)
                 {
-                    Melon<UADRealismMod>.Logger.BigError($"PartModel {(string.IsNullOrEmpty(kvp.key) ? "NULL/EMPTY" :  kvp.key)} is null!");
+                    Melon<UADRealismMod>.Logger.BigError($"PartModel {(string.IsNullOrEmpty(kvp.key) ? "NULL/EMPTY" : kvp.key)} is null!");
                     continue;
                 }
 
@@ -457,12 +498,121 @@ namespace UADRealism
 
                 ApplyScale(kvp.value, torpedoScale);
             }
+        }
 
-            var time = sw.Elapsed;
-            Melon<UADRealismMod>.Logger.Msg($"Total time: {time}");
+        private static bool LoadData(int totalHulls)
+        {
+            string basePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "UADRealism");
+            if (!Directory.Exists(basePath))
+                return false;
 
-            _LoadingDone = true;
-            G.ui.CompleteLoadingScreen();
+            string pathHData = Path.Combine(basePath, "hulldata.csv");
+            if (!File.Exists(pathHData))
+                return false;
+
+            var hDatas = File.ReadAllLines(pathHData);
+            if (hDatas.Length < 6)
+                return false;
+
+            int curLine = 0;
+            if (!int.TryParse(hDatas[curLine++].Split(',')[1], out var version) || version != _Version)
+                return false;
+            if (!int.TryParse(hDatas[curLine++].Split(',')[1], out var dataCount) || dataCount != _HullModelData.Count)
+                return false;
+            if (!int.TryParse(hDatas[curLine++].Split(',')[1], out var hullCount) || hullCount != totalHulls)
+                return false;
+            if (!int.TryParse(hDatas[curLine++].Split(',')[1], out var partCount) || partCount != G.GameData.parts.Count)
+                return false;
+
+            ++curLine; // header row
+            int procDatas = 0;
+            for (; curLine < hDatas.Length; ++curLine)
+            {
+                if (hDatas[curLine] == "$$END$$")
+                    break;
+
+                var line = hDatas[curLine].Split(',');
+                if (!_HullModelData.TryGetValue(line[0], out var hData))
+                    return false;
+
+                hData._statsSet = new HullStats[hData._sectionsMax + 1];
+                hData._isDDHull = bool.Parse(line[1]);
+                hData._year = float.Parse(line[2]);
+                hData._desiredCb = float.Parse(line[3]);
+                hData._hullNumber = float.Parse(line[4]);
+                hData._yPos = float.Parse(line[5]);
+                ++procDatas;
+            }
+            curLine += 2; // the endline + header row
+            int procSecs = 0;
+            for (; curLine < hDatas.Length; ++curLine)
+            {
+                var line = hDatas[curLine].Split(',');
+                int col = 0;
+                if (!_HullModelData.TryGetValue(line[col++], out var hData))
+                    return false;
+
+                int sec = int.Parse(line[col++]);
+                var stats = new HullStats();
+                stats.Lwl = float.Parse(line[col++]);
+                stats.B = float.Parse(line[col++]);
+                stats.T = float.Parse(line[col++]);
+                stats.beamBulge = float.Parse(line[col++]);
+                stats.bulgeDepth = float.Parse(line[col++]);
+                stats.Vd = float.Parse(line[col++]);
+                stats.Cb = float.Parse(line[col++]);
+                stats.Cm = float.Parse(line[col++]);
+                stats.Cwp = float.Parse(line[col++]);
+                stats.Cp = float.Parse(line[col++]);
+                stats.Cvp = float.Parse(line[col++]);
+                stats.iE = float.Parse(line[col++]);
+                stats.LrPct = float.Parse(line[col++]);
+                stats.bowLength = float.Parse(line[col++]);
+                stats.lcbPct = float.Parse(line[col++]);
+                stats.Catr = float.Parse(line[col++]);
+                stats.scaleFactor = float.Parse(line[col++]);
+                stats.Cv = float.Parse(line[col++]);
+                hData._statsSet[sec] = stats;
+                ++procSecs;
+            }
+            Melon<UADRealismMod>.Logger.Msg($"Loaded hull data. Processed {procDatas} HullDatas and {procSecs} HullStats");
+            return true;
+        }
+
+        private static void SaveData(int totalHulls)
+        {
+            string basePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "UADRealism");
+            if (!Directory.Exists(basePath))
+                Directory.CreateDirectory(basePath);
+
+            string pathHData = Path.Combine(basePath, "hulldata.csv");
+
+            List<string> lines = new List<string>();
+            lines.Add($"version,{_Version}");
+            lines.Add($"Total datas,{_HullModelData.Count}");
+            lines.Add($"Total hulls,{totalHulls}");
+            lines.Add($"Total parts,{G.GameData.parts.Count}");
+            lines.Add("key,isDDHull,year,desiredCb,hullNumber,yPos");
+
+            foreach (var kvp in _HullModelData)
+            {
+                var h = kvp.Value;
+                lines.Add($"{kvp.Key},{h._isDDHull},{h._year},{h._desiredCb},{h._hullNumber},{h._yPos}");
+            }
+
+            lines.Add("$$END$$");
+            lines.Add("key,sec,Lwl,B,T,beamBulge,bulgeDepth,Vd,Cb,Cm,Cwp,Cp,Cvp,iE,LrPct,bowLength,lcbPct,Catr,scaleFactor,Cv");
+            foreach (var kvp in _HullModelData)
+            {
+                var h = kvp.Value;
+                for (int i = 0; i < h._statsSet.Length; ++i)
+                {
+                    var s = h._statsSet[i];
+                    lines.Add($"{kvp.Key},{i},{s.Lwl},{s.B},{s.T},{s.beamBulge},{s.bulgeDepth},{s.Vd},{s.Cb},{s.Cm},{s.Cwp},{s.Cp},{s.Cvp},{s.iE},{s.LrPct},{s.bowLength},{s.lcbPct},{s.Catr},{s.scaleFactor},{s.Cv}");
+                }
+            }
+
+            File.WriteAllLines(pathHData, lines);
         }
 
         private static float GunModelScale(float caliber)
