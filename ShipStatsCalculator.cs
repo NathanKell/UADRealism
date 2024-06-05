@@ -559,9 +559,11 @@ namespace UADRealism
                         stats.iE = Mathf.Atan2(stats.B * 0.5f, stats.bowLength) * Mathf.Rad2Deg;
                         stats.LrPct = (sternRow - midAft + 1) * sizePerPixel; // will divide by Lwl once that's found.
 
-                        // Try to scale Cm based on fineness of hull which we'll guess from
+                        // Cm for destroyers is often quite wrong. Try to scale
+                        // it based on fineness of hull which we'll guess from
                         // the bow length vs the beam.
-                        //stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, hData._isDDHull ? 0.625f : 0.375f, hData._isDDHull ? 0.75f : 0.625f, true));
+                        if (hData._isDDHull)
+                            stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, 0.675f, 0.8f, true));
 
                         // Detect transom
                         float minTransomWidth = stats.beamBulge * 0.25f; // otherwise can detect small cruiser sterns
@@ -856,7 +858,7 @@ namespace UADRealism
 
                 // Fudge numbers to deal with the fact that the hull models
                 // have various issues (too blocky, mostly).
-                stats.Cwp = Util.Remap(stats.Cwp, 0.5f, 0.85f, 0.5f, Util.Remap(hData._desiredCb, 0.38f, 0.6f, 0.68f, 0.83f, true));
+                stats.Cwp = Util.Remap(stats.Cwp, 0.5f, 0.85f, 0.5f, Util.Remap(hData._desiredCb, 0.38f, 0.6f, 0.68f, 0.82f, true));
                 stats.Cb = ShipStats.RemapGameCb(stats.Cb, hData._desiredCb);
 
                 // Recompute. For zero-section case, check if destroyer and fudge numbers.

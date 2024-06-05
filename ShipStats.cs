@@ -631,15 +631,15 @@ namespace UADRealism
                     break;
 
                 case "cl":
-                    Cb = Util.Remap(year, 1900f, 1930f, 0.495f, 0.55f, true);
+                    Cb = Util.Remap(year, 1900f, 1930f, 0.495f, 0.53f, true);
                     break;
 
                 case "bc":
-                    Cb = Util.Remap(year, 1905f, 1930f, 0.52f, 0.56f, true);
+                    Cb = Util.Remap(year, 1905f, 1930f, 0.51f, 0.56f, true);
                     break;
 
                 case "ca":
-                    Cb = Util.Remap(year, 1900f, 1930f, 0.505f, 0.54f, true);
+                    Cb = Util.Remap(year, 1900f, 1930f, 0.505f, 0.53f, true);
                     break;
 
                 case "bb":
