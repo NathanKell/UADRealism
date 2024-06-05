@@ -196,10 +196,7 @@ namespace UADRealism
 
             // Try to load from disk
             if (LoadData(totalHulls))
-            {
-                SaveData(totalHulls);
                 yield break;
-            }
 
             foreach (var kvp in _HullModelData)
             {
