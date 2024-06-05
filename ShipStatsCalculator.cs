@@ -561,7 +561,7 @@ namespace UADRealism
 
                         // Try to scale Cm based on fineness of hull which we'll guess from
                         // the bow length vs the beam.
-                        stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, hData._isDDHull ? 0.625f : 0.25f, hData._isDDHull ? 0.75f : 0.5f, true));
+                        //stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, hData._isDDHull ? 0.625f : 0.375f, hData._isDDHull ? 0.75f : 0.625f, true));
 
                         // Detect transom
                         float minTransomWidth = stats.beamBulge * 0.25f; // otherwise can detect small cruiser sterns
@@ -820,7 +820,6 @@ namespace UADRealism
         public static System.Collections.IEnumerator ProcessHullData(HullData hData)
         {
             var data = hData._hulls[0];
-            ShipStats.SetAverageYearAndCb(hData);
 
             var part = Instance.SpawnPart(data);
             //part.gameObject.AddComponent<LogMB>();
@@ -857,7 +856,7 @@ namespace UADRealism
 
                 // Fudge numbers to deal with the fact that the hull models
                 // have various issues (too blocky, mostly).
-                stats.Cwp = Util.Remap(stats.Cwp, 0.5f, 0.85f, 0.5f, Util.Remap(hData._desiredCb, 0.38f, 0.55f, 0.67f, 0.8f, true));
+                stats.Cwp = Util.Remap(stats.Cwp, 0.5f, 0.85f, 0.5f, Util.Remap(hData._desiredCb, 0.38f, 0.6f, 0.68f, 0.83f, true));
                 stats.Cb = ShipStats.RemapGameCb(stats.Cb, hData._desiredCb);
 
                 // Recompute. For zero-section case, check if destroyer and fudge numbers.
@@ -891,8 +890,8 @@ namespace UADRealism
                 // our primary coefficients vs the non-blocky case.
                 if (secCount != 0)
                 {
-                    stats.Cwp = stats.Cwp * 0.5f + hData._statsSet[0].Cwp * 0.5f;
-                    stats.Cb = stats.Cb * 0.5f + hData._statsSet[0].Cb * 0.5f;
+                    stats.Cwp = stats.Cwp * 0.8f + hData._statsSet[0].Cwp * 0.2f;
+                    stats.Cb = stats.Cb * 0.8f + hData._statsSet[0].Cb * 0.2f;
                 }
                 
                 // Recompute secondary stats based on primary.
@@ -913,7 +912,7 @@ namespace UADRealism
                 // Early-out if the hull is getting too blocky
                 // (but keep going if it's a special ship or
                 // its min section count is higher than this anyway)
-                if (stats.Cp > 0.7f)
+                if (stats.Cp > 0.73f)
                 {
                     bool stop = true;
                     foreach (var hull in hData._hulls)
