@@ -293,10 +293,10 @@ namespace UADRealism
         private static System.Collections.IEnumerator PartSteps()
         {
             var gameData = G.GameData;
-            List<PartData> hulls = new List<PartData>();
+            //List<PartData> hulls = new List<PartData>();
 
             // Pass 4: Compute hull scale ratios
-            Dictionary<PartData, float> hullToScaleRatio = new Dictionary<PartData, float>();
+            //Dictionary<PartData, float> hullToScaleRatio = new Dictionary<PartData, float>();
             int num = 1;
 #if LOGHULLSCALES
             Melon<UADRealismMod>.Logger.Msg("time,order,name,scaleRatio,origB,origBeamMin,newB,Secs,L/B,Cp,CpDesired,Year,Kn");
@@ -305,48 +305,48 @@ namespace UADRealism
             ++num;
             --num;
 #endif
-            foreach (var kvp in gameData.parts)
-            {
-                var hull = kvp.Value;
-                if (!hull.isHull)
-                    continue;
+//            foreach (var kvp in gameData.parts)
+//            {
+//                var hull = kvp.Value;
+//                if (!hull.isHull)
+//                    continue;
 
-                hulls.Add(hull);
+//                hulls.Add(hull);
 
-                var hData = GetData(hull);
-                if (hData == null)
-                {
-                    Melon<UADRealismMod>.Logger.BigError($"Hull {hull.name} has no hull data!");
-                    continue;
-                }
+//                var hData = GetData(hull);
+//                if (hData == null)
+//                {
+//                    Melon<UADRealismMod>.Logger.BigError($"Hull {hull.name} has no hull data!");
+//                    continue;
+//                }
 
-                float sMax = hull.speedLimiter;
-                if (sMax > 33f && (hull.shipType.name != "dd" && hull.shipType.name != "tb"))
-                    sMax = 33f;
+//                float sMax = hull.speedLimiter;
+//                if (sMax > 33f && (hull.shipType.name != "dd" && hull.shipType.name != "tb"))
+//                    sMax = 33f;
 
-                float year = Database.GetYear(hull);
-                if (year < 0f)
-                    year = 1915f;
+//                float year = Database.GetYear(hull);
+//                if (year < 0f)
+//                    year = 1915f;
 
-                const float bDivT = DefaultBdivT * 0.867f;
-                float lDivB = GetDesiredLdivB(hull.tonnageMin * TonnesToCubicMetersWater, bDivT, sMax * KnotsToMS, hull.shipType.name, year);
-                int secs = GetDesiredSections(hData, hull.sectionsMin, hull.sectionsMax, hull.tonnageMin, sMax * KnotsToMS, lDivB, bDivT, out var bmPct, out var drPct, out var desiredCp);
-                var stats = GetScaledStats(hData, hull.tonnageMin, bmPct, drPct, secs);
-                if (secs < 0 || secs > hData._sectionsMax)
-                {
-                    Melon<UADRealismMod>.Logger.BigError($"Hull {hull.name} calculated an out of bounds section count {secs}! Max {hData._sectionsMax}! ({sMax:F0}Kn, L/B {lDivB:F2}, B/T {bDivT:F2}");
-                    continue;
-                }
-                var origStats = hData._statsSet[secs];
-                var origData = _OriginalHullData[hull.name];
-                float origB = (origStats.B * (1f + origData._beamMin * 0.01f)) * origData._scale;
-                float newB = stats.B;
-                float scaleRatio = newB / origB;
-                hullToScaleRatio[hull] = scaleRatio;
-#if LOGHULLSCALES
-                Melon<UADRealismMod>.Logger.Msg($",{num++},{hull.name},{scaleRatio:F3},{origB:F2},{origData._beamMin:F0},{newB:F2},{secs},{lDivB:F2},{origStats.Cp:F3},{desiredCp:F3},{year:F0},{sMax:F1}");
-#endif
-            }
+//                const float bDivT = DefaultBdivT * 0.867f;
+//                float lDivB = GetDesiredLdivB(hull.tonnageMin * TonnesToCubicMetersWater, bDivT, sMax * KnotsToMS, hull.shipType.name, year);
+//                int secs = GetDesiredSections(hData, hull.sectionsMin, hull.sectionsMax, hull.tonnageMin, sMax * KnotsToMS, lDivB, bDivT, out var bmPct, out var drPct, out var desiredCp);
+//                var stats = GetScaledStats(hData, hull.tonnageMin, bmPct, drPct, secs);
+//                if (secs < 0 || secs > hData._sectionsMax)
+//                {
+//                    Melon<UADRealismMod>.Logger.BigError($"Hull {hull.name} calculated an out of bounds section count {secs}! Max {hData._sectionsMax}! ({sMax:F0}Kn, L/B {lDivB:F2}, B/T {bDivT:F2}");
+//                    continue;
+//                }
+//                var origStats = hData._statsSet[secs];
+//                var origData = _OriginalHullData[hull.name];
+//                float origB = (origStats.B * (1f + origData._beamMin * 0.01f)) * origData._scale;
+//                float newB = stats.B;
+//                float scaleRatio = newB / origB;
+//                hullToScaleRatio[hull] = scaleRatio;
+//#if LOGHULLSCALES
+//                Melon<UADRealismMod>.Logger.Msg($",{num++},{hull.name},{scaleRatio:F3},{origB:F2},{origData._beamMin:F0},{newB:F2},{secs},{lDivB:F2},{origStats.Cp:F3},{desiredCp:F3},{year:F0},{sMax:F1}");
+//#endif
+//            }
 
             num = 1;
 #if LOGPARTSTATS
@@ -373,23 +373,24 @@ namespace UADRealism
                 // Assume no regular part is has "(custom)" for model
 
                 // Hate to do n^2 but we don't have a lookup, stock does hashset overlaps.
-                float minScaleRatio = float.MaxValue;
-                string minHullName = "(none)";
-                foreach (var hull in hulls)
-                {
-                    if (!ShipM.IsPartAllowedNoTech(hull, hull.shipType, data))
-                        continue;
+                //float minScaleRatio = float.MaxValue;
+                //string minHullName = "(none)";
+                //foreach (var hull in hulls)
+                //{
+                //    if (!ShipM.IsPartAllowedNoTech(hull, hull.shipType, data))
+                //        continue;
 
-                    // This should never happen -- we precompute them all
-                    if (!hullToScaleRatio.TryGetValue(hull, out var scaleRatio))
-                        continue;
+                //    // This should never happen -- we precompute them all
+                //    if (!hullToScaleRatio.TryGetValue(hull, out var scaleRatio))
+                //        continue;
 
-                    if (scaleRatio < minScaleRatio)
-                    {
-                        minHullName = hull.name;
-                        minScaleRatio = scaleRatio;
-                    }
-                }
+                //    if (scaleRatio < minScaleRatio)
+                //    {
+                //        minHullName = hull.name;
+                //        minScaleRatio = scaleRatio;
+                //    }
+                //}
+                float minScaleRatio = torpedoScale;
                 float origScale = data.scale;
                 if (minScaleRatio == float.MaxValue)
                     minScaleRatio = 1f;
@@ -618,9 +619,9 @@ namespace UADRealism
         private static float GunModelScale(float caliber)
         {
             float calInch = caliber * (1f / 25.4f);
-            return 0.9f + 0.1f * Mathf.Cos((calInch < 11.87f ?
+            return (0.9f + 0.1f * Mathf.Cos((calInch < 11.87f ?
                 (Mathf.Pow(Mathf.Max(0, calInch - 4f), 0.78f) + 4)
-                : (Mathf.Pow(calInch - 11.87f, 1.25f) + 11.87f)) * Mathf.PI * 0.5f);
+                : (Mathf.Pow(calInch - 11.87f, 1.25f) + 11.87f)) * Mathf.PI * 0.5f)) * 0.5f + 0.85f * 0.5f;
         }
 
         private static List<KeyValuePair<int, float>> _PMDKVPs;
