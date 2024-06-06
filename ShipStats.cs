@@ -702,6 +702,7 @@ namespace UADRealism
             newStats.Vd *= volMult; // Vd should be the same as ship.Tonnage() * TonnesToCubicMetersWater
             newStats.Cv *= volMult;
             newStats.bowLength *= linearScale;
+            newStats.iE = Mathf.Atan2(newStats.B * 0.5f, newStats.bowLength) * Mathf.Rad2Deg;
             newStats.scaleFactor = linearScale;
 
             //Melon<UADRealismMod>.Logger.Msg($"Post with {linearScale:F3}x, B={bmMult:F3},T={drMult:F3}: {newStats.Lwl:F2}x{newStats.B:F2}x{newStats.T:F2}, {newStats.Vd}t.");
