@@ -1,4 +1,5 @@
-﻿using System;
+﻿//#define OUTPUTIMAGES
+using System;
 using System.Collections.Generic;
 using MelonLoader;
 using HarmonyLib;
@@ -308,6 +309,7 @@ namespace UADRealism
             bool hasBulge = false;
             int sternCol = 0;
             int transomCol = -1;
+            int transomWidth = -1;
             int firstPropCol = -1;
             int firstEndPropCol = -1;
             var part = obj.GetParent().GetComponent<Part>();
@@ -356,6 +358,9 @@ namespace UADRealism
 
                 _camera.Render();
                 _texture.ReadPixels(new Rect(0, 0, _TextureRes, _TextureRes), 0, 0);
+#if OUTPUTIMAGES
+                bool hasChangedPixels = false;
+#endif
 
                 // It would be very nice to not alloc a full mb here. But
                 // il2cpp/harmony doesn't support GetRawTextureData<>,
@@ -458,7 +463,7 @@ namespace UADRealism
                         // but that should be ok.
                         // We'll also record the number of beam pixels at each row.
                         int lastNonPropCol = -1;
-                        
+
                         for (row = 0; row < _TextureRes; ++row)
                         {
                             short numPx = 0;
@@ -487,7 +492,7 @@ namespace UADRealism
                             }
 
                             // Prop detection
-                            if (row > _TextureRes * 3 / 4)
+                            if (row > (_TextureRes * 3) / 4)
                             {
                                 int lastSideCol = sideCol + 1;
                                 short lastPx = _beamPixelCounts[lastSideCol];
@@ -520,13 +525,16 @@ namespace UADRealism
                                     else
                                     {
                                         numPx = predictedPx;
+#if OUTPUTIMAGES
                                         // handle output
-                                        //int pxStart = (_TextureRes - numPx) / 2;
-                                        //int pxEnd = pxStart + numPx - 1;
-                                        //for (int i = 0; i < _TextureRes; ++i)
-                                        //{
-                                        //    pixels[row * _TextureRes + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
-                                        //}
+                                        int pxStart = (_TextureRes - numPx) / 2;
+                                        int pxEnd = pxStart + numPx - 1;
+                                        for (int i = 0; i < _TextureRes; ++i)
+                                        {
+                                            pixels[row * _TextureRes + i].a = (i < pxStart || i > pxEnd) ? (byte)0 : (byte)255;
+                                        }
+                                        hasChangedPixels = true;
+#endif
                                     }
                                 }
                             }
@@ -555,6 +563,7 @@ namespace UADRealism
                             }
                         }
                         Awp *= sizePerPixel * sizePerPixel;
+                        // This is slightly wrong with a ram bow (and a reverse transom stern)
                         stats.bowLength = (midFwd - bowRow + 1) * sizePerPixel;
                         stats.iE = Mathf.Atan2(stats.B * 0.5f, stats.bowLength) * Mathf.Rad2Deg;
                         stats.LrPct = (sternRow - midAft + 1) * sizePerPixel; // will divide by Lwl once that's found.
@@ -566,21 +575,20 @@ namespace UADRealism
                             stats.Cm = Mathf.Pow(stats.Cm, Util.Remap(stats.bowLength / stats.B, 1.5f, 2.5f, 0.675f, 0.8f, true));
 
                         // Detect transom
-                        float minTransomWidth = stats.beamBulge * 0.25f; // otherwise can detect small cruiser sterns
+                        float minTransomWidth = stats.beamBulge * 0.28f; // otherwise can detect flat cruiser sterns
                         sternCol = _TextureRes - sternRow - 1;
-
                         for (int col = -1; col < _TextureRes * 1 / 5; ++col)
                         {
                             int curCol = sternCol + col;
                             int curPx = curCol < 0 ? 0 : _beamPixelCounts[curCol];
-                            const float angleDelta = 45f;
                             const int yDelta = 3;
                             int nextCol = curCol + yDelta;
                             int nextPx = _beamPixelCounts[nextCol];
                             int farCol = nextCol + yDelta;
-                            float angle1 = Mathf.Atan2(yDelta * 2, nextPx - curPx);
-                            float angle2 = Mathf.Atan2(yDelta * 2, _beamPixelCounts[farCol] - nextPx);
-                            if (angle2 - angle1 > Mathf.Deg2Rad * angleDelta)
+                            int farPx = _beamPixelCounts[farCol];
+                            float angle1 = nextPx == curPx ? 90f : Mathf.Atan2(yDelta * 2, nextPx - curPx) * Mathf.Rad2Deg;
+                            float angle2 = farPx == nextPx ? 90f : Mathf.Atan2(yDelta * 2, _beamPixelCounts[farCol] - nextPx) * Mathf.Rad2Deg;
+                            if (angle1 < 13f && angle2 > 40f)
                             {
                                 if (transomCol < nextCol && nextPx * sizePerPixel > minTransomWidth)
                                 {
@@ -592,7 +600,10 @@ namespace UADRealism
                                             isProp = true;
 
                                     if (!isProp)
+                                    {
                                         transomCol = nextCol;
+                                        transomWidth = _beamPixelCounts[nextCol];
+                                    }
                                 }
                             }
                             // we've passed the transom. But wait until a few pixels down in case
@@ -602,25 +613,6 @@ namespace UADRealism
                                 break;
                             }
                         }
-
-                        //if (transomCol >= 0)
-                        //{
-                        //if (transomCol >= 0)
-                        //{
-                        //Debug.Log($"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): Transom at col {transomCol}: {(_beamPixelCounts[transomCol] / (float)maxBeamPx):P2}");
-                        //}
-                        //Patch_GameData._WrittenModels.Add(ShipStats.GetHullModelKey(p.data) + "_");
-                        //string hierarchy = $"{(part.data == null ? obj.name : ShipStats.GetHullModelKey(part.data))} ({sec}): {ModUtils.DumpHierarchy(obj)}";
-                        //Debug.Log("---------\n" + hierarchy);
-                        //}
-                        //{
-                        //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
-                        //    int bbPx = Mathf.RoundToInt(stats.beamBulge / sizePerPixel);
-                        //    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}_b{maxBeamPx}_f{bbPx}.png";
-
-                        //    var bytes = ImageConversion.EncodeToPNG(_texture);
-                        //    Il2CppSystem.IO.File.WriteAllBytes(filePath, bytes);
-                        //}
 
                         break;
 
@@ -700,17 +692,23 @@ namespace UADRealism
                                     // that the beam is zeroing here).
                                     // TODO: Do the same thing for rudders we do for props in bottom view: if we go below last depth,
                                     // instead of just continuing at last depth, continue the _slope_.
-                                    //if (depthLimit || px.a == 0 || (!firstRowRed && col < _TextureRes / 2 && IsFogged(px) && (r == 0 || pixels[(r - 1) * _TextureRes + col].a > 0)))
                                     if (depthLimit || px.a == 0 || (!firstRowFog && col < _TextureRes / 2 && numFog > 0))
                                     {
                                         Vd += (startRow - r) * dispPerPx;
                                         if (!depthLimit)
                                             lastDepth = r + 1;
-
-                                        // handle output
-                                        //for (int r2 = r; r2 >= 0; --r2)
-                                        //    pixels[r2 * _TextureRes + col].a = 0;
-
+#if OUTPUTIMAGES
+                                        //handle output
+                                        for (int r2 = r; r2 >= 0; --r2)
+                                        {
+                                            int pxIdx = r2 * _TextureRes + col;
+                                            if (pixels[pxIdx].a != 0)
+                                            {
+                                                hasChangedPixels = true;
+                                                pixels[pxIdx].a = 0;
+                                            }
+                                        }
+#endif
                                         break;
                                     }
                                     if (isFogged)
@@ -746,7 +744,7 @@ namespace UADRealism
                         }
 
                         float halfDisp = Vd * 0.5f;
-                        stats.lcbPct = stats.Lwl * 0.5f;
+                        stats.lcbPct = 0f;
                         for (int col = startCol; col >= lastCol; --col)
                         {
                             float dispAtColEnd = _displacementsPerPx[col];
@@ -760,29 +758,37 @@ namespace UADRealism
                                     sternToCB += Mathf.InverseLerp(_displacementsPerPx[col + 1], dispAtColEnd, halfDisp);
 
                                 stats.lcbPct = (sternToCB * sizePerPixel) / stats.Lwl - 0.5f;
+                                // For now, fudge this, because of the inaccuracy in aft detection.
+                                stats.lcbPct = stats.lcbPct * 0.5f - 0.01f;
+                                // The ironclads have holes (!) in their sterns.
+                                if (stats.lcbPct > 0f)
+                                    stats.lcbPct = 0f;
                                 break;
                             }
                         }
                         break;
                 }
+#if OUTPUTIMAGES
+                if (view != ShipViewDir.Front || sec == 0)
+                {
+                    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
+                    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}";
+                    if (view == ShipViewDir.Bottom && firstPropCol > 0)
+                        filePath += $"_ps{firstPropCol}_pe{firstEndPropCol}";
+                    if (view != ShipViewDir.Front && transomCol >= 0)
+                        filePath += $"_tr{transomCol}_tw{transomWidth}_bm{maxBeamPx}";
 
-                //if(view != ShipViewDir.Front || sec == 0)
-                //{
-                //    string filePath = "C:\\temp\\112\\uad\\nar\\5.0\\shots\\";
-                //    filePath += $"{ShipStats.GetHullModelKey(part.data).Replace(";", "+")}_{sec}_{view.ToString()}";
-                //    if (view == ShipViewDir.Bottom && firstPropCol > 0)
-                //        filePath += $"ps{firstPropCol}_pe{firstEndPropCol}";
+                    var bytes = ImageConversion.EncodeToPNG(_texture);
+                    Il2CppSystem.IO.File.WriteAllBytes(filePath + ".png", bytes);
 
-                //    var bytes = ImageConversion.EncodeToPNG(_texture);
-                //    Il2CppSystem.IO.File.WriteAllBytes(filePath + ".png", bytes);
-
-                //    if (view == ShipViewDir.Side)
-                //    {
-                //        _texture.SetPixels32(pixels);
-                //        bytes = ImageConversion.EncodeToPNG(_texture);
-                //        Il2CppSystem.IO.File.WriteAllBytes(filePath + "_out.png", bytes);
-                //    }
-                //}
+                    if (hasChangedPixels)
+                    {
+                        _texture.SetPixels32(pixels);
+                        bytes = ImageConversion.EncodeToPNG(_texture);
+                        Il2CppSystem.IO.File.WriteAllBytes(filePath + "_out.png", bytes);
+                    }
+                }
+#endif
             }
             RenderTexture.active = null;
 
