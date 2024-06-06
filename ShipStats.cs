@@ -62,7 +62,7 @@ namespace UADRealism
 
     public static class ShipStats
     {
-        const int _Version = 1;
+        const int _Version = 2;
 
         private static bool _isRenderingHulls = false;
         public static bool _IsRenderingHulls => _isRenderingHulls;
@@ -748,7 +748,7 @@ namespace UADRealism
                 Cb /= div;
             }
             if (year == 0f)
-                year = 1915f;
+                year = 1890f;
             if (Cb == 0f)
                 Cb = CbAlt / (float)hData._hulls.Count;
 
@@ -860,6 +860,14 @@ namespace UADRealism
             if (avgCb < 0.49f)
                 Cb *= Util.Remap(avgCb, 0.38f, 0.5f, Util.Remap(Cb, 0.33f, 0.55f, 1f, 0.8f, true), Util.Remap(Cb, 0.33f, 0.55f, 1.3f, 1f, true));
             return Cb;
+        }
+
+        public static float GetYearCbCmMult(float Cb, float year)
+        {
+            if (year > 1925f)
+                return 1f;
+            float maxMul = Mathf.Lerp(0.96f, 1f, (1f + Mathf.Cos(Mathf.InverseLerp(0.5f, 0.62f, Cb) * (2f * Mathf.PI))) * 0.5f);
+            return Util.Remap(year, 1890f, 1925f, maxMul, 1f);
         }
 
         public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)

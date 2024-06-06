@@ -835,6 +835,7 @@ namespace UADRealism
             float sec0Draught = 1f;
             float sec0Beam = 1f;
             float sec0BulgeDepth = 1f;
+            float yearCbCmMult = 1f;
             for (int secCount = 0; secCount < count; ++secCount)
             {
                 // we're going to set min to 0 later
@@ -873,6 +874,8 @@ namespace UADRealism
                     sec0Draught = stats.T;
                     sec0Beam = stats.B;
                     sec0BulgeDepth = stats.bulgeDepth;
+                    if (!hData._isDDHull)
+                        yearCbCmMult = ShipStats.GetYearCbCmMult(stats.Cb, hData._year);
                 }
                 else
                 {
@@ -886,15 +889,20 @@ namespace UADRealism
                     stats.LrPct = hData._statsSet[0].LrPct * hData._statsSet[0].Lwl / stats.Lwl;
                     stats.iE = hData._statsSet[0].iE;
                     stats.bowLength = hData._statsSet[0].bowLength;
-                }
 
-                // Adding sections makes things too blocky. We'll average
-                // our primary coefficients vs the non-blocky case.
-                if (secCount != 0)
-                {
+                    // Adding sections makes things too blocky. We'll average
+                    // our primary coefficients vs the non-blocky case.
                     stats.Cwp = stats.Cwp * 0.8f + hData._statsSet[0].Cwp * 0.2f;
                     stats.Cb = stats.Cb * 0.8f + hData._statsSet[0].Cb * 0.2f;
                 }
+
+                // The game consistently has too-high block coefficients.
+                // To counteract this we make the Cm high. But early on,
+                // it's more expected to have lower Cm *and* Cb. Doing this
+                // preserves Cp. This will also increase Cwp slightly
+                // which is fine because it's too low in these ranges.
+                stats.Cb *= yearCbCmMult;
+                stats.Cm *= yearCbCmMult;
                 
                 // Recompute secondary stats based on primary.
                 stats.Vd = stats.Cb * stats.Lwl * stats.B * stats.T;
