@@ -1,4 +1,4 @@
-﻿//#define LOGHULLSTATS
+﻿#define LOGHULLSTATS
 //#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
@@ -62,7 +62,7 @@ namespace UADRealism
 
     public static class ShipStats
     {
-        const int _Version = 2;
+        const int _Version = 3;
 
         private static bool _isRenderingHulls = false;
         public static bool _IsRenderingHulls => _isRenderingHulls;
@@ -326,7 +326,7 @@ namespace UADRealism
 //                    year = 1915f;
 
 //                const float bDivT = DefaultBdivT * 0.867f;
-//                float lDivB = GetDesiredLdivB(hull.tonnageMin * TonnesToCubicMetersWater, bDivT, sMax * KnotsToMS, hull.shipType.name, year);
+//                float lDivB = GetDesiredLdivB(hull.tonnageMin * TonnesToCubicMetersWater, hData._desiredCb, bDivT, sMax * KnotsToMS, hull.shipType.name, year);
 //                int secs = GetDesiredSections(hData, hull.sectionsMin, hull.sectionsMax, hull.tonnageMin, sMax * KnotsToMS, lDivB, bDivT, out var bmPct, out var drPct, out var desiredCp);
 //                var stats = GetScaledStats(hData, hull.tonnageMin, bmPct, drPct, secs);
 //                if (secs < 0 || secs > hData._sectionsMax)
@@ -732,13 +732,17 @@ namespace UADRealism
             float hn = 0f;
             foreach (var hull in hData._hulls)
             {
-                CbAlt += GetDesiredCb(hull.shipType.name, 1915f);
+                float multCb = 1f;
+                // god I hate special cases.
+                if (hull.model == "dreadnought_hull_b_var")
+                    multCb = 0.93f;
+                CbAlt += GetDesiredCb(hull.shipType.name, 1915f) * multCb;
                 hn += GetHullNumber(hull.shipType.name);
                 float hYear = Database.GetYear(hull);
                 if (hYear < 0f)
                     continue;
 
-                Cb += GetDesiredCb(hull.shipType.name, hYear);
+                Cb += GetDesiredCb(hull.shipType.name, hYear) * multCb;
                 year += hYear;
                 ++div;
             }
@@ -767,7 +771,7 @@ namespace UADRealism
         public const float DefaultBdivT = 2.9f;
 
         public static float GetDesiredLdivB(Ship ship, float BdivT)
-            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, BdivT, ship.speedMax, ship.shipType.name, Database.GetYear(ship.hull.data));
+            => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, GetData(ship)._desiredCb, BdivT, ship.speedMax, ship.shipType.name, Database.GetYear(ship.hull.data));
 
         public static float GetDesiredCb(string sType, float year)
         {
@@ -797,6 +801,11 @@ namespace UADRealism
 
                 case "ic":
                     Cb = 0.66f;
+                    break;
+
+                case "tr":
+                case "tr_amc":
+                    Cb = 0.75f;
                     break;
             }
             return Cb;
@@ -870,10 +879,8 @@ namespace UADRealism
             return Util.Remap(year, 1890f, 1925f, maxMul, 1f);
         }
 
-        public static float GetDesiredLdivB(float Vd, float BdivT, float speedMS, string sType, float year)
+        public static float GetDesiredLdivB(float Vd, float Cb, float BdivT, float speedMS, string sType, float year)
         {
-            float Cb = GetDesiredCb(sType, year);
-
             float blockVolume = Vd / Cb;
 
             // Use block to estimate a starting L/B
@@ -948,14 +955,17 @@ namespace UADRealism
         public static float GetDesiredCpForFn(float Fn)
         {
             float tVal;
-            if (Fn > 0.33f)
-                tVal = 1f - Mathf.Pow((Fn - 0.33f) / (0.6f - 0.33f), 0.8f);
+            const float maxFn = 0.6f;
+            const float midFn = 0.35f;
+            const float minFn = 0.18f;
+            if (Fn > midFn)
+                tVal = 1f - Mathf.Pow((Fn - midFn) / (maxFn - midFn), 0.8f);
             else
-                tVal = (Fn - 0.18f) / (0.33f - 0.18f);
+                tVal = (Fn - minFn) / (midFn - minFn);
             
             float scaling = Mathf.Cos(Mathf.Clamp01(tVal) * Mathf.PI) * 0.5f + 0.5f;
             
-            return 0.58f + scaling * (Fn > 0.33f ? 0.06f : 0.126f);
+            return 0.57f + scaling * (Fn > midFn ? 0.06f : 0.126f);
         }
 
         public static float GetEngineIHPMult(Ship ship)

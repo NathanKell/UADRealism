@@ -118,7 +118,7 @@ namespace UADRealism
                         // ** Britain **
                         // G3/N3 had transom sterns
                         case "bc_4_britain_g3":
-                        case "bb_4_britain":
+                        case "bb_4_britain": // N3
                             part.model = "brooklyn_hull_c_wide";
                             part.sectionsMin = 1;
                             part.sectionsMax = 5;
@@ -138,6 +138,9 @@ namespace UADRealism
                             part.model = "brooklyn_hull_a";
                             part.sectionsMin = 5;
                             part.sectionsMax = 8;
+                            // The default setup is to use Des Moines parts, but they're jsut Atlanta parts
+                            // which look very wrong for a cruiser that looks close to the Baltimore/Oregon City classes.
+                            // We're not going to remove that tag though.
                             part.paramx.Add("CA_Heavy_USA", new Il2CppSystem.Collections.Generic.List<string>());
                             break;
 
