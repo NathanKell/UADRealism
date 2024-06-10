@@ -239,57 +239,6 @@ namespace UADRealism
         }
 
 #if disabled
-        //private static Dictionary<Ship.A, float> oldArmor = new Dictionary<Ship.A, float>();
-        //private static bool isInCalcInstability = false;
-        //private static bool hasSetFirstInstability = false;
-        //private static bool isCalcInstabilityPatched = false;
-
-        //private static void PatchArmorForCalcInstability(Ship ship)
-        //{
-        //    float sizeZ = ship.hullSize.size.z;
-        //    if (sizeZ == 0f)
-        //        return;
-
-        //    ship.armor.TryGetValue(Ship.A.Deck, out var deckMain);
-        //    if (deckMain == 0f)
-        //        return;
-
-        //    isCalcInstabilityPatched = true;
-
-        //    Melon<UADRealismMod>.Logger.Msg("Patching armor");
-
-        //    foreach (var kvp in ship.armor)
-        //        oldArmor.Add(kvp.key, kvp.value);
-
-        //    ship.armor.TryGetValue(Ship.A.Belt, out var beltMain);
-        //    ship.armor.TryGetValue(Ship.A.BeltBow, out var beltBow);
-        //    ship.armor.TryGetValue(Ship.A.BeltStern, out var beltStern);
-        //    float citadelExtraBelt = 0f;
-        //    float citadelExtraDeck = 0f;
-        //    for (int i = (int)Ship.A.InnerBelt_1st; i <= (int)Ship.A.InnerDeck_3rd; ++i)
-        //    {
-        //        var armorType = (Ship.A)i;
-        //        ship.armor.TryGetValue(armorType, out var citArmor);
-        //        if (armorType >= Ship.A.InnerDeck_1st)
-        //            citadelExtraDeck += citArmor;
-        //        else
-        //            citadelExtraBelt += citArmor;
-        //    }
-        //    beltMain += beltBow * 0.5f + beltStern * 0.5f + citadelExtraBelt * 0.25f;
-        //    deckMain += citadelExtraDeck * 0.25f;
-
-        //    float minDeck = (sizeZ + 1f) / -0.04f - beltMain * 0.5f + 0.001f;
-        //    float minDeck2 = -125 - beltMain * 0.5f + 0.001f;
-        //    deckMain = -deckMain;
-        //    if (deckMain < minDeck)
-        //        deckMain = minDeck;
-        //    if (deckMain < minDeck2)
-        //        deckMain = minDeck2;
-
-        //    ship.armor[Ship.A.Deck] = deckMain;
-        //    ship.armor[Ship.A.Belt] = beltMain;
-        //}
-
         //[HarmonyPrefix]
         //[HarmonyPatch(nameof(Ship.CalcInstability))]
         //internal static void Prefix_CalcInstability(Ship __instance)
@@ -387,13 +336,6 @@ namespace UADRealism
             Patch_Ui._ShipForEnginePower = __instance;
             Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} Cb={stats.Cb:F3}/Cwp={stats.Cwp:F3}/Cp={stats.Cp:F3}, {Ui.FormatEnginePower(SHP * ihpMult)}");
 
-
-            //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
-            //{
-            //    oldTurretArmors.Add(__instance.shipTurretArmor[i].barbetteArmor);
-            //    __instance.shipTurretArmor[i].barbetteArmor = 0f;
-            //}
-
             //float topweight = 0f;
             //foreach (var p in __instance.parts)
             //{
@@ -445,12 +387,6 @@ namespace UADRealism
 
             //metacentre = (float)(Math.Pow(hull.beam, 1.5) * ((double)stabilityAdj - 0.5) / 0.5 / 200.0);
             //rollPeriod = (float)(0.42 * (double)hull.beamBulges / Math.Sqrt(metacentre));
-
-
-            //for (int i = 0; i < __instance.shipTurretArmor.Count; ++i)
-            //    __instance.shipTurretArmor[i].barbetteArmor = oldTurretArmors[i];
-
-            //oldTurretArmors.Clear();
         }
 
         [HarmonyPostfix]

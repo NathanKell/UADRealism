@@ -26,7 +26,6 @@ namespace UADRealism
             desiredLdivB *= 1f + ModUtils.DistributedRange(0.025f);
 
             float CpOffset = ModUtils.DistributedRange(0.02f, 3);
-            //Melon<UADRealismMod>.Logger.Msg($"Iterating to find Cp for {(ship.speedMax / ShipStats.KnotsToMS)}kn. L/B {desiredLdivB:F2}, B/T {desiredBdivT:F2}, Cp offset {CpOffset:F3}");
 
             var bestSec = ShipStats.GetDesiredSections(ship, desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, CpOffset);
 
@@ -44,7 +43,6 @@ namespace UADRealism
                 fbVal = Mathf.Lerp(0f, ShipData._MaxFreeboard, fbVal);
             ship.ModData().SetFreeboard(fbVal);
 
-            //Melon<UADRealismMod>.Logger.Msg($"Setting sizeZ={ship.GetFineness():F1} from {t:F3} from {bestSec} in {ship.hull.data.sectionsMin}-{ship.hull.data.sectionsMax}");
             if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
                 ship.RefreshHull(false);
         }
@@ -173,8 +171,6 @@ namespace UADRealism
                 oldArmor[kvp.Key] = kvp.Value;
             var oldRange = ship.opRange < minOpRange ? minOpRange : ship.opRange;
 
-            //Melon<UADRealismMod>.Logger.Msg($"Adjust. Old values: {oldSpeed:F1}/{oldQuarters}/{oldRange}. Armor {ModUtils.ArmorString(ship.armor)}");
-
             float minSpeed;
             if (limitSpeed > 0f)
             {
@@ -208,7 +204,6 @@ namespace UADRealism
                     newArmor[kvp.Key] = Mathf.Max(armorMinHint[kvp.Key], MinArmorForZone(ship, kvp.Key));
 
                 ship.SetArmor(newArmor);
-                //Melon<UADRealismMod>.Logger.Msg($"Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
 
                 canMakeTarget = ship.Weight() / ship.Tonnage() <= targetWeight;
                 if (!canMakeTarget)
@@ -217,7 +212,6 @@ namespace UADRealism
                         newArmor[kvp.Key] = MinArmorForZone(ship, kvp.Key);
 
                     ship.SetArmor(newArmor);
-                    //Melon<UADRealismMod>.Logger.Msg($"Trying again. Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
                     canMakeTarget = ship.Weight() / ship.Tonnage() <= targetWeight;
                 }
             }
@@ -240,7 +234,6 @@ namespace UADRealism
 
             minSpeed = Mathf.Max(minSpeed, ship.shipType.speedMin * ShipStats.KnotsToMS);
             maxSpeed = Mathf.Min(maxSpeed, ship.shipType.speedMax * ShipStats.KnotsToMS);
-            //Melon<UADRealismMod>.Logger.Msg($"Min speed: {minSpeed:F1}, max {maxSpeed:F1}");
             oldSpeed = RoundSpeedToStep(oldSpeed);
 
             // Reset
@@ -324,29 +317,6 @@ namespace UADRealism
                 if (allowEditRange && newOpRange != ship.opRange)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Range, delta > 0 ? 75f : 400f);
 
-                //string newValues = "Potentials:";
-                //foreach (var kvp in _AdjustHullStatsOptions)
-                //{
-                //    string val = null;
-                //    switch (kvp.Key)
-                //    {
-                //        case AdjustHullStatsItem.Armor:
-                //            val = $" A:{ship.armor[randomA]:F1}->{newArmor[randomA]:F1}";
-                //            break;
-                //        case AdjustHullStatsItem.Speed:
-                //            val = $" S:{ship.speedMax:F1}->{newSpeed:F1}";
-                //            break;
-                //        case AdjustHullStatsItem.Range:
-                //            val = $" R:{ship.opRange}->{newOpRange}";
-                //            break;
-                //        default:
-                //            val = $" C:{ship.CurrentCrewQuarters}->{newQuarters}";
-                //            break;
-                //    }
-                //    newValues += val;
-                //}
-                //Melon<UADRealismMod>.Logger.Msg(newValues);
-
                 if (_AdjustHullStatsOptions.Count == 0)
                     return;
 
@@ -365,22 +335,17 @@ namespace UADRealism
                     {
                         case AdjustHullStatsItem.Speed:
                             ship.SetSpeedMax(newSpeed);
-                            //Melon<UADRealismMod>.Logger.Msg($"Picked speed");
                             break;
                         case AdjustHullStatsItem.Quarters:
                             ship.CurrentCrewQuarters = newQuarters;
-                            //Melon<UADRealismMod>.Logger.Msg($"Picked quarters");
                             break;
                         case AdjustHullStatsItem.Range:
                             ship.SetOpRange(newOpRange);
-                            //Melon<UADRealismMod>.Logger.Msg($"Picked range");
                             break;
                         default:
                             ship.SetArmor(newArmor);
-                            //Melon<UADRealismMod>.Logger.Msg($"Picked armor");
                             break;
                     }
-                    //Melon<UADRealismMod>.Logger.Msg($"Checking: {ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
                     if (stopCondition())
                         return;
                 }
@@ -576,7 +541,6 @@ namespace UADRealism
                 steelweight *= 0.9f + (1f + ship.ModData().Freeboard * 0.02f) * 0.1f;
                 steelweight *= 1f + citPct * 0.1f;
                 float modifiedHullTechMult = Util.Remap(hullTechMult, 0.58f, 1f, 0.675f, 1f);
-                //Melon<UADRealismMod>.Logger.Msg($"PartMats: Scantlings {scantlingStrength:F2}, tech {modifiedHullTechMult:F3}. Cit len {citadelLength:F1} / {stats.Lwl:F1}");
                 steelweight *= 1.65f * modifiedHullTechMult;
                 steelweight *= scantlingStrength;
 
@@ -673,9 +637,6 @@ namespace UADRealism
                 mat.weight = weightSTS * extAreaRatio * (1f - bowRatio) * Awp * ship.armor.ArmorValue(Ship.A.DeckStern);
                 mat.costMod = costSTS;
                 mats.Add(mat);
-
-                //Melon<UADRealismMod>.Logger.Msg($"Armor: C: {ship.GetDynamicCitadelMinZ():F1}-{ship.GetDynamicCitadelMaxZ():F1} vs {ship.hullPartMinZ:F1}-{ship.hullPartMaxZ:F1}. Bow {bowRatio:F3}. Belt: {armorCitadelLength:F1}x{beltHeightEstimate:F1}m. QC {halfCirc:F1}, QSL {shipSideLength:F1}, "
-                //    + $"Deck: Awp {Awp:F1}. Ratio {extAreaRatio:F3}");
 
                 var citArmor = ship.GetCitadelArmor();
                 if (citArmor != null)
@@ -783,8 +744,6 @@ namespace UADRealism
             else if (data.isGun)
             {
                 ship.CheckCaliberOnShip();
-                //Melon<UADRealismMod>.Logger.Msg($"Getting gun mats for partdata {data.name}");
-                //Melon<UADRealismMod>.Logger.Msg($"Has gunID {data.GetGunDataId(ship)} (noship {data.GetGunDataId(null)})");
                 var gunDataM = new GunDataM(data, ship, true);
                 bool isCasemate = gunDataM.isCasemate;
                 float baseWeight = gunDataM.BaseWeight();
@@ -824,7 +783,6 @@ namespace UADRealism
                     int calInch = Mathf.RoundToInt(gunDataM.calInch);
                     float cal = gunDataM.caliber;
                     float gunYear = Database.GetGunYear(calInch, gunGrade);
-                    //Melon<UADRealismMod>.Logger.Msg($"Gun {cal:F2} ({calInch}) of grade {gunGrade} has year {gunYear:F0}");
                     float barbetteWidth = TurretBaseWidth(cal, gunYear);
                     if (isCasemate)
                     {
@@ -922,8 +880,6 @@ namespace UADRealism
                 mat.weight = ammoAmount * Part.AvgShellWeight(gunDataM.gunData, data, ship) * 0.001f;
                 mat.costMod = ship.ShellCost(data);
                 mats.Add(mat);
-
-                //Melon<UADRealismMod>.Logger.Msg($"Done getting gun mats");
             }
             //else if (data.isBarbette)
             //{
