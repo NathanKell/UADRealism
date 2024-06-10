@@ -11,6 +11,12 @@ using UnityEngine;
 using Il2Cpp;
 using System.IO;
 
+#pragma warning disable CS8601
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+#pragma warning disable CS8625
+#pragma warning disable CS8618
+
 namespace UADRealism
 {
     public class HullData

@@ -6,6 +6,10 @@ using UnityEngine;
 using Il2Cpp;
 using UnityEngine.UI;
 
+#pragma warning disable CS8604
+#pragma warning disable CS8625
+#pragma warning disable CS8603
+
 namespace UADRealism
 {
     [HarmonyPatch(typeof(Ui))]

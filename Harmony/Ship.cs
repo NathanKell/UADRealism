@@ -4,7 +4,10 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
-using System.Linq;
+
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+#pragma warning disable CS8625
 
 namespace UADRealism
 {
@@ -363,8 +366,7 @@ namespace UADRealism
             if (ShipStats._IsRenderingHulls || __instance == null)
                 return;
 
-            if (__instance.hullSize == null
-                || __instance.hullSize.size.x == 0f
+            if (__instance.hullSize.size.x == 0f
                 || __instance.hullSize.size.y == 0f
                 || __instance.hullSize.size.z == 0f
                 || __instance.hullSize.min.y == 0f)
@@ -572,5 +574,16 @@ namespace UADRealism
 
         //    return false;
         //}
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.MaxArmorForZone))]
+        internal static bool Prefix_MaxArmorForZone(Ship __instance, Ship.A armorA, PartData gunPartData, ref float __result)
+        {
+            __result = ShipM.MaxArmorForZone(__instance, armorA, gunPartData);
+            return false;
+        }
+        
+        // Not bothering to prefix MinArmorForZone because it can stay as default
+        // (all it does is return minArmor for BeltMain, and 0 for everything else)
     }
 }

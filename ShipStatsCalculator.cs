@@ -6,6 +6,13 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 
+#pragma warning disable CS8601
+#pragma warning disable CS8602
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+#pragma warning disable CS8625
+#pragma warning disable CS8618
+
 namespace UADRealism
 {
     [RegisterTypeInIl2Cpp]
@@ -127,7 +134,9 @@ namespace UADRealism
 
                 foreach (var mr in rs)
                 {
-                    if (mr != null && !okRenderers.Contains(mr))
+                    if (mr == null)
+                        continue;
+                    if (!okRenderers.Contains(mr))
                     {
                         if (mr.enabled)
                         {

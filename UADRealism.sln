@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.34031.81
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.34928.147
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UADRealism", "UADRealism.csproj", "{F13AF963-30A2-49D6-BB18-CAB9B9B41BD8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UADRealism", "UADRealism.csproj", "{9935328D-6D13-4352-AB53-EB037607F138}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +11,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{F13AF963-30A2-49D6-BB18-CAB9B9B41BD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F13AF963-30A2-49D6-BB18-CAB9B9B41BD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F13AF963-30A2-49D6-BB18-CAB9B9B41BD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F13AF963-30A2-49D6-BB18-CAB9B9B41BD8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9935328D-6D13-4352-AB53-EB037607F138}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9935328D-6D13-4352-AB53-EB037607F138}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9935328D-6D13-4352-AB53-EB037607F138}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9935328D-6D13-4352-AB53-EB037607F138}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -10,6 +10,10 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+#pragma warning disable CS8625
+
 namespace UADRealism
 {
     public static class ShipM
@@ -201,7 +205,7 @@ namespace UADRealism
                 ship.SetOpRange(minOpRange);
 
                 foreach (var kvp in ship.armor)
-                    newArmor[kvp.Key] = Mathf.Max(armorMinHint[kvp.Key], ship.MinArmorForZone(kvp.Key));
+                    newArmor[kvp.Key] = Mathf.Max(armorMinHint[kvp.Key], MinArmorForZone(ship, kvp.Key));
 
                 ship.SetArmor(newArmor);
                 //Melon<UADRealismMod>.Logger.Msg($"Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
@@ -210,7 +214,7 @@ namespace UADRealism
                 if (!canMakeTarget)
                 {
                     foreach (var kvp in ship.armor)
-                        newArmor[kvp.Key] = ship.MinArmorForZone(kvp.Key);
+                        newArmor[kvp.Key] = MinArmorForZone(ship, kvp.Key);
 
                     ship.SetArmor(newArmor);
                     //Melon<UADRealismMod>.Logger.Msg($"Trying again. Min values: {ship.speedMax:F1}/{ship.CurrentCrewQuarters}/{ship.opRange}. Armor {ModUtils.ArmorString(ship.armor)}.\n{ship.Weight():F0}/{ship.Tonnage():F0}={(ship.Weight() / ship.Tonnage()):F2} vs {targetWeight:F2}");
@@ -224,7 +228,7 @@ namespace UADRealism
                 ship.SetOpRange(VesselEntity.OpRange.VeryHigh);
 
                 foreach (var kvp in ship.armor)
-                    newArmor[kvp.Key] = Mathf.Min(limitArmor, ship.MaxArmorForZone(kvp.Key));
+                    newArmor[kvp.Key] = Mathf.Min(limitArmor, MaxArmorForZone(ship, kvp.Key, null));
 
                 ship.SetArmor(newArmor);
 
@@ -274,11 +278,11 @@ namespace UADRealism
                     // to do this fresh each time.
                     foreach (var kvp in armorPriority)
                     {
-                        float maxZone = ship.MaxArmorForZone(kvp.Key);
+                        float maxZone = MaxArmorForZone(ship, kvp.Key, null);
                         if (maxZone > 0f)
                         {
                             armorMinHint.TryGetValue(kvp.Key, out var minHint);
-                            float minArmor = Mathf.Max(minHint, ship.MinArmorForZone(kvp.Key));
+                            float minArmor = Mathf.Max(minHint, MinArmorForZone(ship, kvp.Key));
                             float maxArmor = Mathf.Min(armorLimit, maxZone);
                             float oldLevel = ship.armor.ContainsKey(kvp.Key) ? ship.armor[kvp.Key] : 0f; // trygetvalue is grumpy in IL2Cpp
                             if ((delta > 0) ? (oldLevel < maxArmor) : (oldLevel > minArmor))
@@ -289,8 +293,8 @@ namespace UADRealism
                     {
                         var randomA = ModUtils.RandomByWeights(_AdjustPriorityArmorLocal);
                         armorMinHint.TryGetValue(randomA, out var minHint);
-                        float minArmor = Mathf.Max(minHint, ship.MinArmorForZone(randomA));
-                        float maxArmor = Mathf.Min(armorLimit, ship.MaxArmorForZone(randomA));
+                        float minArmor = Mathf.Max(minHint, MinArmorForZone(ship, randomA));
+                        float maxArmor = Mathf.Min(armorLimit, MaxArmorForZone(ship, randomA, null));
                         float oldLevel = ship.armor.ContainsKey(randomA) ? ship.armor[randomA] : 0f; // trygetvalue is grumpy in IL2Cpp
                         float newArmorLevel = delta * 2.54f + oldLevel;
                         if (delta < 0)
@@ -409,23 +413,6 @@ namespace UADRealism
             return weight;
         }
 
-        private static float[] _TurretBarrelCountWeightMults = null;
-
-        private static float GetTurretBarrelWeightMult(PartData data)
-        {
-            if (_TurretBarrelCountWeightMults == null)
-            {
-                _TurretBarrelCountWeightMults = new float[5];
-                _TurretBarrelCountWeightMults[0] = 1f;
-                _TurretBarrelCountWeightMults[1] = MonoBehaviourExt.Param("w_turret_barrels_2", 1.8f);
-                _TurretBarrelCountWeightMults[2] = MonoBehaviourExt.Param("w_turret_barrels_3", 2.48f);
-                _TurretBarrelCountWeightMults[3] = MonoBehaviourExt.Param("w_turret_barrels_4", 3.1f);
-                _TurretBarrelCountWeightMults[4] = MonoBehaviourExt.Param("w_turret_barrels_5", 3.6f);
-            }
-
-            return _TurretBarrelCountWeightMults[Util.Clamp(data.barrels - 1, 0, 4)];
-        }
-
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
         {
             bool isCasemate = Ship.IsCasemateGun(data);
@@ -460,7 +447,12 @@ namespace UADRealism
                 Mathf.Pow(cal, _TurretCalBigExp) * _TurretCalBigMult, Mathf.InverseLerp(6f * 25.4f, 7f * 25.4f, cal));
 
         public static float TurretBaseHeight(float cal)
-            => (Mathf.Pow(cal, 0.35f) * 0.12f + 1.8f) * (cal < 5f * 25.4f ? cal * (1f / (5f * 25.4f)) : 1f);
+        {
+            float height = Mathf.Pow(cal, 0.35f) * 0.12f + 1.8f;
+            if (cal < 5f * 25.4f)
+                height *= cal * (1f / (5f * 25.4f));
+            return height;
+        }
 
         public static float TurretBarrelsWidthMult(float barrelsF)
             => Mathf.Pow(barrelsF, _TurretBarrelsWidthPow) + _TurretCalBarrelsWidthOffset;
@@ -793,43 +785,17 @@ namespace UADRealism
                 ship.CheckCaliberOnShip();
                 //Melon<UADRealismMod>.Logger.Msg($"Getting gun mats for partdata {data.name}");
                 //Melon<UADRealismMod>.Logger.Msg($"Has gunID {data.GetGunDataId(ship)} (noship {data.GetGunDataId(null)})");
-                var gunData = G.GameData.GunData(data);
-                float baseWeight = gunData.BaseWeight(ship, data);
+                var gunDataM = new GunDataM(data, ship, true);
+                bool isCasemate = gunDataM.isCasemate;
+                float baseWeight = gunDataM.BaseWeight();
                 float techWeightMod = ship.TechWeightMod(data);
-                var tc = FindMatchingTurretCaliber(ship, data);
-                float minLengthParam, maxLengthParam, techLengthLimit;
-                bool isCasemate = Ship.IsCasemateGun(data);
-                // Stock is weird here, it uses casemate params in wrong place.
-                if (isCasemate)
-                {
-                    minLengthParam = MonoBehaviourExt.Param("min_casemate_length_mod", -10f);
-                    maxLengthParam = MonoBehaviourExt.Param("max_casemate_length_mod", 10f);
-                    techLengthLimit = ship.TechMax("tech_gun_length_limit_casemates", maxLengthParam);
-                }
-                else
-                {
-                    minLengthParam = MonoBehaviourExt.Param("min_gun_length_mod", -20f);
-                    maxLengthParam = MonoBehaviourExt.Param("max_gun_length_mod", 20f);
-                    float calIn = data.caliber;
-                    if (tc != null)
-                        calIn += tc.diameter;
-                    calIn *= 1f / 25.4f;
-                    techLengthLimit = calIn > 2f ? ship.TechMax("tech_gun_length_limit", maxLengthParam) : ship.TechMax("tech_gun_length_limit_small", maxLengthParam);
-                }
 
-                float barrelMult = GetTurretBarrelWeightMult(data);
+                float barrelMult = GunDataM.GetTurretBarrelWeightMult(data);
                 float turretWeight = baseWeight * techWeightMod * barrelMult;
-                if (isCasemate)
-                    turretWeight *= MonoBehaviourExt.Param("w_turret_casemate_mod", 0.75f);
+                if (gunDataM.isCasemate)
+                    turretWeight *= MonoBehaviourExt.Param("w_turret_casemate_mod", 0.75f); // 0.5 in NAR
 
-                float costMod = ship.TechCostMod(data);
-                // To avoid the weird effect (seen in stock) of making guns cheaper over time,
-                // we split this remap in half. (Otherwise the halfway-point between min and
-                // max length will move as max length increases.)
-                if (tc != null)
-                    costMod += tc.length > 0f ?
-                        Util.Remap(tc.length, 0f, techLengthLimit, 0f, MonoBehaviourExt.Param("gun_length_extra_cost_max", 0.3f))
-                        : Util.Remap(tc.length, minLengthParam, 0f, MonoBehaviourExt.Param("gun_length_extra_cost_min", -0.2f), 0f);
+                float costMod = ship.TechCostMod(data) + gunDataM.RemapLength(MonoBehaviourExt.Param("gun_length_extra_cost_min", -0.2f), MonoBehaviourExt.Param("gun_length_extra_cost_max", 0.3f), 0f);
 
                 var mat = new Ship.MatInfo();
                 mat.name = "turret";
@@ -839,7 +805,7 @@ namespace UADRealism
                 mats.Add(mat);
 
                 int gunGrade = ship.TechGunGrade(data, true);
-                float barrelWeight = gunData.BarrelWeight(ship, data, gunGrade);
+                float barrelWeight = gunDataM.BarrelWeight(gunGrade);
                 float barrelsF = (float)data.barrels;
                 mat = new Ship.MatInfo();
                 mat.name = "turret_barrels";
@@ -851,16 +817,14 @@ namespace UADRealism
                 var ta = FindMatchingTurretArmor(ship, data);
                 if (ta != null)
                 {
-                    float cal = data.caliber;
                     float aTop, aFace, aSides;
                     string sideMat;
                     string topMat;
                     float barrelWidthMult;
-                    int calInch = Mathf.RoundToInt(cal * (1f / 25.4f));
+                    int calInch = Mathf.RoundToInt(gunDataM.calInch);
+                    float cal = gunDataM.caliber;
                     float gunYear = Database.GetGunYear(calInch, gunGrade);
                     //Melon<UADRealismMod>.Logger.Msg($"Gun {cal:F2} ({calInch}) of grade {gunGrade} has year {gunYear:F0}");
-                    if (tc != null)
-                        cal += tc.diameter;
                     float barbetteWidth = TurretBaseWidth(cal, gunYear);
                     if (isCasemate)
                     {
@@ -913,7 +877,7 @@ namespace UADRealism
                         }
                     }
 
-                    aFace *= 1f - barrelWidthMult * 0.1f; // gunports
+                    aFace *= (1f - barrelsF * 0.1f) / barrelWidthMult; // gunports
 
                     // The game makes a distinction here between small guns and big guns
                     // (i.e. ACR/BB/BC grade and smaller). We don't, because armor is armor.
@@ -951,11 +915,11 @@ namespace UADRealism
                     mats.Add(mat);
                 }
 
-                float ammoAmount = gunData.ammo * ship.TechA("ammo_amount");
+                float ammoAmount = gunDataM.gunData.ammo * ship.TechA("ammo_amount");
                 mat = new Ship.MatInfo();
                 mat.name = "ammo";
                 mat.mat = Ship.Mat.Ammo;
-                mat.weight = ammoAmount * Part.AvgShellWeight(gunData, data, ship) * 0.001f;
+                mat.weight = ammoAmount * Part.AvgShellWeight(gunDataM.gunData, data, ship) * 0.001f;
                 mat.costMod = ship.ShellCost(data);
                 mats.Add(mat);
 
@@ -1227,6 +1191,92 @@ namespace UADRealism
             //}
 
             return true;
+        }
+
+        public static float MaxArmorForZone(Ship ship, Ship.A armorA, PartData gunPartData)
+        {
+            float thickness = 0f;
+            switch (armorA)
+            {
+                case Ship.A.ConningTower:
+                    foreach (var part in ship.parts)
+                    {
+                        if (part.data.isTowerMain)
+                        {
+                            var wConning = MonoBehaviourExt.Param("w_conning_tower_threshold", 0.3f);
+                            var conningPct = MonoBehaviourExt.Param("conning_tower_armor_percent", 0.05f);
+                            thickness = Mathf.Clamp(ship.TechWeightMod(part.data) * part.data.weight * wConning * conningPct, 0f, ship.shipType.armorMax * 1.5f) * 25.4f;
+                            break;
+                        }
+                    }
+                    break;
+
+                case Ship.A.TurretTop:
+                case Ship.A.TurretSide:
+                case Ship.A.Barbette:
+                    if (gunPartData == null)
+                        break;
+                    var gdm = new GunDataM(gunPartData, ship, false);
+                    float mult = armorA == Ship.A.TurretTop ? 0.75f : 1.5f;
+                    thickness = mult * gdm.caliber;
+                    if (gdm.isCasemate)
+                    {
+                        thickness *= 0.8f;
+                        if (armorA != Ship.A.Barbette)
+                            thickness = ship.shipType.armorMax == -1f ? float.PositiveInfinity : Math.Max(ship.shipType.armorMax * 25.4f, thickness);
+                    }
+
+                    if (G.settings.armorStep * 2f >= thickness)
+                        return 0f;
+                    break;
+
+                case Ship.A.InnerBelt_1st:
+                    if (ship.armor.TryGetValue(Ship.A.Belt, out var beltThick))
+                        return beltThick * 0.5f;
+                    break;
+
+                case Ship.A.InnerBelt_2nd:
+                    if (ship.armor.TryGetValue(Ship.A.InnerBelt_1st, out var beltThick1))
+                        return beltThick1 * 0.8f;
+                    break;
+
+                case Ship.A.InnerBelt_3rd:
+                    if (ship.armor.TryGetValue(Ship.A.InnerBelt_2nd, out var beltThick2))
+                        return beltThick2 * 0.8f;
+                    break;
+
+                case Ship.A.InnerDeck_1st:
+                    if (ship.armor.TryGetValue(Ship.A.Deck, out var deckThick))
+                        return deckThick * 0.6f;
+                    break;
+
+                case Ship.A.InnerDeck_2nd:
+                    if (ship.armor.TryGetValue(Ship.A.InnerDeck_1st, out var deckThick1))
+                        return deckThick1 * 0.8f;
+                    break;
+
+                case Ship.A.InnerDeck_3rd:
+                    if (ship.armor.TryGetValue(Ship.A.InnerDeck_2nd, out var deckThick2))
+                        return deckThick2 * 0.8f;
+                    break;
+            }
+            
+            thickness = G.settings.RoundToArmorStep(thickness);
+            if (thickness != 0f)
+                return thickness;
+
+            if (ship.shipType.armorMax == -1f)
+                return float.PositiveInfinity;
+            else
+                return ship.StatEffect("armor_max_mod", false) * ship.shipType.armorMax * 25.4f;
+        }
+
+        public static float MinArmorForZone(Ship ship, Ship.A armor)
+        {
+            if (armor != Ship.A.Belt)
+                return 0f;
+
+            return ship.shipType.armorMin * 25.4f;
         }
 
         public static ShipData ModData(this Ship ship)

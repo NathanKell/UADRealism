@@ -5,10 +5,19 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 
+#pragma warning disable CS8603
+#pragma warning disable CS8604
+#pragma warning disable CS8625
+
 namespace UADRealism
 {
     public static class ModUtils
     {
+        // Due to an Il2Cpp interop issue, you can't actually pass null nullables, you have to pass
+        // nullables _with no value_. So we're going to just store a bunch of statics here we can use
+        // instead of allocating each time.
+        public static Il2CppSystem.Nullable<int>  _NullableEmpty_Int = new Il2CppSystem.Nullable<int>();
+
         // Reimplementation of stock function
         public static void FindChildrenStartsWith(GameObject obj, string str, List<GameObject> list)
         {
@@ -182,7 +191,7 @@ namespace UADRealism
             return (float)rnd.NextDouble() * (b - a) + a;
         }
 
-        public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null)
+        public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null) where T : notnull
         {
             if (dictionary.Count == 0)
                 return default(T);
