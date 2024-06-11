@@ -1,4 +1,4 @@
-﻿#define LOGHULLSTATS
+﻿//#define LOGHULLSTATS
 //#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
@@ -69,7 +69,7 @@ namespace UADRealism
 
     public static class ShipStats
     {
-        const int _Version = 4;
+        const int _Version = 5;
 
         private static bool _isRenderingHulls = false;
         public static bool _IsRenderingHulls => _isRenderingHulls;
@@ -177,6 +177,9 @@ namespace UADRealism
                 data.tonnageMin *= Mathf.Pow(data.beamMin * 0.01f + 1f, data.beamCoef) * Mathf.Pow(data.draughtMin * 0.01f + 1f, data.draughtCoef);
                 data.tonnageMax *= Mathf.Pow(data.beamMax * 0.01f + 1f, data.beamCoef) * Mathf.Pow(data.draughtMax * 0.01f + 1f, data.draughtCoef);
 
+                if (data.shipType.name == "dd" || data.shipType.name == "tb")
+                    data.tonnageMin *= 0.6f;
+
 
                 data.beamMin = -50f;
                 data.beamMax = 50f;
@@ -256,9 +259,9 @@ namespace UADRealism
                 }
             }
 
-            // Pass 3: Set starting scales for all hull parts, compute scale ratios
-            int num = 1;
+            // Pass 3: Set starting data for all hull parts
 #if LOGHULLSTATS
+            int num = 1;
             Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,HN,dCb,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
 #endif
             foreach (var kvp in gameData.parts)
@@ -274,10 +277,9 @@ namespace UADRealism
                     continue;
                 }
 
-                // _now_ we set min sections to lowest we can
-                if (hData._secMinWithFunnel < data.sectionsMin)
-                    data.sectionsMin = hData._secMinWithFunnel;
+                ApplyHullData(data, hData);
 
+#if LOGHULLSTATS
                 var modelName = hData._key;
                 for (int sections = data.sectionsMin; sections < data.sectionsMax; ++sections)
                 {
@@ -286,14 +288,45 @@ namespace UADRealism
                     var stats = GetScaledStats(hData, tng, 0, 0, sections);
                     float shpMult = GetHullFormSHPMult(data);
                     float shp = GetSHPRequired(stats, data.speedLimiter * KnotsToMS, false);
-#if LOGHULLSTATS
                     Melon<UADRealismMod>.Logger.Msg($",{num},{data.name.Replace(',', '&')},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._hullNumber:F0},{hData._desiredCb:F3},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{shpMult:F2}");
-#endif
                     ++num;
                 }
+#endif
             }
 
             SaveData(totalHulls);
+        }
+
+        private static void ApplyHullData(PartData hull, HullData hData)
+        {
+            // Set min sections to lowest we can
+            if (hData._secMinWithFunnel < hull.sectionsMin)
+                hull.sectionsMin = hData._secMinWithFunnel;
+
+            float t = Mathf.InverseLerp(0.45f, 0.65f, hData._statsSet[hull.sectionsMin].Cb);
+            float minLB1 = Mathf.Lerp(6f, 2.75f, t);
+            float minLB2 = Mathf.Lerp(7f, 4f, t);
+            float maxLB1 = Mathf.Lerp(12f, 8f, t);
+            float maxLB2 = Mathf.Lerp(15f, 9f, t);
+
+            float minLB = hData._statsSet[hull.sectionsMin].Lwl / hData._statsSet[hull.sectionsMin].B;
+            float maxLB = hData._statsSet[hull.sectionsMax].Lwl / hData._statsSet[hull.sectionsMax].B;
+
+            float minBMult = Mathf.Min(minLB / maxLB1, maxLB / maxLB2);
+            if (minBMult > 0.95f)
+                minBMult = 0.95f;
+
+            float maxBMult = Math.Max(minLB / minLB1, maxLB / minLB2);
+            if (maxBMult < 1.05f)
+                maxBMult = 1.05f;
+
+            hull.beamMin = (minBMult - 1f) * 100f;
+            hull.beamMax = (maxBMult - 1f) * 100f;
+
+            float nominalB = (minBMult + maxBMult) * 0.5f * hData._statsSet[hull.sectionsMin].B;
+            float BT = nominalB / hData._statsSet[hull.sectionsMin].T;
+            hull.draughtMin = (Math.Min(0.95f, BT / 4.25f) - 1f) * 100f;
+            hull.draughtMax = (Math.Max(1.05f, BT / 2f) - 1f) * 100f;
         }
 
         private static System.Collections.IEnumerator PartSteps()
@@ -541,15 +574,17 @@ namespace UADRealism
                     break;
 
                 var line = hDatas[curLine].Split(',');
-                if (!_HullModelData.TryGetValue(line[0], out var hData))
+                int col = 0;
+                if (!_HullModelData.TryGetValue(line[col++], out var hData))
                     return false;
 
                 hData._statsSet = new HullStats[hData._sectionsMax + 1];
-                hData._isDDHull = bool.Parse(line[1]);
-                hData._year = float.Parse(line[2]);
-                hData._desiredCb = float.Parse(line[3]);
-                hData._hullNumber = float.Parse(line[4]);
-                hData._yPos = float.Parse(line[5]);
+                hData._isDDHull = bool.Parse(line[col++]);
+                hData._year = float.Parse(line[col++]);
+                hData._desiredCb = float.Parse(line[col++]);
+                hData._hullNumber = float.Parse(line[col++]);
+                hData._yPos = float.Parse(line[col++]);
+                hData._secMinWithFunnel = int.Parse(line[col++]);
                 ++procDatas;
             }
             curLine += 2; // the endline + header row
@@ -584,6 +619,17 @@ namespace UADRealism
                 hData._statsSet[sec] = stats;
                 ++procSecs;
             }
+
+            // Apply data
+            foreach (var kvp in _HullModelData)
+            {
+                var hData = kvp.Value;
+                foreach (var hull in hData._hulls)
+                {
+                    if (hData._secMinWithFunnel < hull.sectionsMin)
+                        hull.sectionsMin = hData._secMinWithFunnel;
+                }
+            }
             Melon<UADRealismMod>.Logger.Msg($"Loaded hull data. Processed {procDatas} HullDatas and {procSecs} HullStats");
             return true;
         }
@@ -601,12 +647,12 @@ namespace UADRealism
             lines.Add($"Total datas,{_HullModelData.Count}");
             lines.Add($"Total hulls,{totalHulls}");
             lines.Add($"Total parts,{G.GameData.parts.Count}");
-            lines.Add("key,isDDHull,year,desiredCb,hullNumber,yPos");
+            lines.Add("key,isDDHull,year,desiredCb,hullNumber,yPos,secMinWithFunnel");
 
             foreach (var kvp in _HullModelData)
             {
                 var h = kvp.Value;
-                lines.Add($"{kvp.Key},{h._isDDHull},{h._year},{h._desiredCb},{h._hullNumber},{h._yPos}");
+                lines.Add($"{kvp.Key},{h._isDDHull},{h._year},{h._desiredCb},{h._hullNumber},{h._yPos},{h._secMinWithFunnel}");
             }
 
             lines.Add("$$END$$");
@@ -1196,7 +1242,16 @@ namespace UADRealism
         }
 
         public static float OpRangeToPct(Ship.OpRange opRange)
-            => (8f + (int)opRange * 2f) * 0.01f;
+        {
+            return opRange switch
+            {
+                VesselEntity.OpRange.VeryLow => 8,
+                VesselEntity.OpRange.Low => 13,
+                VesselEntity.OpRange.Medium => 16,
+                VesselEntity.OpRange.High => 20,
+                _ => 32
+            };
+        }
 
         public static int GetRange(Ship ship) => GetRange(ship, ship.opRange);
 
