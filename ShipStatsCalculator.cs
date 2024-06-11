@@ -834,7 +834,7 @@ namespace UADRealism
             return stats;
         }
 
-        public static System.Collections.IEnumerator ProcessHullData(HullData hData)
+        public static System.Collections.IEnumerator ProcessHullData(HullData hData, bool checkMountsOnly)
         {
             var data = hData._hulls[0];
 
@@ -851,6 +851,7 @@ namespace UADRealism
             float sec0Beam = 1f;
             float sec0BulgeDepth = 1f;
             float yearCbCmMult = 1f;
+            hData._secMinWithFunnel = -1;
             for (int secCount = 0; secCount < count; ++secCount)
             {
                 // we're going to set min to 0 later
@@ -863,6 +864,32 @@ namespace UADRealism
                 Instance.ApplyVariations(part);
 
                 Instance.PositionSections(part);
+
+                if (checkMountsOnly)
+                {
+                    var mounts = part.GetComponentsInChildren<Mount>(true);
+                    int mCount = 0;
+                    foreach (var m in mounts)
+                        if (m.gameObject.activeInHierarchy && m.funnel)
+                            ++mCount;
+
+                    if (mCount > 2)
+                        break;
+
+                    Melon<UADRealismMod>.Logger.Msg($"Hull {hData._key}@{secCount} {hData._sectionsMin}-{hData._sectionsMax} has {mCount} funnel mounts");
+                    continue;
+                }
+                else if (hData._secMinWithFunnel == -1)
+                {
+                    var mounts = part.GetComponentsInChildren<Mount>(true);
+                    int mCount = 0;
+                    foreach (var m in mounts)
+                        if (m.gameObject.activeInHierarchy && m.funnel)
+                            ++mCount;
+
+                    if (mCount > 0)
+                        hData._secMinWithFunnel = secCount;
+                }
 
                 // Calc the stats for this layout. Note that scaling dimensions will only
                 // linearly change stats, it won't require a recalc.
@@ -964,9 +991,9 @@ namespace UADRealism
                 yield return null;
             }
 
-            string varStr = hData._key.Substring(data.model.Length);
-            if (varStr != string.Empty)
-                varStr = $"({varStr.Substring(1)}) ";
+            //string varStr = hData._key.Substring(data.model.Length);
+            //if (varStr != string.Empty)
+            //    varStr = $"({varStr.Substring(1)}) ";
             //Melon<UADRealismMod>.Logger.Msg($"Calculated stats for {data.model} {varStr}for {hData._sectionsMin} to {hData._sectionsMax} sections");
 
             //Melon<UADRealismMod>.Logger.Msg($"{data.model}: {(stats.Lwl * scaleFactor):F2}x{beamStr}x{(stats.D * scaleFactor):F2}, {(stats.Vd * tRatio)}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}");
@@ -991,26 +1018,29 @@ namespace UADRealism
             part.isShown = true;
 
             var visual = part.model.GetChild("Visual", false);
-            var sections = visual.GetChild("Sections", false);
-            part.bow = sections.GetChild("Bow", false);
-            part.stern = sections.GetChild("Stern", false);
-            var middles = new List<GameObject>();
-            ModUtils.FindChildrenStartsWith(sections, "Middle", middles);
-            middles.Sort((a, b) => a.name.CompareTo(b.name));
-            part.middlesBase = new Il2CppSystem.Collections.Generic.List<GameObject>();
-            foreach (var m in middles)
+            if (data.isHull)
             {
-                part.middlesBase.Add(m);
-                m.active = false;
+                var sections = visual.GetChild("Sections", false);
+                part.bow = sections.GetChild("Bow", false);
+                part.stern = sections.GetChild("Stern", false);
+                var middles = new List<GameObject>();
+                ModUtils.FindChildrenStartsWith(sections, "Middle", middles);
+                middles.Sort((a, b) => a.name.CompareTo(b.name));
+                part.middlesBase = new Il2CppSystem.Collections.Generic.List<GameObject>();
+                foreach (var m in middles)
+                {
+                    part.middlesBase.Add(m);
+                    m.active = false;
+                }
+
+                part.middles = new Il2CppSystem.Collections.Generic.List<GameObject>();
+                part.hullInfo = part.model.GetComponent<HullInfo>();
+                //part.RegrabDeckSizes(true);
+                //part.RecalcVisualSize();
+
+                foreach (var go in part.middlesBase)
+                    Util.SetActiveX(go, false);
             }
-
-            part.middles = new Il2CppSystem.Collections.Generic.List<GameObject>();
-            part.hullInfo = part.model.GetComponent<HullInfo>();
-            //part.RegrabDeckSizes(true);
-            //part.RecalcVisualSize();
-
-            foreach (var go in part.middlesBase)
-                Util.SetActiveX(go, false);
 
             return part;
         }

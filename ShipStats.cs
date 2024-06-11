@@ -24,6 +24,7 @@ namespace UADRealism
         public string _key;
         public List<PartData> _hulls;
         public int _sectionsMin;
+        public int _secMinWithFunnel;
         public int _sectionsMax;
         public HullStats[] _statsSet;
         public bool _isDDHull = false;
@@ -68,7 +69,7 @@ namespace UADRealism
 
     public static class ShipStats
     {
-        const int _Version = 3;
+        const int _Version = 4;
 
         private static bool _isRenderingHulls = false;
         public static bool _IsRenderingHulls => _isRenderingHulls;
@@ -210,7 +211,7 @@ namespace UADRealism
             }
 
             // Pass 2: Spawn and render the hull models, calculating stats
-            yield return CalculateHullData();
+            yield return CalculateHullData(false);
 
             // Pass 2.5: Correct for really weird high-draught hull models
             // (and, in Monitor's case, too low draught). In the process,
@@ -266,17 +267,19 @@ namespace UADRealism
                 if (!data.isHull)
                     continue;
 
-                // _now_ we set min sections to 0
-                data.sectionsMin = 0;
-
                 var hData = GetData(data);
                 if (hData == null)
                 {
                     Melon<UADRealismMod>.Logger.BigError($"Unable to find data for partdata {data.name} of model {data.model} with key {GetHullModelKey(data)}");
                     continue;
                 }
+
+                // _now_ we set min sections to lowest we can
+                if (hData._secMinWithFunnel < data.sectionsMin)
+                    data.sectionsMin = hData._secMinWithFunnel;
+
                 var modelName = hData._key;
-                for (int sections = 0; sections < data.sectionsMax; ++sections)
+                for (int sections = data.sectionsMin; sections < data.sectionsMax; ++sections)
                 {
                     float tVal = sections > 0 ? 0.25f : 0;
                     float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
@@ -1219,12 +1222,12 @@ namespace UADRealism
             return Mathf.RoundToInt(effectiveTons / hpCruise * speedMS * fuelToKM);
         }
 
-        public static System.Collections.IEnumerator CalculateHullData()
+        public static System.Collections.IEnumerator CalculateHullData(bool checkMountsOnly)
         {
             _isRenderingHulls = true;
             foreach (var kvp in _HullModelData)
             {
-                yield return ShipStatsCalculator.ProcessHullData(kvp.Value);
+                yield return ShipStatsCalculator.ProcessHullData(kvp.Value, checkMountsOnly);
             }
             _isRenderingHulls = false;
         }
