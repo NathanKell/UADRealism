@@ -375,22 +375,24 @@ namespace UADRealism
                 // Guns handled in next loop for logging purposes.
                 // Assume no regular part is has "(custom)" for model
 
-                // Hate to do n^2 but we don't have a lookup, stock does hashset overlaps.
                 //float minScaleRatio = float.MaxValue;
                 //string minHullName = "(none)";
-                //foreach (var hull in hulls)
+                //var hulls = Database.GetHullNamesForPart(data);
+                //if (hulls != null)
                 //{
-                //    if (!ShipM.IsPartAllowedNoTech(hull, hull.shipType, data))
-                //        continue;
-
-                //    // This should never happen -- we precompute them all
-                //    if (!hullToScaleRatio.TryGetValue(hull, out var scaleRatio))
-                //        continue;
-
-                //    if (scaleRatio < minScaleRatio)
+                //    foreach (var hullName in hulls)
                 //    {
-                //        minHullName = hull.name;
-                //        minScaleRatio = scaleRatio;
+                //        var hull = gameData.parts[hullName];
+
+                //        // This should never happen -- we precompute them all
+                //        if (!hullToScaleRatio.TryGetValue(hull, out var scaleRatio))
+                //            continue;
+
+                //        if (scaleRatio < minScaleRatio)
+                //        {
+                //            minHullName = hull.name;
+                //            minScaleRatio = scaleRatio;
+                //        }
                 //    }
                 //}
                 float minScaleRatio = torpedoScale;
