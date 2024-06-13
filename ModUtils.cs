@@ -183,15 +183,18 @@ namespace UADRealism
             return val / steps;
         }
 
-        public static float Range(float a, float b, System.Random rnd = null)
+        public static float Range(float a, float b, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
         {
+            if (nativeRnd != null)
+                return (float)nativeRnd.NextDouble() * (b - a) + a;
+
             if (rnd == null)
                 return UnityEngine.Random.Range(a, b);
 
             return (float)rnd.NextDouble() * (b - a) + a;
         }
 
-        public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null) where T : notnull
+        public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : notnull
         {
             if (dictionary.Count == 0)
                 return default(T);
@@ -206,7 +209,7 @@ namespace UADRealism
             if (sum == 0f)
                 return default(T);
 
-            float selector = Range(0f, sum, rnd);
+            float selector = Range(0f, sum, rnd, nativeRnd);
             float curSum = 0f;
             foreach (var kvp in dictionary)
             {

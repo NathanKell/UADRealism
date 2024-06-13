@@ -114,7 +114,8 @@ namespace UADRealism
             return Mathf.RoundToInt(speed / step * (1f / ShipStats.KnotsToMS)) * ShipStats.KnotsToMS * step;
         }
 
-        public static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, System.Random rnd = null, float limitArmor = -1, float limitSpeed = 0f)
+        public static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, Il2CppSystem.Func<bool> nativeStop, 
+            bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null, float limitArmor = -1, float limitSpeed = 0f)
         {
             float year = ship.GetYear(ship);
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
@@ -152,14 +153,14 @@ namespace UADRealism
             else if (ship.shipType.name == "dd")
             {
                 float armorVal = ship.shipType.armor;
-                float randMult = ModUtils.Range(1f, 1.3f, rnd);
+                float randMult = ModUtils.Range(1f, 1.3f, rnd, nativeRnd);
                 float yearMult = Util.Remap(year, 1890f, 1940f, 1f, 0.85f, true);
 
                 armorInches = armorVal * randMult * yearMult;
             }
             else
             {
-                armorInches = armorMin * ModUtils.Range(1f, 1.2f, rnd);
+                armorInches = armorMin * ModUtils.Range(1f, 1.2f, rnd, nativeRnd);
             }
             var armorMinHint = Ship.GenerateArmor(armorInches * 25.4f, ship);
 
@@ -242,7 +243,7 @@ namespace UADRealism
             ship.SetOpRange(oldRange);
             ship.SetArmor(oldArmor);
 
-            if (stopCondition())
+            if(nativeStop == null ? stopCondition() : nativeStop.Invoke())
                 return;
 
             Dictionary<Ship.A, float> armorPriority = delta > 0 ? _AdjustPriorityArmorIncrease : _AdjustPriorityArmorReduce;
@@ -324,7 +325,7 @@ namespace UADRealism
                 // so that we don't screw with our weights. (If we just removed items,
                 // like stock, then quarters and range would be overrepresented.)
                 AdjustHullStatsItem thingToChange = AdjustHullStatsItem.Empty;
-                while ((thingToChange = ModUtils.RandomByWeights(_AdjustHullStatsOptions, rnd)) != AdjustHullStatsItem.Empty)
+                while ((thingToChange = ModUtils.RandomByWeights(_AdjustHullStatsOptions, rnd, nativeRnd)) != AdjustHullStatsItem.Empty)
                 {
                     float weight = _AdjustHullStatsOptions[thingToChange];
                     _AdjustHullStatsOptions.Remove(thingToChange);
@@ -346,7 +347,7 @@ namespace UADRealism
                             ship.SetArmor(newArmor);
                             break;
                     }
-                    if (stopCondition())
+                    if (nativeStop == null ? stopCondition() : nativeStop.Invoke())
                         return;
                 }
             }
@@ -536,8 +537,9 @@ namespace UADRealism
                         break;
                 }
 
-                float lbd = stats.Lwl * stats.B * stats.T;
-                float steelweight = lbd * (0.21f - 0.026f * Mathf.Log10(lbd)) * (1f + 0.025f * (stats.Lwl / stats.T - 12)) * (1f + (2f / 3f) * (stats.Cb - 0.7f));
+                var statsNormal = ShipStats.GetLoadingStats(ship, HullLoadState.Normal);
+                float lbd = statsNormal.Lwl * statsNormal.B * statsNormal.T;
+                float steelweight = lbd * (0.21f - 0.026f * Mathf.Log10(lbd)) * (1f + 0.025f * (statsNormal.Lwl / statsNormal.T - 12)) * (1f + (2f / 3f) * (statsNormal.Cb - 0.7f));
                 steelweight *= 0.9f + (1f + ship.ModData().Freeboard * 0.02f) * 0.1f;
                 steelweight *= 1f + citPct * 0.1f;
                 float modifiedHullTechMult = Util.Remap(hullTechMult, 0.58f, 1f, 0.675f, 1f);
@@ -720,8 +722,8 @@ namespace UADRealism
                 // Torpedo Defense System
                 float weightMultTDS = ship.TechR("anti_torp_weight") - 1f;
                 // total guesswork here
-                float depthTDS = stats.T * 0.75f;
-                float volumeTDS = citadelLength * stats.B * 0.2f * depthTDS; // assume 10% on each side
+                float depthTDS = statsNormal.T * 0.75f;
+                float volumeTDS = citadelLength * statsNormal.B * 0.2f * depthTDS; // assume 10% on each side
                 float areaTDS = citadelLength * 2f * depthTDS;
                 const float maxTDSDensity = 0.2f;
                 const float maxTDSThickMult = 0.06f * 0.0254f;

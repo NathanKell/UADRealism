@@ -46,12 +46,11 @@ namespace UADRealism
             }
 
             __state = byHuman;
-            // This is gross. But we can't patch AdjustHullStats so we need to make
-            // it not run, and run something else ourselves. We should just be
-            // prefixing that, but it crashes (!) because apparently the runtime
-            // interop can't handle patching methods that take nullable arguments.
-            // Blergh. So instead we'll manually handle the "byHuman" case that
+            // We can't reach into the middle of this code.
+            // So instead we'll manually handle the "byHuman" case that
             // invokes AdjustHullStats when we get to our postfix.
+            // (Before net6 Harmony was crashing on nullables, but it works
+            // now so we can prefix ok, but we'll keep this workaround.)
 
             byHuman = false;
         }
@@ -92,7 +91,7 @@ namespace UADRealism
                     float newTargetWeight = Util.Remap(year, 1890f, 1940f, 0.65f, 0.75f, true);
                     return newTargetWeight >= __instance.Weight() / __instance.Tonnage();
 
-                }));
+                }), null);
 
                 // If our speed was adjusted, we should change hull geometry to optimize.
                 if (oldSpeed != __instance.speedMax)
@@ -331,7 +330,7 @@ namespace UADRealism
             }
             string hp = ihpMult == 1f ? $"{SHP:N0} SHP" : $"{(SHP * ihpMult):N0} IHP";
 #if LOGSHIP
-            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} ({ShipStats.GetHullFormSHPMult(__instance):F2}x{ihpMult:F2}) for {(__instance.speedMax/ShipStats.KnotsToMS):F1}kn");
+            Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} ({(stats.Lwl/stats.beamBulge):F1},{(stats.beamBulge/stats.T):F1}), {(stats.Vd * ShipStats.WaterDensity * 0.001d):F0}t. Cb={stats.Cb:F3}, Cm={stats.Cm:F3}, Cwp={stats.Cwp:F3}, Cp={stats.Cp:F3}, Cvp={stats.Cvp:F3}. {hp} (x{ihpMult:F2}) for {(__instance.speedMax/ShipStats.KnotsToMS):F1}kn");
 #endif
             Patch_Ui._ShipForEnginePower = __instance;
             Melon<UADRealismMod>.Logger.Msg($"{__instance.vesselName}: {stats.Lwl:F2}x{beamStr}x{stats.T:F2} Cb={stats.Cb:F3}/Cwp={stats.Cwp:F3}/Cp={stats.Cp:F3}, {Ui.FormatEnginePower(SHP * ihpMult)}");
@@ -518,7 +517,15 @@ namespace UADRealism
             __result = ShipM.MaxArmorForZone(__instance, armorA, gunPartData);
             return false;
         }
-        
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ship.AdjustHullStats))]
+        internal static bool Prefix_AdjustHullStats(Ship __instance, int delta, float targetWeight, Il2CppSystem.Func<bool> stopCondition, bool allowEditSpeed, bool allowEditArmor, bool allowEditCrewQuarters, Il2CppSystem.Random rnd, Il2CppSystem.Nullable<float> limitArmor, float limitSpeed)
+        {
+            ShipM.AdjustHullStats(__instance, delta, targetWeight, null, stopCondition, allowEditSpeed, allowEditArmor, allowEditCrewQuarters, true, null, rnd);
+            return true;
+        }
+
         // Not bothering to prefix MinArmorForZone because it can stay as default
         // (all it does is return minArmor for BeltMain, and 0 for everything else)
     }

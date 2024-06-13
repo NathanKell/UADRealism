@@ -10,6 +10,7 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 using System.IO;
+using Il2CppMessagePack.Formatters;
 
 #pragma warning disable CS8601
 #pragma warning disable CS8603
@@ -32,6 +33,14 @@ namespace UADRealism
         public float _desiredCb;
         public float _hullNumber;
         public float _yPos;
+    }
+
+    public enum HullLoadState
+    {
+        LightShip,
+        Standard,
+        Normal,
+        Full
     }
 
     public struct HullStats
@@ -204,65 +213,68 @@ namespace UADRealism
                 _HullToHullData[data.name] = hData;
             }
 
-            // Try to load from disk
-            if (LoadData(totalHulls))
-                yield break;
-
-            foreach (var kvp in _HullModelData)
+            // Try to load from disk. If we can't,
+            // then process the hulls and save.
+            if (!LoadData(totalHulls))
             {
-                SetAverageYearAndCb(kvp.Value);
-            }
-
-            // Pass 2: Spawn and render the hull models, calculating stats
-            yield return CalculateHullData(false);
-
-            // Pass 2.5: Correct for really weird high-draught hull models
-            // (and, in Monitor's case, too low draught). In the process,
-            // sanify B/T values.
-            float minBT = 100f, maxBT = 0f, avgBT = 0f;
-            float hCount = 0f;
-            foreach (var kvp in _HullModelData)
-            {
-                float BdivT = kvp.Value._statsSet[0].B / kvp.Value._statsSet[0].T;
-                if (BdivT < minBT)
-                    minBT = BdivT;
-                if (BdivT > maxBT)
-                    maxBT = BdivT;
-
-                avgBT += BdivT;
-                ++hCount;
-            }
-            if (hCount > 0f)
-                avgBT /= hCount;
-            foreach (var kvp in _HullModelData)
-            {
-                for (int i = kvp.Value._statsSet.Length; i-- > 0;)
+                foreach (var kvp in _HullModelData)
                 {
-                    var stats = kvp.Value._statsSet[i];
-                    float BdivT = stats.B / stats.T;
+                    SetAverageYearAndCb(kvp.Value);
+                }
 
-                    float newBT;
-                    if (BdivT < avgBT)
-                        newBT = Util.Remap(BdivT, minBT, avgBT, 2.25f, 2.8f, true);
-                    else
-                        newBT = Util.Remap(BdivT, avgBT, maxBT, 2.8f, 3.75f, true);
+                // Pass 2: Spawn and render the hull models, calculating stats
+                yield return CalculateHullData(false);
 
-                    float tMult = BdivT / newBT;
-                    if (tMult < 0.99f || tMult > 1.01f)
+                // Pass 2.5: Correct for really weird high-draught hull models
+                // (and, in Monitor's case, too low draught). In the process,
+                // sanify B/T values.
+                float minBT = 100f, maxBT = 0f, avgBT = 0f;
+                float hCount = 0f;
+                foreach (var kvp in _HullModelData)
+                {
+                    float BdivT = kvp.Value._statsSet[0].B / kvp.Value._statsSet[0].T;
+                    if (BdivT < minBT)
+                        minBT = BdivT;
+                    if (BdivT > maxBT)
+                        maxBT = BdivT;
+
+                    avgBT += BdivT;
+                    ++hCount;
+                }
+                if (hCount > 0f)
+                    avgBT /= hCount;
+                foreach (var kvp in _HullModelData)
+                {
+                    for (int i = kvp.Value._statsSet.Length; i-- > 0;)
                     {
-                        stats.bulgeDepth *= tMult;
-                        stats.Cv *= tMult;
-                        stats.T *= tMult;
-                        stats.Vd *= tMult;
-                        kvp.Value._statsSet[i] = stats;
+                        var stats = kvp.Value._statsSet[i];
+                        float BdivT = stats.B / stats.T;
+
+                        float newBT;
+                        if (BdivT < avgBT)
+                            newBT = Util.Remap(BdivT, minBT, avgBT, 2.25f, 2.8f, true);
+                        else
+                            newBT = Util.Remap(BdivT, avgBT, maxBT, 2.8f, 3.75f, true);
+
+                        float tMult = BdivT / newBT;
+                        if (tMult < 0.99f || tMult > 1.01f)
+                        {
+                            stats.bulgeDepth *= tMult;
+                            stats.Cv *= tMult;
+                            stats.T *= tMult;
+                            stats.Vd *= tMult;
+                            kvp.Value._statsSet[i] = stats;
+                        }
                     }
                 }
+
+                SaveData(totalHulls);
             }
 
             // Pass 3: Set starting data for all hull parts
 #if LOGHULLSTATS
             int num = 1;
-            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,HN,dCb,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,sMul");
+            Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,HN,dCb,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,NormTng,T,B/T,Cb,Cm,Cp,ammo,range,SHP");
 #endif
             foreach (var kvp in gameData.parts)
             {
@@ -281,20 +293,39 @@ namespace UADRealism
 
 #if LOGHULLSTATS
                 var modelName = hData._key;
+                float year = Database.GetYear(data);
+                const float desiredBdivT = DefaultBdivT * 0.867f;
+                float BT = hData._statsSet[data.sectionsMin].B / hData._statsSet[data.sectionsMin].T;
+                VesselEntity.OpRange range = data.shipType.name switch
+                {
+                    "dd" => year < 1910 ? VesselEntity.OpRange.VeryHigh : year < 1920 ? VesselEntity.OpRange.High : VesselEntity.OpRange.Medium,
+                    "tb" => year < 1900 ? VesselEntity.OpRange.VeryLow : year < 1910 ? VesselEntity.OpRange.Low : VesselEntity.OpRange.Medium,
+                    "ca" or "cl" => VesselEntity.OpRange.Medium,
+                    _ => year < 1925 ? VesselEntity.OpRange.VeryLow : VesselEntity.OpRange.Low
+                };
                 for (int sections = data.sectionsMin; sections < data.sectionsMax; ++sections)
                 {
-                    float tVal = sections > 0 ? 0.25f : 0;
-                    float tng = Mathf.Lerp(data.tonnageMin, data.tonnageMax, tVal);
-                    var stats = GetScaledStats(hData, tng, 0, 0, sections);
-                    float shpMult = GetHullFormSHPMult(data);
+                    float oldLB = hData._statsSet[sections].Lwl / hData._statsSet[sections].B;
+                    float oldBT = hData._statsSet[sections].B / hData._statsSet[sections].T;
+                    float desiredLdivB = GetDesiredLdivB(data.tonnageMin * TonnesToCubicMetersWater, hData._desiredCb, desiredBdivT, data.speedLimiter * KnotsToMS, data.shipType.name, year);
+                    float bmMult = oldLB / desiredLdivB;
+                    float drMult = BT / desiredBdivT;
+                    if (float.IsNaN(bmMult) || bmMult == 0f)
+                        bmMult = 1f;
+                    if (float.IsNaN(drMult) || drMult == 0f)
+                        drMult = 1f;
+
+                    var stats = GetScaledStats(hData, data.tonnageMin, (bmMult - 1f) * 100f, (drMult / bmMult - 1f) * 100f, sections);
                     float shp = GetSHPRequired(stats, data.speedLimiter * KnotsToMS, false);
-                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name.Replace(',', '&')},{modelName},{sections},{tng:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._hullNumber:F0},{hData._desiredCb:F3},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{shpMult:F2}");
+                    var nStats = GetLoadingStats(stats, data.tonnageMin, range, year, data.shipType.name, HullLoadState.Normal);
+                    float shpNormal = GetSHPRequired(nStats, data.speedLimiter * KnotsToMS, false);
+                    float ammoPct = EstimatedAmmoPct(data.shipType.name, year);
+                    float opRangePct = OpRangeToPct(range, year, data.shipType.name);
+                    Melon<UADRealismMod>.Logger.Msg($",{num},{data.name.Replace(',', '&')},{modelName},{sections},{data.tonnageMin:F0},{(Mathf.Pow(data.tonnageMax / data.tonnageMin, 1f / 3f) - 1f):P0},{stats.scaleFactor:F3},{stats.Lwl:F2},{stats.B:F2},{(stats.beamBulge == stats.B ? 0 : stats.beamBulge):F2},{stats.T:F2},{(stats.Lwl / stats.B):F2},{(stats.B / stats.T):F2},{hData._hullNumber:F0},{hData._desiredCb:F3},{hData._year},{stats.Cb:F3},{stats.Cm:F3},{stats.Cp:F3},{stats.Cwp:F3},{stats.Cvp:F3},{stats.Catr:F3},{stats.Cv:F3},{stats.bowLength:F2},{(stats.bowLength / stats.B):F2},{stats.iE:F2},{stats.LrPct:F3},{stats.lcbPct:F4},{hData._isDDHull},{data.speedLimiter:F1},{shp:F0},{(nStats.Vd / TonnesToCubicMetersWater):F0},{nStats.T:F2},{(nStats.B/nStats.T):F2},{nStats.Cb:F3},{nStats.Cm:F3},{nStats.Cp:F3},{ammoPct:F2},{opRangePct:F2},{shpNormal:F0}");
                     ++num;
                 }
 #endif
             }
-
-            SaveData(totalHulls);
         }
 
         private static void ApplyHullData(PartData hull, HullData hData)
@@ -323,8 +354,7 @@ namespace UADRealism
             hull.beamMin = (minBMult - 1f) * 100f;
             hull.beamMax = (maxBMult - 1f) * 100f;
 
-            float nominalB = (minBMult + maxBMult) * 0.5f * hData._statsSet[hull.sectionsMin].B;
-            float BT = nominalB / hData._statsSet[hull.sectionsMin].T;
+            float BT = hData._statsSet[hull.sectionsMin].B / hData._statsSet[hull.sectionsMin].T;
             hull.draughtMin = (Math.Min(0.95f, BT / 4.25f) - 1f) * 100f;
             hull.draughtMax = (Math.Max(1.05f, BT / 2f) - 1f) * 100f;
         }
@@ -620,16 +650,6 @@ namespace UADRealism
                 ++procSecs;
             }
 
-            // Apply data
-            foreach (var kvp in _HullModelData)
-            {
-                var hData = kvp.Value;
-                foreach (var hull in hData._hulls)
-                {
-                    if (hData._secMinWithFunnel < hull.sectionsMin)
-                        hull.sectionsMin = hData._secMinWithFunnel;
-                }
-            }
             Melon<UADRealismMod>.Logger.Msg($"Loaded hull data. Processed {procDatas} HullDatas and {procSecs} HullStats");
             return true;
         }
@@ -778,6 +798,52 @@ namespace UADRealism
             float bmMult = 1f + lengthToBeamPct * 0.01f;
             float drMult = bmMult * (1f + beamToDraughtPct * 0.01f);
             return Mathf.Pow(desiredVol / (Vd * bmMult * drMult ), 1f / 3f);
+        }
+
+        private static float EstimatedAmmoPct(string sType, float year)
+            => sType switch
+            {
+                "ca" or "cl" => Util.Remap(year, 1890f, 1940f, 3.4f, 3.9f, true),
+                "dd" or "tb" => Mathf.Lerp(1f, 5f, Mathf.Pow(Mathf.InverseLerp(1890f, 1940f, year), 1.5f)),
+                _ => Util.Remap(year, 1890f, 1920f, 4f, 5f, true)
+            };
+
+        public static HullStats GetLoadingStats(Ship ship, HullLoadState loadState)
+            => GetLoadingStats(GetScaledStats(ship), ship.tonnage, ship.opRange, Database.GetYear(ship.hull.data), ship.shipType.name, loadState);
+
+        public static HullStats GetLoadingStats(HullStats oldStats, float tonnage, VesselEntity.OpRange opRange, float year, string sType, HullLoadState loadState)
+        {
+            var stats = oldStats;
+            if (loadState == HullLoadState.Full)
+                return stats;
+
+            // Make assumptions about ammo since we need to have a fixed full-load displacement
+            // in this game rather than starting from light ship.
+            float ammoPct = EstimatedAmmoPct(sType, year);
+            float opRangePct = OpRangeToPct(opRange, year, sType);
+
+            float tonnageDelta = loadState switch
+            {
+                HullLoadState.LightShip => tonnage * (ammoPct + opRangePct),
+                HullLoadState.Standard => tonnage * opRangePct,
+                HullLoadState.Normal or _ => tonnage * (ammoPct + opRangePct) * (1f / 3f)
+            } * 0.01f;
+            float VdDelta = tonnageDelta * TonnesToCubicMetersWater;
+
+            // assume straight sides between light ship and full load draughts
+            float Tdelta = VdDelta / (stats.B * stats.Lwl * stats.Cwp);
+            float newAm = stats.Cm * stats.B * stats.T - stats.B * Tdelta;
+
+            stats.T -= Tdelta;
+            stats.Vd -= VdDelta;
+            stats.Cm = newAm / (stats.B * stats.T);
+            // assume proportional change in Atr so no change in Catr
+            stats.Cb = stats.Vd / (stats.Lwl * stats.B * stats.T);
+            stats.Cp = stats.Cb / stats.Cm;
+            stats.Cvp = stats.Cb / stats.Cwp;
+            stats.Cv = 100f * stats.Vd / (stats.Lwl * stats.Lwl * stats.Lwl);
+
+            return stats;
         }
 
         public static void SetAverageYearAndCb(HullData hData)
@@ -1049,24 +1115,8 @@ namespace UADRealism
             }
         }
 
-        public static float GetHullFormSHPMult(Ship ship) => GetHullFormSHPMult(ship.hull.data);
-
-        public static float GetHullFormSHPMult(PartData data)
-        {
-            if (!G.GameData.stats.TryGetValue("hull_form", out var sd))
-                return 1f;
-            if (!data.statsx.TryGetValue(sd, out var hullForm))
-                return 1f;
-
-            float influence = Mathf.InverseLerp(80f, 20f, hullForm);
-            return Mathf.Lerp(1f, Util.Remap(hullForm, 20f, 80f, 1.35f, 1f, true), influence * influence);
-        }
-
         public static float GetSHPRequired(Ship ship)
-        {
-            float shp = GetSHPRequired(GetScaledStats(ship), ship.speedMax);
-            return shp * GetHullFormSHPMult(ship);
-        }
+            => GetSHPRequired(GetScaledStats(ship), ship.speedMax);
 
         public static float GetHPRequired(Ship ship) => GetSHPRequired(ship) * GetEngineIHPMult(ship);
 
@@ -1241,7 +1291,7 @@ namespace UADRealism
             return (float)(Ps / 745.7d);
         }
 
-        public static float OpRangeToPct(Ship.OpRange opRange)
+        public static float OpRangeToPctFuel(Ship.OpRange opRange)
         {
             return opRange switch
             {
@@ -1253,6 +1303,19 @@ namespace UADRealism
             };
         }
 
+        public static float OpRangeToPct(Ship.OpRange opRange, float year, string sType)
+        {
+            float multStores = 0.15f;
+            float multRFW = Util.Remap(year, 1905f, 1935f, 0.1f, 0.08f, true) * (1f - (float)opRange * 0.025f);
+            if (sType == "dd" || sType == "tb")
+            {
+                multStores *= 0.7f;
+                multRFW *= 1.2f;
+            }
+
+            return OpRangeToPctFuel(opRange) * (1f + multStores + multRFW);
+        }
+
         public static int GetRange(Ship ship) => GetRange(ship, ship.opRange);
 
         public static int GetRange(Ship ship, Ship.OpRange opRange)
@@ -1261,18 +1324,18 @@ namespace UADRealism
             float effTech = ship.TechA("fuel_eff");
             float statRange = ship.StatEffectPrivate("operating_range");
             float year = Database.GetYear(ship.hull.data);
-            return GetRange(GetScaledStats(ship), GetHullFormSHPMult(ship), GetEngineIHPMult(ship),
+            return GetRange(GetScaledStats(ship), GetEngineIHPMult(ship),
                 // TODO: handle TB/DD differently?
                 Mathf.Min(ship.speedMax, (year > 1920f ? Util.Remap(year, 1920f, 1930f, 12f, 15f, true) : Util.Remap(year, 1890f, 1910f, 10f, 12f, true)) * KnotsToMS),
                 opRange, 1f / fuelTech * effTech * statRange);
         }
         
-        public static int GetRange(HullStats stats, float hullMult, float engineMult, float speedMS, Ship.OpRange opRange, float fuelMult)
-            => GetRange(stats, hullMult, engineMult, speedMS, fuelMult * stats.Vd * (1f / TonnesToCubicMetersWater) * OpRangeToPct(opRange));
+        public static int GetRange(HullStats stats, float engineMult, float speedMS, Ship.OpRange opRange, float fuelMult)
+            => GetRange(stats, engineMult, speedMS, fuelMult * stats.Vd * (1f / TonnesToCubicMetersWater) * OpRangeToPctFuel(opRange) * 0.01f);
 
-        public static int GetRange(HullStats stats, float hullMult, float engineMult, float speedMS, float effectiveTons)
+        public static int GetRange(HullStats stats, float engineMult, float speedMS, float effectiveTons)
         {
-            float hpCruise = GetSHPRequired(stats, speedMS, false) * hullMult * engineMult;
+            float hpCruise = GetSHPRequired(stats, speedMS, false) * engineMult;
             const float fuelToKM = 524f;
             return Mathf.RoundToInt(effectiveTons / hpCruise * speedMS * fuelToKM);
         }
