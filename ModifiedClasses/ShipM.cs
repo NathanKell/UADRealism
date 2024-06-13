@@ -549,6 +549,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Hull;
                 mat.weight = steelweight;
                 mat.costMod = ship.TechCostMod(data) * Mathf.Lerp(1.55f, 12.5f, tonnage / 150000f) * 0.0675f; // stock
+                mat.cost = 0f;
                 mats.Add(mat);
 
 
@@ -562,6 +563,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Engine;
                 mat.weight = engineWeight;
                 mat.costMod = ship.TechR("engine_c") * Mathf.Lerp(1f, 12.5f, tonnage / 150000f); // stock
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 // Armor
@@ -597,6 +599,7 @@ namespace UADRealism
 
                 mat.weight = weightFaceHard * armorCitadelLength * beltHeightEstimate * 2f * mainThick;
                 mat.costMod = costFaceHard;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
@@ -604,6 +607,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightFaceHard * armorExtLength * bowRatio * beltHeightEstimate * 2f * ship.armor.ArmorValue(Ship.A.BeltBow);
                 mat.costMod = costFaceHard;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
@@ -611,6 +615,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightFaceHard * armorExtLength * (1f - bowRatio) * beltHeightEstimate * 2f * ship.armor.ArmorValue(Ship.A.BeltStern);
                 mat.costMod = costFaceHard;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 //// Deck
@@ -622,6 +627,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightSTS * (1f - extAreaRatio) * Awp * ship.armor.ArmorValue(Ship.A.Deck);
                 mat.costMod = costSTS;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
@@ -629,6 +635,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightSTS * extAreaRatio * bowRatio * Awp * ship.armor.ArmorValue(Ship.A.DeckBow);
                 mat.costMod = costSTS;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
@@ -636,6 +643,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightSTS * extAreaRatio * (1f - bowRatio) * Awp * ship.armor.ArmorValue(Ship.A.DeckStern);
                 mat.costMod = costSTS;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 var citArmor = ship.GetCitadelArmor();
@@ -667,6 +675,7 @@ namespace UADRealism
                             mat.weight = beltMult * ship.armor.ArmorValue(area);
                             mat.costMod = costFaceHard;
                         }
+                        mat.cost = 0f;
                         mats.Add(mat);
                     }
                 }
@@ -697,6 +706,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightFaceHard * ctAreaEstimate * ship.armor.ArmorValue(Ship.A.ConningTower);
                 mat.costMod = costFaceHard;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
@@ -704,6 +714,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Armor;
                 mat.weight = weightSTS * superstructureAreaEstimate * ship.armor.ArmorValue(Ship.A.Superstructure);
                 mat.costMod = costSTS;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 // Torpedo Defense System
@@ -720,13 +731,15 @@ namespace UADRealism
                 mat.mat = Ship.Mat.AntiTorp;
                 mat.weight = weightTDS;
                 mat.costMod = 0.6f * Mathf.Lerp(1f, 3f, tonnage / 100000f) + 0.4f * costSTS; // stock, but use STS cost too
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 mat = new Ship.MatInfo();
                 mat.name = "op_range";
                 mat.mat = Ship.Mat.Fuel;
-                mat.weight = tonnage * ShipStats.OpRangeToPct(ship.opRange);
+                mat.weight = tonnage * ShipStats.OpRangeToPct(ship.opRange, year, ship.shipType.name) * 0.01f;
                 mat.costMod = ship.TechR("fuel_c");
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 // Handle survivability mostly like stock
@@ -739,6 +752,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Surv;
                 mat.weight = survWeight;
                 mat.costMod = 1f;
+                mat.cost = 0f;
                 mats.Add(mat);
             }
             else if (data.isGun)
@@ -761,6 +775,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Turret;
                 mat.weight = turretWeight;
                 mat.costMod = costMod;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 int gunGrade = ship.TechGunGrade(data, true);
@@ -771,6 +786,7 @@ namespace UADRealism
                 mat.weight = barrelsF * barrelWeight;
                 mat.mat = Ship.Mat.Barrel;
                 mat.costMod = costMod;
+                mat.cost = 0f;
                 mats.Add(mat);
 
                 var ta = FindMatchingTurretArmor(ship, data);
@@ -845,6 +861,7 @@ namespace UADRealism
                     mat.mat = Ship.Mat.Armor;
                     mat.weight = (aFace * weightFaceHard + aSides * weightSTS) * ta.sideTurretArmor;
                     mat.costMod = (aFace * costFaceHard + aSides * costSTS) / (aFace + aSides);
+                    mat.cost = 0f;
                     mats.Add(mat);
 
                     mat = new Ship.MatInfo();
@@ -852,6 +869,7 @@ namespace UADRealism
                     mat.mat = Ship.Mat.Armor;
                     mat.weight = aTop * weightSTS * ta.topTurretArmor;
                     mat.costMod = costSTS;
+                    mat.cost = 0f;
                     mats.Add(mat);
 
                     float totalBarbWeight = 0f;
@@ -870,6 +888,7 @@ namespace UADRealism
                     mat.mat = Ship.Mat.Armor;
                     mat.weight = totalBarbWeight / (float)totalParts;
                     mat.costMod = costFaceHard;
+                    mat.cost = 0f;
                     mats.Add(mat);
                 }
 
@@ -879,6 +898,7 @@ namespace UADRealism
                 mat.mat = Ship.Mat.Ammo;
                 mat.weight = ammoAmount * Part.AvgShellWeight(gunDataM.gunData, data, ship) * 0.001f;
                 mat.costMod = ship.ShellCost(data);
+                mat.cost = 0f;
                 mats.Add(mat);
             }
             //else if (data.isBarbette)
@@ -966,6 +986,7 @@ namespace UADRealism
                 mat.weight = torpData.baseTorpWeight * torpMult * ship.TechWeightMod(data);
                 mat.mat = Ship.Mat.Torpedo;
                 mat.costMod = torpData.baseTorpCost * torpMult * ship.TechCostMod(data);
+                mat.cost = 0f;
                 mats.Add(mat);
             }
             else
@@ -975,6 +996,7 @@ namespace UADRealism
                 mat.weight = data.weight * ship.TechWeightMod(data);
                 mat.mat = Ship.Mat.Raw;
                 mat.costMod = 1f;
+                mat.cost = data.cost;
                 mats.Add(mat);
             }
 
