@@ -1,4 +1,4 @@
-﻿//#define LOGHULLSTATS
+﻿#define LOGHULLSTATS
 //#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
