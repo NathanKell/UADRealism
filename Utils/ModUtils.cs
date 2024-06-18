@@ -160,15 +160,18 @@ namespace UADRealism
         // Returns a smoothed distribution, i.e.
         // Random.Range(-range, range) + Random.Range(-range, range)...
         // divided by steps
-        public static float DistributedRange(float range, int steps = 2)
+        public static float DistributedRange(float range, int steps = 2, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
         {
             float val = 0f;
             for (int i = steps; i-- > 0;)
             {
-                val += UnityEngine.Random.Range(-range, range);
+                val += Range(-range, range, rnd, nativeRnd);
             }
             return val / steps;
         }
+
+        public static float DistributedRange(float range, Il2CppSystem.Random rnd)
+            => DistributedRange(range, 2, null, rnd);
 
         // Returns a smoothed distribution, i.e.
         // Random.Range(-range, range) + Random.Range(-range, range)...

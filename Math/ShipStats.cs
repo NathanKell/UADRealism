@@ -294,22 +294,15 @@ namespace UADRealism
 #if LOGHULLSTATS
                 var modelName = hData._key;
                 float year = Database.GetYear(data);
-                const float desiredBdivT = DefaultBdivT * 0.867f;
                 float BT = hData._statsSet[data.sectionsMin].B / hData._statsSet[data.sectionsMin].T;
-                VesselEntity.OpRange range = data.shipType.name switch
-                {
-                    "dd" => year < 1910 ? VesselEntity.OpRange.VeryHigh : year < 1920 ? VesselEntity.OpRange.High : VesselEntity.OpRange.Medium,
-                    "tb" => year < 1900 ? VesselEntity.OpRange.VeryLow : year < 1910 ? VesselEntity.OpRange.Low : VesselEntity.OpRange.Medium,
-                    "ca" or "cl" => VesselEntity.OpRange.Medium,
-                    _ => year < 1925 ? VesselEntity.OpRange.VeryLow : VesselEntity.OpRange.Low
-                };
+                VesselEntity.OpRange range = GetDesiredOpRange(data.shipType.name, year);
                 for (int sections = data.sectionsMin; sections < data.sectionsMax; ++sections)
                 {
                     float oldLB = hData._statsSet[sections].Lwl / hData._statsSet[sections].B;
                     float oldBT = hData._statsSet[sections].B / hData._statsSet[sections].T;
-                    float desiredLdivB = GetDesiredLdivB(data.tonnageMin * TonnesToCubicMetersWater, hData._desiredCb, desiredBdivT, data.speedLimiter * KnotsToMS, data.shipType.name, year);
+                    float desiredLdivB = GetDesiredLdivB(data.tonnageMin * TonnesToCubicMetersWater, hData._desiredCb, ShipStats.DefaultBdivT, data.speedLimiter * KnotsToMS, data.shipType.name, year);
                     float bmMult = oldLB / desiredLdivB;
-                    float drMult = BT / desiredBdivT;
+                    float drMult = BT / DefaultBdivT;
                     if (float.IsNaN(bmMult) || bmMult == 0f)
                         bmMult = 1f;
                     if (float.IsNaN(drMult) || drMult == 0f)
@@ -891,7 +884,7 @@ namespace UADRealism
 
         public const float KnotsToMS = 0.514444444f;
 
-        public const float DefaultBdivT = 2.9f;
+        public const float DefaultBdivT = 2.7f;
 
         public static float GetDesiredLdivB(Ship ship, float BdivT)
             => GetDesiredLdivB(ship.tonnage * TonnesToCubicMetersWater, GetData(ship)._desiredCb, BdivT, ship.speedMax, ship.shipType.name, Database.GetYear(ship.hull.data));
@@ -1002,6 +995,87 @@ namespace UADRealism
             return Util.Remap(year, 1890f, 1925f, maxMul, 1f);
         }
 
+        public static float GetScantlingStrength(string sType, float year, PartData hull)
+        {
+            float scantlingStrength;
+            const float scantlingLightEarly = 0.5f;
+            const float scantlingLightLate = 0.71f;
+            const float scantlingCruiser = 0.95f;
+            const float scantlingCL = 0.9f;
+            const float scantlingACR = 1f;
+            const float scantlingBB = 1.1f;
+            switch (sType)
+            {
+                case "dd":
+                case "tb":
+                    scantlingStrength = Util.Remap(year, 1900f, 1935f, scantlingLightEarly, scantlingLightLate, true);
+                    break;
+                case "bb":
+                    scantlingStrength = scantlingBB;
+                    break;
+                case "cl":
+                    scantlingStrength = hull.nameUi.Contains("Semi-") ? scantlingCruiser : Util.Remap(year, 1890f, 1920f, scantlingCL, scantlingCruiser, true);
+                    break;
+                case "ca":
+                    scantlingStrength = Util.Remap(year, 1910f, 1925f, scantlingACR, scantlingCruiser, true);
+                    break;
+                case "bc":
+                    scantlingStrength = Util.Remap(year, 1900f, 1930f, scantlingACR, scantlingBB, true);
+                    break;
+                case "ic":
+                    scantlingStrength = 2f;
+                    break;
+
+                case "tr":
+                case "tr_amc":
+                    scantlingStrength = 0.75f;
+                    break;
+
+                default:
+                    scantlingStrength = 1f;
+                    break;
+            }
+            return scantlingStrength;
+        }
+
+        public static float GetMachineryWeightMult(string sType, float year)
+        {
+            float machMult = 1f;
+            switch (sType)
+            {
+                case "tb":
+                case "dd":
+                    machMult = Util.Remap(year, 1900f, 1940f, 0.25f, 0.45f, true);
+                    break;
+
+                case "cl":
+                    machMult = Util.Remap(year, 1900f, 1940f, 0.4f, 0.72f, true);
+                    break;
+
+                case "bc":
+                    machMult = Util.Remap(year, 1900f, 1940f, 0.75f, 1f, true);
+                    break;
+
+                case "ca":
+                    machMult = Util.Remap(year, 1900f, 1940f, 0.75f, 0.72f, true);
+                    break;
+
+                case "bb":
+                    machMult = 1f;
+                    break;
+
+                case "ic":
+                    machMult = 1.5f;
+                    break;
+
+                case "tr":
+                case "tr_amc":
+                    machMult = 1.25f;
+                    break;
+            }
+            return machMult;
+        }
+
         public static float GetDesiredLdivB(float Vd, float Cb, float BdivT, float speedMS, string sType, float year)
         {
             float blockVolume = Vd / Cb;
@@ -1026,7 +1100,7 @@ namespace UADRealism
 
         private static float LdivBFromFn(float Fn, float year)
         {
-            return Mathf.Clamp(5f + (Fn - 0.2f) * 21f, Util.Remap(year, 1890f, 1930f, 4f, 5f, true), Util.Remap(year, 1890f, 1930f, 11f, 9.5f, true));
+            return Mathf.Clamp(4f + (Fn - 0.2f) * 21f, Util.Remap(year, 1890f, 1930f, 4f, 5f, true), 11f);
         }
 
         private static float LdivBFromBlock(float Cb, float year)
@@ -1290,6 +1364,15 @@ namespace UADRealism
 
             return (float)(Ps / 745.7d);
         }
+
+        public static VesselEntity.OpRange GetDesiredOpRange(string sType, float year)
+            => sType switch
+            {
+                "dd" => year < 1910 ? VesselEntity.OpRange.VeryHigh : year < 1925 ? VesselEntity.OpRange.High : VesselEntity.OpRange.Medium,
+                "tb" => year < 1900 ? VesselEntity.OpRange.VeryLow : year < 1910 ? VesselEntity.OpRange.Low : VesselEntity.OpRange.Medium,
+                "ca" or "cl" => VesselEntity.OpRange.Medium,
+                _ => year < 1925 ? VesselEntity.OpRange.VeryLow : VesselEntity.OpRange.Low
+            };
 
         public static float OpRangeToPctFuel(Ship.OpRange opRange)
         {

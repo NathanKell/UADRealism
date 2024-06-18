@@ -303,10 +303,10 @@ $component_name_short_he_5;Incendiary
 $component_name_short_hydro_1;Hydro I
 $component_name_short_hydro_2;Hydro II
 $component_name_short_hydro_3;Hydro III
-$component_name_short_main_engine_1;Steam Basic
-$component_name_short_main_engine_2;Steam 3-Exp
-$component_name_short_main_engine_3;Steam M-Exp I
-$component_name_short_main_engine_3_adv;Steam M-Exp II
+$component_name_short_main_engine_1;Compound
+$component_name_short_main_engine_2;VTE
+$component_name_short_main_engine_3;Adv VTE
+$component_name_short_main_engine_3_adv;Quad Exp
 $component_name_short_main_engine_4;Turbines
 $component_name_short_main_engine_5;G.Turbines
 $component_name_short_main_engine_6;G.Turbines II
@@ -2329,7 +2329,7 @@ $technology_desc_armor_quality_9;Thick-Plate Improved Krupp Cemented form of Kru
 $technology_desc_armor_quality_end;Armor toughness becomes increased.
 $technology_desc_engine_boiler_1;The boilers are feeded with coal fuel which is stored in bunkers. The coal bunkers placed on ship compartments lining the ship’s sides, provide a noticeable protection against penetrating hits and increase ship floatability.
 $technology_desc_engine_boiler_10;The overall energy output of boilers is increased.
-$technology_desc_engine_boiler_16;Boilers are made lighter without losing heat efficiency.
+$technology_desc_engine_boiler_16;Boilers contain small tubes with water inside amidst the heat source, rather than heated tubes through a volume of water. This is much more efficient, but the downside is that fresh water must be used in the boiler.
 $technology_desc_engine_boiler_17;A device which saves energy by using the exhaust gases from the boiler to preheat the cold water.
 $technology_desc_engine_boiler_18;An improved economizer mechanism for boilers.
 $technology_desc_engine_boiler_19;Improved boiler in which the water flows and becomes superheated steam, without recirculation.
@@ -2949,11 +2949,11 @@ $technology_name_engine_boiler_12;Boiler efficiency upgrade III
 $technology_name_engine_boiler_13;Boiler efficiency upgrade IV
 $technology_name_engine_boiler_14;Boiler efficiency upgrade V
 $technology_name_engine_boiler_15;Boiler efficiency upgrade VI
-$technology_name_engine_boiler_16;Lighter boilers
+$technology_name_engine_boiler_16;Water-tube boiler
 $technology_name_engine_boiler_17;Economizer
 $technology_name_engine_boiler_18;Preheater
 $technology_name_engine_boiler_19;Once through boiler
-$technology_name_engine_boiler_2;Oil fired boilers
+$technology_name_engine_boiler_2;Oil-Spraying
 $technology_name_engine_boiler_20;Water-wall furnace boiler
 $technology_name_engine_boiler_21;Advanced superheater
 $technology_name_engine_boiler_22;Forced circulation boiler
@@ -2988,8 +2988,8 @@ $technology_name_engine_boiler_end;Advanced boilers & fuel systems
 $technology_name_engine_engine_1;Steam compound engine
 $technology_name_engine_engine_10;Marine diesel engine II
 $technology_name_engine_engine_2;Triple expansion steam engine
-$technology_name_engine_engine_3;Multiple expansion steam engine I
-$technology_name_engine_engine_4;Multiple expansion steam engine II
+$technology_name_engine_engine_3;Advanced Vertical Triple Expansion
+$technology_name_engine_engine_4;Quad Expansion Engine
 $technology_name_engine_engine_5;Steam turbines
 $technology_name_engine_engine_6;Geared steam turbines
 $technology_name_engine_engine_7;Turbo-electric drive

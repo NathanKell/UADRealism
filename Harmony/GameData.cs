@@ -246,7 +246,159 @@ namespace UADRealism
                         }
                     }
                 }
+
+                // Don't make tech changes to hull weight as severe
+                if (tech.componentx == null && tech.effects.TryGetValue("hull", out var hullEff))
+                {
+                    for (int i = 0; i < hullEff.Count; ++i)
+                    {
+                        var lst = hullEff[i];
+                        // hullweight uses argindex 0
+                        lst[0] = (Mathf.RoundToInt(float.Parse(lst[0]) * 0.75f * 10000f) * 0.0001f).ToString();
+                    }
+                }
+
+                switch (tech.name)
+                {
+                    case "engine_engine_1":
+                        ReplaceOrAddEffect(tech, "hp", "7");
+                        break;
+                    case "engine_engine_2": // VTE
+                        tech.year = 1890; // technically earlier
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "9");
+                        break;
+                    case "engine_engine_3": // M-Exp 1 - Adv VTE
+                        tech.year = 1897; // guess
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "10");
+                        break;
+                    case "engine_engine_4": // M-Exp 2 - Quad Exp
+                        tech.year = 1902; // guess
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "12");
+                        break;
+                    case "engine_engine_5": // Turbines
+                        tech.year = 1899; // Viper-class DD, LD 1899
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "15");
+                        break;
+                    case "engine_engine_6": // Geared Turbines
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "22");
+                        break;
+                    case "engine_engine_7": // Turbo-Electric
+                        tech.year = 1916; // Tennessee-class LD 1916
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "13"); // FIXME
+                        break;
+                    case "engine_engine_8": // Geared Turbines II
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "35");
+                        break;
+
+                    // Make the alt engines sane
+                    case "engine_engine_9": // Diesel I
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "14");
+                        break;
+                    case "engine_engine_10": // Diesel II
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "16");
+                        break;
+                    case "engine_engine_11": // Gas Turbine
+                        tech.effects.Remove("engine");
+                        ReplaceOrAddEffect(tech, "hp", "25");
+                        break;
+
+                    // Decrease weight effect
+                    case "engine_special_7":
+                        ReplaceOrAddEffect(tech, "engine", "2");
+                        break;
+
+                    // Rework boiler weights - Coal/Oil
+                    case "engine_boiler_1": // start, coal
+                        ReplaceOrAddEffect(tech, "boiler", "-15");
+                        break;
+                    case "engine_boiler_2":
+                        tech.year = 1902; // Semi-Oil. In common use in first decade.
+                        ReplaceOrAddEffect(tech, "boiler", "-5");
+                        break;
+                    case "engine_boiler_3":
+                        tech.year = 1908; // Oil I, used on Paulding class LD 1908
+                        //ReplaceOrAddEffect(tech, "boiler", "0");
+                        tech.effects.Remove("boiler");
+                        break;
+
+                    // Rework boiler weights - regular upgardes
+                    // Swap economizer and lighter boilers (now water-tube boilers)
+                    case "engine_boiler_16":
+                        tech.year = 1896;
+                        ReplaceOrAddEffect(tech, "boiler", "1");
+                        break;
+                    case "engine_boiler_17":
+                        tech.year = 1891;
+                        ReplaceOrAddEffect(tech, "boiler", "1");
+                        break;
+                    case "engine_boiler_18":
+                        ReplaceOrAddEffect(tech, "boiler", "1");
+                        break;
+                    case "engine_boiler_19":
+                        ReplaceOrAddEffect(tech, "boiler", "2");
+                        break;
+                    case "engine_boiler_20":   
+                        ReplaceOrAddEffect(tech, "boiler", "2");
+                        break;
+                    case "engine_boiler_21":
+                        ReplaceOrAddEffect(tech, "boiler", "4");
+                        break;
+                    case "engine_boiler_22": // HP Steam
+                        ReplaceOrAddEffect(tech, "boiler", "5");
+                        ReplaceOrAddEffect(tech, "engine", "2");
+                        break;
+
+
+                    // Add later upgrades for (Very) HP steam etc
+                    case "engine_boiler_14":
+                        tech.year = 1935;
+                        ReplaceOrAddEffect(tech, "boiler", "6");
+                        ReplaceOrAddEffect(tech, "engine", "2");
+                        break;
+                    case "engine_boiler_15":
+                        ReplaceOrAddEffect(tech, "boiler", "7");
+                        ReplaceOrAddEffect(tech, "engine", "6");
+                        break;
+
+                    // Scale down engine weight increases from aux engines
+                    case "engine_special_10":
+                    case "engine_special_11":
+                    case "engine_special_12":
+                    case "engine_special_13":
+                    case "engine_special_14":
+                        if (float.TryParse(tech.effects["engine"][0][0], out var specE))
+                        {
+                            specE += 5f;
+                            specE *= 0.2f;
+                            specE -= 5f;
+                            tech.effects["engine"][0][0] = specE.ToString("G4");
+                        }
+                        break;
+                }
             }
+        }
+
+        private static void ReplaceOrAddEffect(TechnologyData tech, string effect, string arg)
+        {
+            if (tech.effects.TryGetValue(effect, out var eff))
+            {
+                eff[0][0] = arg;
+                return;
+            }
+
+            eff = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.List<string>>();
+            tech.effects[effect] = eff;
+            eff.Add(new Il2CppSystem.Collections.Generic.List<string>());
+            eff[0].Add(arg);
         }
     }
 }

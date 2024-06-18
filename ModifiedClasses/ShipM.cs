@@ -36,7 +36,7 @@ namespace UADRealism
             ship.ModData().SetFineness(Mathf.Lerp(ShipData._MinFineness, ShipData._MaxFineness, 1f - t));
 
             // Also set freeboard. Center it on 0.
-            float fbVal = ModUtils.DistributedRange(1f);
+            float fbVal = ModUtils.DistributedRange(1f, 3);
             if (fbVal < 0f)
                 fbVal = Mathf.Lerp(0f, ShipData._MinFreeboard, -fbVal);
             else
@@ -360,6 +360,10 @@ namespace UADRealism
             float techEngine = ship.TechR("engine");
             float techBoiler = ship.TechR("boiler");
             float weight = (0.45f * techBoiler + 0.55f * techEngine) * (hp / techHP);
+            // NOTE this is the design year, not the hull's unlock year. This is because we presume
+            // the machinery will be current (and the player might have selected an engine type
+            // unlocked later than the hull anyway!)
+            weight *= ShipStats.GetMachineryWeightMult(ship.shipType.name, ship.GetYear(ship));
             if (!flaws || !GameManager.IsCampaign || !Ship.IsFlawsActive(ship))
                 return weight;
 
@@ -505,45 +509,14 @@ namespace UADRealism
                 float citadelLength = ship.GetDynamicCitadelMaxZ(false, false) - ship.GetDynamicCitadelMinZ(false, false);
                 float citPct = citadelLength / stats.Lwl;
 
-                float scantlingStrength;
-                const float scantlingLightEarly = 0.75f;
-                const float scantlingLightLate = 0.85f;
-                const float scantlingCruiser = 0.95f;
-                const float scantlingCL = 0.9f;
-                const float scantlingACR = 1f;
-                const float scantlingBB = 1.1f;
-                bool isTBDD = false;
-                switch (ship.shipType.name)
-                {
-                    case "dd":
-                    case "tb":
-                        scantlingStrength = Util.Remap(year, 1890f, 1920f, scantlingLightEarly, scantlingLightLate, true);
-                        isTBDD = true;
-                        break;
-                    case "bb":
-                        scantlingStrength = scantlingBB;
-                        break;
-                    case "cl":
-                        scantlingStrength = data.nameUi.Contains("Semi-") ? scantlingCruiser : Util.Remap(year, 1890f, 1920f, scantlingCL, scantlingCruiser, true);
-                        break;
-                    case "ca":
-                        scantlingStrength = Util.Remap(year, 1910f, 1925f, scantlingACR, scantlingCruiser, true);
-                        break;
-                    case "bc":
-                        scantlingStrength = Util.Remap(year, 1900f, 1930f, scantlingACR, scantlingBB, true);
-                        break;
-                    default:
-                        scantlingStrength = 1f;
-                        break;
-                }
+                float scantlingStrength = ShipStats.GetScantlingStrength(ship.shipType.name, year, data);
 
                 var statsNormal = ShipStats.GetLoadingStats(ship, HullLoadState.Normal);
                 float lbd = statsNormal.Lwl * statsNormal.B * statsNormal.T;
                 float steelweight = lbd * (0.21f - 0.026f * Mathf.Log10(lbd)) * (1f + 0.025f * (statsNormal.Lwl / statsNormal.T - 12)) * (1f + (2f / 3f) * (statsNormal.Cb - 0.7f));
                 steelweight *= 0.9f + (1f + ship.ModData().Freeboard * 0.02f) * 0.1f;
                 steelweight *= 1f + citPct * 0.1f;
-                float modifiedHullTechMult = Util.Remap(hullTechMult, 0.58f, 1f, 0.675f, 1f);
-                steelweight *= 1.65f * modifiedHullTechMult;
+                steelweight *= 1.65f * hullTechMult;
                 steelweight *= scantlingStrength;
 
                 Ship.MatInfo mat = new Ship.MatInfo();
@@ -557,8 +530,6 @@ namespace UADRealism
 
                 // engine
                 float engineWeight = GetEngineMatsWeightCalculateValue(ship, false);
-                if (isTBDD)
-                    engineWeight *= 0.8f;
 
                 mat = new Ship.MatInfo();
                 mat.name = "engines";
@@ -689,12 +660,12 @@ namespace UADRealism
                 {
                     if (p.data.isTowerMain)
                     {
-                        ctAreaEstimate = Mathf.Pow(p.data.weight * ship.TechWeightMod(p.data), 2f / 3f);
+                        ctAreaEstimate = Mathf.Pow(p.data.weight, 2f / 3f);
                     }
                     // Unlike stock, we count uptakes as superstructure
                     else if (p.data.isTowerAny || p.data.isFunnel)
                     {
-                        float areaEst = Mathf.Pow(p.data.weight * ship.TechWeightMod(p.data), 2f / 3f);
+                        float areaEst = Mathf.Pow(p.data.weight, 2f / 3f);
                         // But uptakes aren't the whole funnel
                         if (p.data.isFunnel)
                             areaEst *= 0.25f;
@@ -720,14 +691,15 @@ namespace UADRealism
                 mats.Add(mat);
 
                 // Torpedo Defense System
-                float weightMultTDS = ship.TechR("anti_torp_weight") - 1f;
+                float weightMultTDS = Math.Max(0f, ship.TechR("anti_torp_weight") - 1f);
                 // total guesswork here
                 float depthTDS = statsNormal.T * 0.75f;
                 float volumeTDS = citadelLength * statsNormal.B * 0.2f * depthTDS; // assume 10% on each side
                 float areaTDS = citadelLength * 2f * depthTDS;
                 const float maxTDSDensity = 0.2f;
                 const float maxTDSThickMult = 0.06f * 0.0254f;
-                float weightTDS = (volumeTDS * maxTDSDensity * modifiedHullTechMult + maxTDSThickMult * Mathf.Sqrt(tonnage) * areaTDS * weightSTS) * weightMultTDS;
+                // FIXME maybe shouldn't increase TDS weight based on components that increase hull weight, just techs?
+                float weightTDS = (volumeTDS * maxTDSDensity * hullTechMult + maxTDSThickMult * Mathf.Sqrt(tonnage) * areaTDS * weightSTS) * weightMultTDS;
                 mat = new Ship.MatInfo();
                 mat.name = "antitorpedo";
                 mat.mat = Ship.Mat.AntiTorp;
@@ -747,7 +719,7 @@ namespace UADRealism
                 // Handle survivability mostly like stock
                 float survMinMult = MonoBehaviourExt.Param("w_survivability_min", 0f);
                 float survMaxMult = MonoBehaviourExt.Param("w_survivability_max", 10f);
-                float survWeight = modifiedHullTechMult * tonnage * scantlingStrength
+                float survWeight = hullTechMult * tonnage * scantlingStrength
                     * 0.01f * Util.Remap((int)ship.survivability, (int)Ship.Survivability.VeryLow, (int)Ship.Survivability.VeryHigh, survMinMult, survMaxMult);
                 mat = new Ship.MatInfo();
                 mat.name = "survivability";
@@ -998,7 +970,7 @@ namespace UADRealism
                 mat.weight = data.weight * ship.TechWeightMod(data);
                 mat.mat = Ship.Mat.Raw;
                 mat.costMod = 1f;
-                mat.cost = data.cost;
+                mat.cost = data.cost * ship.TechCostMod(data);
                 mats.Add(mat);
             }
 
@@ -1178,6 +1150,224 @@ namespace UADRealism
                 return 0f;
 
             return ship.shipType.armorMin * 25.4f;
+        }
+
+        public static void DesignShip(Ship ship, Ship._GenerateRandomShip_d__566 _this)
+        {
+            var smd = ship.ModData();
+            var helper = _this.__8__1;
+            helper.rnd = new Il2CppSystem.Random(Util.FromTo(1, 1000000, null)); // yes, this is how stock inits it.
+            var rnd = helper.rnd;
+
+            float hullYear = Database.GetYear(ship.hull.data);
+            float designYear = ship.GetYear(ship);
+            float avgYear = (hullYear + designYear) * 0.5f;
+            string sType = ship.shipType.name;
+            var hData = ShipStats.GetData(ship);
+
+            if (_this._isRefitMode_5__2 && !_this.isSimpleRefit)
+            {
+                float tLimit = ship.player.TonnageLimit(ship.shipType);
+                float tng = ship.Tonnage();
+                float tRatio = tLimit / tng;
+                if (tRatio < 1f)
+                {
+                    float drMult = 1f + ship.draught * 0.01f;
+                    float minDrMult = 1f + ship.hull.data.draughtMin * 0.01f;
+                    float newDrMult = Mathf.Max(minDrMult, Mathf.Max(0.9f, tRatio) * drMult);
+                    float requiredDrMult = tRatio * drMult;
+                    if(newDrMult < drMult)
+                    {
+                        ship.SetDraught((newDrMult - 1f) * 100f);
+                        tRatio *= drMult / newDrMult;
+                    }
+                    if (newDrMult > requiredDrMult)
+                    {
+                        ship.SetBeam((MathF.Sqrt(tRatio) * (1f + ship.beam * 0.01f) - 1f) * 100f);
+                    }
+                    ship.SetTonnage(tLimit);
+                }
+            }
+            else
+            {
+                if (!_this.adjustTonnage)
+                {
+                    var tng = ship.Tonnage();
+                    var clampedTng = Mathf.Clamp(tng, ship.TonnageMin(), ship.TonnageMax());
+                    if (clampedTng != tng)
+                        ship.SetTonnage(clampedTng);
+                }
+                else
+                {
+                    var tMin = ship.TonnageMin();
+                    var tMax = Math.Min(ship.player.TonnageLimit(ship.shipType), ship.TonnageMax());
+                    if (tMax < tMin)
+                        tMax = tMin;
+
+                    float newTng;
+                    if (_this.customTonnageRatio.HasValue)
+                    {
+                        newTng = Mathf.Lerp(tMin, tMax, _this.customTonnageRatio.Value);
+                    }
+                    else if (ship.shipType.paramx.ContainsKey("random_tonnage"))
+                    {
+                        newTng = Util.Range(tMin, tMax, rnd);
+                    }
+                    else if (ship.shipType.paramx.ContainsKey("random_tonnage_low"))
+                    {
+                        newTng = Util.Range(tMin, Util.Chance(80f) ? Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f)) : tMax, rnd);
+                    }
+                    else
+                    {
+                        newTng = Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f) * Util.Range(0.01f, 1.5f, rnd));
+                    }
+                    
+                    float roundedTng = Ship.RoundTonnageToStep(Util.Range(newTng, tMax, rnd));
+                    ship.SetTonnage(Mathf.Clamp(roundedTng, tMin, tMax));
+                }
+            }
+
+            float CbAvg = 0f;
+            float CpAvg = 0f;
+            if (!_this._isRefitMode_5__2)
+            {
+                for (int i = ship.hull.data.sectionsMin; i <= ship.hull.data.sectionsMax; ++i)
+                {
+                    CbAvg += hData._statsSet[i].Cb;
+                    CpAvg += hData._statsSet[i].Cp;
+                }
+                float secsRecip = 1f / (ship.hull.data.sectionsMax - ship.hull.data.sectionsMin + 1);
+                CbAvg *= secsRecip;
+                CpAvg *= secsRecip;
+            }
+            else
+            {
+                int secs = smd.SectionsFromFineness();
+                CbAvg = hData._statsSet[secs].Cb;
+                CpAvg = hData._statsSet[secs].Cp;
+            }
+
+            float speedKtsMin;
+            float speedKtsMax;
+            float CpMin, CpMax;
+            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.3f, rnd);
+            float extraCpOffset = 0f;
+            switch (sType)
+            {
+                case "tb":
+                    CpMin = Util.Remap(hullYear, 1920f, 1930f, 0.5f, 0.61f, true);
+                    CpMax = Util.Remap(hullYear, 1920f, 1930f, 0.55f, 0.65f, true);
+                    speedKtsMin = Util.Remap(avgYear, 1890f, 1935f, 21f, 32f, true);
+                    speedKtsMax = Util.Remap(avgYear, 1890f, 1935f, 26f, 39f, true);
+                    extraCpOffset = Util.Remap(hullYear, 1895f, 1925f, -0.08f, 0f);
+                    break;
+                case "dd":
+                    CpMin = Util.Remap(hullYear, 1920f, 1930f, 0.5f, 0.61f, true);
+                    CpMax = Util.Remap(hullYear, 1920f, 1930f, 0.55f, 0.65f, true);
+                    speedKtsMin = Util.Remap(avgYear, 1895f, 1935f, 24f, 33f, true);
+                    speedKtsMax = Util.Remap(avgYear, 1895f, 1935f, 29f, 40f, true);
+                    extraCpOffset = Util.Remap(hullYear, 1895f, 1925f, -0.08f, 0f);
+                    break;
+                case "cl":
+                    CpMin = 0.54f;
+                    CpMax = 0.62f;
+                    speedKtsMin = Util.Remap(avgYear, 1890f, 1930f, 17f, 28f, true);
+                    speedKtsMax = Util.Remap(avgYear, 1890f, 1930f, 24f, 37f, true);
+                    break;
+                case "ca":
+                    CpMin = 0.56f;
+                    CpMax = 0.64f;
+                    speedKtsMin = Util.Remap(avgYear, 1890f, 1930f, 15f, 28f, true);
+                    speedKtsMax = Util.Remap(avgYear, 1890f, 1930f, 23f, 35f, true);
+                    break;
+                case "bc":
+                    CpMin = 0.56f;
+                    CpMax = 0.64f;
+                    speedKtsMin = Util.Remap(avgYear, 1900f, 1930f, 23f, 26f, true);
+                    speedKtsMax = Util.Remap(avgYear, 1900f, 1930f, 28f, 34f, true);
+                    break;
+                case "bb":
+                    CpMin = 0.57f;
+                    CpMax = 0.69f;
+                    speedKtsMin = Util.Remap(avgYear, 1895f, 1935f, 14f, 21f, true);
+                    speedKtsMax = Util.Remap(avgYear, 1895f, 1935f, 22f, 34f, true);
+                    break;
+                case "ic":
+                    CpMin = 0.6f;
+                    CpMax = 0.7f;
+                    speedKtsMin = 5f;
+                    speedKtsMax = 11f;
+                    break;
+                default: // tr, amc
+                    CpMin = 0.6f;
+                    CpMax = 0.75f;
+                    speedKtsMin = 10f;
+                    speedKtsMax = 14f;
+                    break;
+            }
+            float speedBias = Mathf.Cos(Mathf.PI * Mathf.InverseLerp(CpMin, CpMax, CpAvg)) * 0.5f;
+            float speedKts = Mathf.Lerp(speedKtsMin, speedKtsMax, (0.5f + ModUtils.DistributedRange(0.5f, rnd)) + speedBias) + ModUtils.DistributedRange(0.2f, rnd);
+            speedKts = Mathf.Clamp(ship.hull.data.shipType.speedMin, ship.hull.data.shipType.speedMax, speedKts);
+            // if this is a refit, we'll use this as our goal speed but maybe not hit it.
+
+            if (!_this._isRefitMode_5__2)
+            {
+                ship.SetSpeedMax(speedKts * ShipStats.KnotsToMS);
+
+                // First, set L/B from B/T
+                float desiredLdivB = ShipStats.GetDesiredLdivB(ship.tonnage * ShipStats.TonnesToCubicMetersWater, CbAvg, desiredBdivT, ship.speedMax, sType, hullYear);
+                desiredLdivB *= 1f + ModUtils.DistributedRange(0.05f, rnd);
+
+                // Next figure out which hull (i.e. what fineness)
+                int bestSec = ShipStats.GetDesiredSections(hData, ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.tonnage, ship.speedMax,
+                    desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, ModUtils.DistributedRange(0.01f, 3, null, rnd) + extraCpOffset);
+                // Center freeboard on 0.
+                float freeboard = ModUtils.DistributedRange(0.5f, 3, null, rnd);
+                if (freeboard < 0f)
+                    freeboard = Mathf.Lerp(0f, ShipData._MinFreeboard, -freeboard);
+                else
+                    freeboard = Mathf.Lerp(0f, ShipData._MaxFreeboard, freeboard);
+
+                // Apply values
+                ship.SetBeam(finalBmPct, false);
+                ship.SetDraught(finalDrPct, false);
+                float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
+                smd.SetFineness(Mathf.Lerp(ShipData._MinFineness, ShipData._MaxFineness, 1f - t));
+                smd.SetFreeboard(freeboard);
+
+                if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
+                    ship.RefreshHull(false);
+            }
+
+            if (!_this.isSimpleRefit)
+            {
+                ship.CurrentCrewQuarters = (Ship.CrewQuarters)(1 + ModUtils.DistributedRange(1, 1, null, rnd));
+                ship.SetOpRange(_this.customRange.HasValue ? _this.customRange.Value :
+                    (VesselEntity.OpRange)Math.Max(
+                        (int)VesselEntity.OpRange.VeryLow,
+                        Math.Min((int)VesselEntity.OpRange.VeryHigh,
+                        (int)ShipStats.GetDesiredOpRange(sType, hullYear) + Mathf.RoundToInt(ModUtils.DistributedRange(1f, 3, null, rnd)))),
+                    true);
+                ship.survivability = _this.customSurv.HasValue ? _this.customSurv.Value :
+                    (Ship.Survivability)Math.Max((int)Ship.Survivability.VeryLow, Math.Min((int)Ship.Survivability.VeryHigh,
+                    ((int)Ship.Survivability.High + (sType == "dd" || sType == "tb" ? -1 : 0) + Mathf.RoundToInt(ModUtils.DistributedRange(1f, 3, null, rnd)))));
+
+                _this._randArmorRatio_5__6 = ship.GetRandArmorRatio(rnd);
+                float mmArmor;
+                if (_this.customArmor.HasValue)
+                    mmArmor = _this.customArmor.Value;
+                else
+                    mmArmor = ship.shipType.armor * 25.4f * _this._randArmorRatio_5__6;
+
+                ship.armor = Ship.GenerateArmor(mmArmor, ship);
+            }
+            // note: need to block other methods from changing the above in simple refit.
+            // (or even in complex refit, probably)
+            if (!GameManager.IsCampaign)
+                ship.CrewTrainingAmount = ModUtils.Range(17f, 100f, null, rnd);
+
+            ship.Weight();
+            ship.RefreshHullStats();
         }
     }
 }
