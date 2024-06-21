@@ -617,6 +617,15 @@ namespace UADRealism
                 if (data.isGun)
                     part.UpdateCollidersSize(_ship);
 
+                float weight = _ship.Weight(true);
+                if (weight > _ship.Tonnage() * 1.4f && !part.data.isWeapon)
+                {
+                    // This part will never work, it takes us over limit.
+                    _ship.badData.Add(data);
+                    MarkBadTry(part, data);
+                    continue;
+                }
+
                 if (!PlacePart(part, rp))
                 {
                     MarkBadTry(part, data);
@@ -701,245 +710,228 @@ namespace UADRealism
         private bool PlacePart(Part part, RandPart rp)
         {
             var data = part.data;
-            bool isValidPlacement = false;
-            // Do this in a do-while so we can break
-            // FIXME I think we can just return false instead?
-            do
+
+            bool useNoMount = false;
+            if (rp.paired && _firstPairCreated != null)
             {
-                bool useNoMount = false;
-                if (rp.paired && _firstPairCreated != null)
+                if (_firstPairCreated.mount == null)
                 {
-                    if (_firstPairCreated.mount == null)
-                    {
-                        useNoMount = true;
-                    }
-                    else
-                    {
-                        var newMountPos = _firstPairCreated.mount.transform.position;
-                        newMountPos.x *= -1f;
-                        part.transform.position = newMountPos;
-                        part.TryFindMount(true);
-                        if (part.mount == null)
-                            return false;
-                    }
+                    useNoMount = true;
                 }
                 else
                 {
-                    if (!data.allowsMount)
+                    var newMountPos = _firstPairCreated.mount.transform.position;
+                    newMountPos.x *= -1f;
+                    part.transform.position = newMountPos;
+                    part.TryFindMount(true);
+                    if (part.mount == null)
+                        return false;
+                }
+            }
+            else
+            {
+                if (!data.allowsMount)
+                {
+                    useNoMount = true;
+                }
+                else
+                {
+                    _ship.allowedMountsInternal.Clear();
+                    foreach (var m in _ship.mounts)
                     {
-                        useNoMount = true;
+                        if (!IsAllowedMount(m, part, rp.demandMounts, rp.excludeMounts))
+                            continue;
+
+                        if (_ship.badMounts.TryGetValue(data, out var set) && set.Contains(m))
+                            continue;
+
+                        if (rp.rangeX.HasValue)
+                        {
+                            Vector2 trueRangeX = new Vector2(rp.rangeX.Value.x + _ship.allowedMountsOffset.x, rp.rangeX.Value.y + _ship.allowedMountsOffset.y)
+                                * (_ship.deckBounds.size.x * 2.5f + _ship.deckBounds.center.x);
+                            if (m.transform.position.x < trueRangeX.x || m.transform.position.x > trueRangeX.y)
+                                continue;
+                        }
+                        if (rp.rangeZ.HasValue)
+                        {
+                            Vector2 trueRangeZ = new Vector2(rp.rangeZ.Value.x + _ship.allowedMountsOffset.x, rp.rangeZ.Value.y + _ship.allowedMountsOffset.y)
+                                * (_ship.deckBounds.size.z * 0.63f + _ship.deckBounds.center.z);
+                            if (m.transform.position.z < trueRangeZ.x || m.transform.position.z > trueRangeZ.y)
+                                continue;
+                        }
+
+                        _ship.allowedMountsInternal.Add(m);
+                    }
+                    if (_ship.allowedMountsInternal.Count > 0)
+                    {
+                        part.Mount(_ship.allowedMountsInternal.Random(null, _this.__8__1.rnd), true);
                     }
                     else
                     {
-                        _ship.allowedMountsInternal.Clear();
-                        foreach (var m in _ship.mounts)
+                        if (!data.needsMount && (rp.demandMounts == null || rp.demandMounts.Count == 0))
                         {
-                            if (!IsAllowedMount(m, part, rp.demandMounts, rp.excludeMounts))
-                                continue;
-
-                            if (_ship.badMounts.TryGetValue(data, out var set) && set.Contains(m))
-                                continue;
-
-                            if (rp.rangeX.HasValue)
-                            {
-                                Vector2 trueRangeX = new Vector2(rp.rangeX.Value.x + _ship.allowedMountsOffset.x, rp.rangeX.Value.y + _ship.allowedMountsOffset.y)
-                                    * (_ship.deckBounds.size.x * 2.5f + _ship.deckBounds.center.x);
-                                if (m.transform.position.x < trueRangeX.x || m.transform.position.x > trueRangeX.y)
-                                    continue;
-                            }
-                            if (rp.rangeZ.HasValue)
-                            {
-                                Vector2 trueRangeZ = new Vector2(rp.rangeZ.Value.x + _ship.allowedMountsOffset.x, rp.rangeZ.Value.y + _ship.allowedMountsOffset.y)
-                                    * (_ship.deckBounds.size.z * 0.63f + _ship.deckBounds.center.z);
-                                if (m.transform.position.z < trueRangeZ.x || m.transform.position.z > trueRangeZ.y)
-                                    continue;
-                            }
-
-                            _ship.allowedMountsInternal.Add(m);
-                        }
-                        if (_ship.allowedMountsInternal.Count > 0)
-                        {
-                            part.Mount(_ship.allowedMountsInternal.Random(null, _this.__8__1.rnd), true);
+                            useNoMount = true;
                         }
                         else
                         {
-                            if (!data.needsMount && (rp.demandMounts == null || rp.demandMounts.Count == 0))
-                            {
-                                useNoMount = true;
-                            }
-                            else
-                            {
-                                var mountGroups = _ship.GetAllowedMountsInGroups(rp, part);
+                            var mountGroups = _ship.GetAllowedMountsInGroups(rp, part);
 
-                                List<Vector3> positions = new List<Vector3>();
-                                var snap = MonoBehaviourExt.Param("snap_point_step", 0.5f);
-                                foreach (var mg in mountGroups)
+                            List<Vector3> positions = new List<Vector3>();
+                            var snap = MonoBehaviourExt.Param("snap_point_step", 0.5f);
+                            foreach (var mg in mountGroups)
+                            {
+                                // We want to sort the list of mounts. But
+                                // it's a native list, not a managed one.
+                                // So copy to managed (ugh).
+                                var mg2 = new List<Mount>();
+                                foreach (var m in mg)
+                                    mg2.Add(m);
+                                mg2.Sort((a, b) =>
                                 {
-                                    // We want to sort the list of mounts. But
-                                    // it's a native list, not a managed one.
-                                    // So copy to managed (ugh).
-                                    var mg2 = new List<Mount>();
-                                    foreach (var m in mg)
-                                        mg2.Add(m);
-                                    mg2.Sort((a, b) =>
-                                    {
-                                        if (a.transform.position.z < b.transform.position.z)
-                                            return -1;
-                                        else if (a.transform.position.z > b.transform.position.z)
-                                            return 1;
-                                        return 0;
-                                    });
+                                    if (a.transform.position.z < b.transform.position.z)
+                                        return -1;
+                                    else if (a.transform.position.z > b.transform.position.z)
+                                        return 1;
+                                    return 0;
+                                });
 
-                                    // Start from the bow (we sorted minZ first)
-                                    for (int i = mg2.Count - 1; i > 0 && positions.Count == 0; --i)
+                                // Start from the bow (we sorted minZ first)
+                                for (int i = mg2.Count - 1; i > 0 && positions.Count == 0; --i)
+                                {
+                                    var curM = mg2[i];
+                                    var nextM = mg2[i - 1];
+                                    var curPos = curM.transform.position;
+                                    var nextPos = nextM.transform.position;
+                                    var distHalfZ = (nextPos.z - curPos.z) * 0.5f;
+                                    part.transform.position = new Vector3(curPos.x, curPos.y, curPos.z + distHalfZ + snap + 16.75f);
+                                    if (!part.CanPlace())
                                     {
-                                        var curM = mg2[i];
-                                        var nextM = mg2[i - 1];
-                                        var curPos = curM.transform.position;
-                                        var nextPos = nextM.transform.position;
-                                        var distHalfZ = (nextPos.z - curPos.z) * 0.5f;
-                                        part.transform.position = new Vector3(curPos.x, curPos.y, curPos.z + distHalfZ + snap + 16.75f);
+                                        part.transform.position = new Vector3(curPos.x, curPos.y, curPos.z + distHalfZ + 16.75f);
                                         if (!part.CanPlace())
+                                            continue;
+                                    }
+
+                                    float midPos = curPos.z + distHalfZ + 16.75f;
+                                    bool lastOK = false;
+                                    while (true)
+                                    {
+                                        midPos -= snap;
+                                        if (midPos < nextPos.z - snap - 105f)
+                                            break;
+
+                                        part.transform.position = new Vector3(curPos.x, curPos.y, midPos);
+                                        if (part.CanPlace())
                                         {
-                                            part.transform.position = new Vector3(curPos.x, curPos.y, curPos.z + distHalfZ + 16.75f);
-                                            if (!part.CanPlace())
-                                                continue;
+                                            positions.Add(part.transform.position);
+                                            lastOK = true;
                                         }
-
-                                        float midPos = curPos.z + distHalfZ + 16.75f;
-                                        bool lastOK = false;
-                                        while (true)
+                                        else
                                         {
-                                            midPos -= snap;
-                                            if (midPos < nextPos.z - snap - 105f)
+                                            if (lastOK)
                                                 break;
-
-                                            part.transform.position = new Vector3(curPos.x, curPos.y, midPos);
-                                            if (part.CanPlace())
-                                            {
-                                                positions.Add(part.transform.position);
-                                                lastOK = true;
-                                            }
-                                            else
-                                            {
-                                                if (lastOK)
-                                                    break;
-                                                lastOK = false;
-                                            }
+                                            lastOK = false;
                                         }
                                     }
                                 }
-
-                                if (positions.Count == 0)
-                                {
-                                    _ship.badData.Add(data);
-                                    break;
-                                }
-                                part.transform.position = positions.Random(null, _this.__8__1.rnd);
                             }
-                        }
-                    }
-                }
 
-                if (useNoMount)
-                {
-                    //FirstPairHasNoMount
-                    if (rp.paired && _firstPairCreated != null)
-                    {
-                        _offsetX *= -1f;
-                    }
-                    else
-                    {
-                        _offsetX = (rp.rangeX.HasValue ?
-                            ModUtils.Range(rp.rangeX.Value.x, rp.rangeX.Value.y, null, _this.__8__1.rnd)
-                            : ModUtils.Range(-1f, 1f, null, _this.__8__1.rnd))
-                            * _ship.deckBounds.size.x * 0.5f;
-                        _offsetZ = (rp.rangeZ.HasValue ?
-                            ModUtils.Range(rp.rangeZ.Value.x, rp.rangeZ.Value.y, null, _this.__8__1.rnd)
-                            : ModUtils.Range(-1f, 1f, null, _this.__8__1.rnd))
-                            * _ship.deckBounds.size.z * 0.5f;
-
-                        if (_offsetX != 0f && !data.paramx.ContainsKey("center"))
-                        {
-                            Vector3 partWorldPos = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
-                            float maxXDist = _ship.deckBounds.size.x * 1.05f;
-                            float maxZDist = _ship.deckBounds.size.z * 0.95f;
-                            Part bestPart = null;
-                            float bestDistX = float.MaxValue;
-                            float bestDistZ = float.MaxValue;
-                            foreach (var p in _ship.parts)
+                            if (positions.Count == 0)
                             {
-                                if (p.data != data)
-                                    continue;
-
-                                var fromPos = Util.AbsVector(p.transform.position - partWorldPos);
-                                if (fromPos.x > maxXDist || fromPos.z > maxZDist)
-                                    continue;
-
-                                if (fromPos.x < bestDistX)
-                                {
-                                    bestPart = p;
-                                    bestDistX = fromPos.x;
-                                }
-                                // Game does an orderby/thenby so the Z check is true iff X
-                                // is equal
-                                else if (fromPos.x == bestDistX && fromPos.z < bestDistZ)
-                                {
-                                    bestPart = p;
-                                    bestDistZ = fromPos.z;
-                                }
+                                // This part doesn't fit anywhere on the ship now
+                                // so let's never try this data again.
+                                _ship.badData.Add(data);
+                                return false;
                             }
-                            if (bestPart != null)
-                                _offsetX = bestPart.transform.localPosition.x; // should this be negative?? Stock doesn't make sense here.
+                            part.transform.position = positions.Random(null, _this.__8__1.rnd);
                         }
                     }
-                    var desiredWorldPoint = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
-                    var deckAtPoint = _ship.FindDeckAtPoint(desiredWorldPoint);
-                    if (deckAtPoint == null)
-                        break;
-
-                    var deckCenter = deckAtPoint.transform.TransformPoint(deckAtPoint.center);
-                    part.Place(new Vector3(desiredWorldPoint.x, deckCenter.y, desiredWorldPoint.z), true);
                 }
+            }
 
-                // Found a position, now check weight
-                float weight = _ship.Weight();
-                if (weight > _ship.Tonnage() * 1.4f && !part.data.isWeapon)
+            if (useNoMount)
+            {
+                if (rp.paired && _firstPairCreated != null)
                 {
-                    _ship.badData.Add(data);
-                    break;
+                    _offsetX *= -1f;
                 }
-
-                data.constructorShip = _ship;
-                if (!part.CanPlace())
-                    break;
-
-                if (!Ship.IsCasemateGun(data) && !part.CanPlaceSoftLight())
-                    break;
-
-                isValidPlacement = true;
-                foreach (var p in _ship.parts)
+                else
                 {
-                    if (p == part)
-                        continue;
+                    _offsetX = (rp.rangeX.HasValue ?
+                        ModUtils.Range(rp.rangeX.Value.x, rp.rangeX.Value.y, null, _this.__8__1.rnd)
+                        : ModUtils.Range(-1f, 1f, null, _this.__8__1.rnd))
+                        * _ship.deckBounds.size.x * 0.5f;
+                    _offsetZ = (rp.rangeZ.HasValue ?
+                        ModUtils.Range(rp.rangeZ.Value.x, rp.rangeZ.Value.y, null, _this.__8__1.rnd)
+                        : ModUtils.Range(-1f, 1f, null, _this.__8__1.rnd))
+                        * _ship.deckBounds.size.z * 0.5f;
 
-                    if (p.data.isTorpedo || (p.data.isGun && !Ship.IsCasemateGun(p.data)))
+                    if (_offsetX != 0f && !data.paramx.ContainsKey("center"))
                     {
-                        if (!p.CanPlaceSoftLight())
+                        Vector3 partWorldPos = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
+                        float maxXDist = _ship.deckBounds.size.x * 1.05f;
+                        float maxZDist = _ship.deckBounds.size.z * 0.95f;
+                        Part bestPart = null;
+                        float bestDistX = float.MaxValue;
+                        float bestDistZ = float.MaxValue;
+                        foreach (var p in _ship.parts)
                         {
-                            isValidPlacement = true;
-                            break;
+                            if (p.data != data)
+                                continue;
+
+                            var fromPos = Util.AbsVector(p.transform.position - partWorldPos);
+                            if (fromPos.x > maxXDist || fromPos.z > maxZDist)
+                                continue;
+
+                            if (fromPos.x < bestDistX)
+                            {
+                                bestPart = p;
+                                bestDistX = fromPos.x;
+                            }
+                            // Game does an orderby/thenby so the Z check is true iff X
+                            // is equal
+                            else if (fromPos.x == bestDistX && fromPos.z < bestDistZ)
+                            {
+                                bestPart = p;
+                                bestDistZ = fromPos.z;
+                            }
                         }
+                        if (bestPart != null)
+                            _offsetX = bestPart.transform.localPosition.x; // should this be negative?? Stock doesn't make sense here.
                     }
                 }
-                if (!isValidPlacement)
-                    break;
+                var desiredWorldPoint = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
+                var deckAtPoint = _ship.FindDeckAtPoint(desiredWorldPoint);
+                if (deckAtPoint == null)
+                    return false;
 
-                return true;
+                var deckCenter = deckAtPoint.transform.TransformPoint(deckAtPoint.center);
+                part.Place(new Vector3(desiredWorldPoint.x, deckCenter.y, desiredWorldPoint.z), true);
+            }
 
-            } while (false);
+            // Found a position
+            data.constructorShip = _ship;
+            if (!part.CanPlace())
+                return false;
 
-            return false;
+            if (!Ship.IsCasemateGun(data) && !part.CanPlaceSoftLight())
+                return false;
+
+            bool isValidPlacement = true;
+            foreach (var p in _ship.parts)
+            {
+                if (p == part)
+                    continue;
+
+                if (p.data.isTorpedo || (p.data.isGun && !Ship.IsCasemateGun(p.data)))
+                {
+                    if (!p.CanPlaceSoftLight())
+                    {
+                        isValidPlacement = true;
+                        break;
+                    }
+                }
+            }
+            return isValidPlacement;
         }
 
         private bool IsAllowedMount(Mount m, Part part, Il2CppSystem.Collections.Generic.List<string> demandMounts, Il2CppSystem.Collections.Generic.List<string> excludeMounts)
