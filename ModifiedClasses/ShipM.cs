@@ -9,7 +9,9 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using Il2CppInterop.Runtime.Runtime.VersionSpecific.FieldInfo;
 
+#pragma warning disable CS8602
 #pragma warning disable CS8603
 #pragma warning disable CS8604
 #pragma warning disable CS8625
@@ -51,7 +53,7 @@ namespace UADRealism
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorIncrease = GenerateAdjustArmorPriorities(true);
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorLocal = new Dictionary<Ship.A, float>();
         private static readonly Dictionary<AdjustHullStatsItem, float> _AdjustHullStatsOptions = new Dictionary<AdjustHullStatsItem, float>();
-        private static System.Array _OpRangeValues = null;
+        private static string[] _OpRangeValues = null;
         internal enum AdjustHullStatsItem
         {
             Speed,
@@ -124,18 +126,41 @@ namespace UADRealism
             bool isLightCraft = ship.shipType.name == "tb" || ship.shipType.name == "dd";
             bool cldd = isCL || isLightCraft;
 
-            VesselEntity.OpRange minOpRange = VesselEntity.OpRange.VeryLow;
+            System.Func<bool> stopFunc;
+            if (nativeStop != null)
+                stopFunc = new Func<bool>(() =>
+                {
+                    return nativeStop.Invoke();
+                });
+            else if (stopCondition != null)
+                stopFunc = stopCondition;
+            else if(delta > 0)
+                stopFunc = new Func<bool>(() =>
+                {
+                    return ship.Weight() / ship.Tonnage() >= targetWeight;
+                });
+            else
+                stopFunc = new Func<bool>(() =>
+                {
+                    return ship.Weight() / ship.Tonnage() <= targetWeight;
+                });
+
+            VesselEntity.OpRange minOpRange = VesselEntity.OpRange.Low;
             if (ship.shipType.paramx.TryGetValue("range_min", out var minRange) && minRange.Count > 0)
             {
                 if (_OpRangeValues == null)
-                    _OpRangeValues = Enum.GetValues(typeof(VesselEntity.OpRange));
-
-                foreach (var e in _OpRangeValues)
                 {
-                    var eStr = Util.ToStringShort(e.ToString()).ToLower();
-                    if (eStr == minRange[0].ToLower())
+                    var vals = Enum.GetValues(typeof(VesselEntity.OpRange));
+                    _OpRangeValues = new string[vals.Length];
+                    for (int i = vals.Length; i-- > 0;)
+                        _OpRangeValues[i] = Util.ToStringShort(vals.GetValue(i).ToString()).ToLower();
+                }   
+
+                for(int i = 0; i < _OpRangeValues.Length; ++i)
+                {
+                    if (_OpRangeValues[i] == minRange[0].ToLower())
                     {
-                        minOpRange = (VesselEntity.OpRange)e;
+                        minOpRange = (VesselEntity.OpRange)i;
                         break;
                     }
                 }
@@ -148,29 +173,37 @@ namespace UADRealism
             // All ships are expected to have a hint
             if (ship.shipType.paramx.TryGetValue("armor_min_hint", out var minArmorParam) && minArmorParam.Count > 0 && float.TryParse(minArmorParam[0], out var armorParam))
             {
-                armorInches = armorMin * armorParam;
-            }
-            else if (ship.shipType.name == "dd")
-            {
-                float armorVal = ship.shipType.armor;
-                float randMult = ModUtils.Range(1f, 1.3f, rnd, nativeRnd);
-                float yearMult = Util.Remap(year, 1890f, 1940f, 1f, 0.85f, true);
-
-                armorInches = armorVal * randMult * yearMult;
+                armorInches = ship.shipType.armor * armorParam;
             }
             else
             {
                 armorInches = armorMin * ModUtils.Range(1f, 1.2f, rnd, nativeRnd);
             }
             var armorMinHint = Ship.GenerateArmor(armorInches * 25.4f, ship);
+            // TB/DD only armor CT and turrets
+            if (isLightCraft)
+            {
+                foreach (var key in _AdjustPriorityArmorReduce.Keys)
+                {
+                    switch (key)
+                    {
+                        case Ship.A.ConningTower:
+                        case Ship.A.Barbette:
+                        case Ship.A.TurretSide:
+                        case Ship.A.TurretTop:
+                            continue;
+                    }
+                    armorMinHint[key] = 0f;
+                }
+            }
 
             float hullSpeedMS = ship.hull.data.speedLimiter * ShipStats.KnotsToMS;
 
             float oldSpeed = ship.speedMax;
             Ship.CrewQuarters oldQuarters = ship.CurrentCrewQuarters;
+            var oldRange = ship.opRange < minOpRange ? minOpRange : ship.opRange;
             foreach (var kvp in ship.armor)
                 oldArmor[kvp.Key] = kvp.Value;
-            var oldRange = ship.opRange < minOpRange ? minOpRange : ship.opRange;
 
             float minSpeed;
             if (limitSpeed > 0f)
@@ -190,6 +223,9 @@ namespace UADRealism
             }
             float maxMult = cldd ? 1.05f : 1.1f;
             float maxSpeed = hullSpeedMS * maxMult * Util.Remap(year, 1890f, 1940f, 1.1f, 1.06f, true);
+
+            minSpeed = Mathf.Max(minSpeed, ship.shipType.speedMin * ShipStats.KnotsToMS);
+            maxSpeed = Mathf.Min(maxSpeed, ship.shipType.speedMax * ShipStats.KnotsToMS);
 
             float armorLimit = limitArmor > 0f ? limitArmor : ship.shipType.armorMax * 3f * 25.4f;
 
@@ -223,7 +259,9 @@ namespace UADRealism
                 ship.SetOpRange(VesselEntity.OpRange.VeryHigh);
 
                 foreach (var kvp in ship.armor)
-                    newArmor[kvp.Key] = Mathf.Min(limitArmor, MaxArmorForZone(ship, kvp.Key, null));
+                    newArmor[kvp.Key] = Mathf.Min(armorLimit, MaxArmorForZone(ship, kvp.Key, null));
+                foreach(var key in ship.GetCitadelArmor())
+                    newArmor[key] = Mathf.Min(armorLimit, MaxArmorForZone(ship, key, null));
 
                 ship.SetArmor(newArmor);
 
@@ -233,8 +271,6 @@ namespace UADRealism
             if (!canMakeTarget)
                 return;
 
-            minSpeed = Mathf.Max(minSpeed, ship.shipType.speedMin * ShipStats.KnotsToMS);
-            maxSpeed = Mathf.Min(maxSpeed, ship.shipType.speedMax * ShipStats.KnotsToMS);
             oldSpeed = RoundSpeedToStep(oldSpeed);
 
             // Reset
@@ -243,19 +279,25 @@ namespace UADRealism
             ship.SetOpRange(oldRange);
             ship.SetArmor(oldArmor);
 
-            if(nativeStop == null ? stopCondition() : nativeStop.Invoke())
-                return;
-
             Dictionary<Ship.A, float> armorPriority = delta > 0 ? _AdjustPriorityArmorIncrease : _AdjustPriorityArmorReduce;
             float speedStep = MonoBehaviourExt.Param("speed_step", 0.5f) * delta * ShipStats.KnotsToMS;
 
             for (int j = 0; j < 699; ++j)
             {
-                // Copy armor over (since it might have changed)
-                newArmor.Clear();
+                if(stopFunc())
+                    return;
+
                 // Recreate, since we might have touched citadel armor
+                newArmor.Clear();
                 foreach (var kvp in ship.armor)
                     newArmor[kvp.Key] = kvp.Value;
+                oldArmor.Clear();
+                foreach (var kvp in ship.armor)
+                    oldArmor[kvp.Key] = kvp.Value;
+
+                oldSpeed = ship.speedMax;
+                oldQuarters = ship.CurrentCrewQuarters;
+                oldRange = ship.opRange;
 
                 float newSpeed = speedStep + ship.speedMax;
                 newSpeed = Mathf.Clamp(newSpeed, minSpeed, maxSpeed);
@@ -278,7 +320,7 @@ namespace UADRealism
                             armorMinHint.TryGetValue(kvp.Key, out var minHint);
                             float minArmor = Mathf.Max(minHint, MinArmorForZone(ship, kvp.Key));
                             float maxArmor = Mathf.Min(armorLimit, maxZone);
-                            float oldLevel = ship.armor.ContainsKey(kvp.Key) ? ship.armor[kvp.Key] : 0f; // trygetvalue is grumpy in IL2Cpp
+                            float oldLevel = ship.armor.ContainsKey(kvp.Key) ? ship.armor[kvp.Key] : 0f;
                             if ((delta > 0) ? (oldLevel < maxArmor) : (oldLevel > minArmor))
                                 _AdjustPriorityArmorLocal.Add(kvp.Key, kvp.Value);
                         }
@@ -289,7 +331,7 @@ namespace UADRealism
                         armorMinHint.TryGetValue(randomA, out var minHint);
                         float minArmor = Mathf.Max(minHint, MinArmorForZone(ship, randomA));
                         float maxArmor = Mathf.Min(armorLimit, MaxArmorForZone(ship, randomA, null));
-                        float oldLevel = ship.armor.ContainsKey(randomA) ? ship.armor[randomA] : 0f; // trygetvalue is grumpy in IL2Cpp
+                        float oldLevel = ship.armor.ContainsKey(randomA) ? ship.armor[randomA] : 0f;
                         float newArmorLevel = delta * 2.54f + oldLevel;
                         if (delta < 0)
                             newArmorLevel = Mathf.Floor(newArmorLevel);
@@ -304,18 +346,19 @@ namespace UADRealism
                             armorFound = true;
                             newArmor[randomA] = newArmorLevel;
                         }
+
                         _AdjustPriorityArmorLocal.Clear();
                     }
                 }
 
                 _AdjustHullStatsOptions.Clear();
-                if (allowEditSpeed && newSpeed != ship.speedMax)
+                if (allowEditSpeed && newSpeed != oldSpeed)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Speed, delta > 0 ? 350f : 690f);
-                if (allowEditCrewQuarters && newQuarters != ship.CurrentCrewQuarters)
+                if (allowEditCrewQuarters && newQuarters != oldQuarters)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Quarters, 150f);
                 if (armorFound)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Armor, delta > 0 ? 850f : 450f);
-                if (allowEditRange && newOpRange != ship.opRange)
+                if (allowEditRange && newOpRange != oldRange)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Range, delta > 0 ? 75f : 400f);
 
                 if (_AdjustHullStatsOptions.Count == 0)
@@ -347,7 +390,28 @@ namespace UADRealism
                             ship.SetArmor(newArmor);
                             break;
                     }
-                    if (nativeStop == null ? stopCondition() : nativeStop.Invoke())
+
+                    if (ship.Weight() > ship.Tonnage() || (GameManager.IsMission && ship.player.isMain && BattleManager.Instance != null && BattleManager.Instance.MissionMainShip == ship && ship.Cost() > ship.player.cash))
+                    {
+                        switch (thingToChange)
+                        {
+                            case AdjustHullStatsItem.Speed:
+                                ship.SetSpeedMax(oldSpeed);
+                                break;
+                            case AdjustHullStatsItem.Quarters:
+                                ship.CurrentCrewQuarters = oldQuarters;
+                                break;
+                            case AdjustHullStatsItem.Range:
+                                ship.SetOpRange(oldRange);
+                                break;
+                            default:
+                                ship.SetArmor(oldArmor);
+                                break;
+                        }
+                        return;
+                    }
+
+                    if (stopFunc())
                         return;
                 }
             }
@@ -1150,224 +1214,6 @@ namespace UADRealism
                 return 0f;
 
             return ship.shipType.armorMin * 25.4f;
-        }
-
-        public static void DesignShip(Ship ship, Ship._GenerateRandomShip_d__566 _this)
-        {
-            var smd = ship.ModData();
-            var helper = _this.__8__1;
-            helper.rnd = new Il2CppSystem.Random(Util.FromTo(1, 1000000, null)); // yes, this is how stock inits it.
-            var rnd = helper.rnd;
-
-            float hullYear = Database.GetYear(ship.hull.data);
-            float designYear = ship.GetYear(ship);
-            float avgYear = (hullYear + designYear) * 0.5f;
-            string sType = ship.shipType.name;
-            var hData = ShipStats.GetData(ship);
-
-            if (_this._isRefitMode_5__2 && !_this.isSimpleRefit)
-            {
-                float tLimit = ship.player.TonnageLimit(ship.shipType);
-                float tng = ship.Tonnage();
-                float tRatio = tLimit / tng;
-                if (tRatio < 1f)
-                {
-                    float drMult = 1f + ship.draught * 0.01f;
-                    float minDrMult = 1f + ship.hull.data.draughtMin * 0.01f;
-                    float newDrMult = Mathf.Max(minDrMult, Mathf.Max(0.9f, tRatio) * drMult);
-                    float requiredDrMult = tRatio * drMult;
-                    if(newDrMult < drMult)
-                    {
-                        ship.SetDraught((newDrMult - 1f) * 100f);
-                        tRatio *= drMult / newDrMult;
-                    }
-                    if (newDrMult > requiredDrMult)
-                    {
-                        ship.SetBeam((MathF.Sqrt(tRatio) * (1f + ship.beam * 0.01f) - 1f) * 100f);
-                    }
-                    ship.SetTonnage(tLimit);
-                }
-            }
-            else
-            {
-                if (!_this.adjustTonnage)
-                {
-                    var tng = ship.Tonnage();
-                    var clampedTng = Mathf.Clamp(tng, ship.TonnageMin(), ship.TonnageMax());
-                    if (clampedTng != tng)
-                        ship.SetTonnage(clampedTng);
-                }
-                else
-                {
-                    var tMin = ship.TonnageMin();
-                    var tMax = Math.Min(ship.player.TonnageLimit(ship.shipType), ship.TonnageMax());
-                    if (tMax < tMin)
-                        tMax = tMin;
-
-                    float newTng;
-                    if (_this.customTonnageRatio.HasValue)
-                    {
-                        newTng = Mathf.Lerp(tMin, tMax, _this.customTonnageRatio.Value);
-                    }
-                    else if (ship.shipType.paramx.ContainsKey("random_tonnage"))
-                    {
-                        newTng = Util.Range(tMin, tMax, rnd);
-                    }
-                    else if (ship.shipType.paramx.ContainsKey("random_tonnage_low"))
-                    {
-                        newTng = Util.Range(tMin, Util.Chance(80f) ? Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f)) : tMax, rnd);
-                    }
-                    else
-                    {
-                        newTng = Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f) * Util.Range(0.01f, 1.5f, rnd));
-                    }
-                    
-                    float roundedTng = Ship.RoundTonnageToStep(Util.Range(newTng, tMax, rnd));
-                    ship.SetTonnage(Mathf.Clamp(roundedTng, tMin, tMax));
-                }
-            }
-
-            float CbAvg = 0f;
-            float CpAvg = 0f;
-            if (!_this._isRefitMode_5__2)
-            {
-                for (int i = ship.hull.data.sectionsMin; i <= ship.hull.data.sectionsMax; ++i)
-                {
-                    CbAvg += hData._statsSet[i].Cb;
-                    CpAvg += hData._statsSet[i].Cp;
-                }
-                float secsRecip = 1f / (ship.hull.data.sectionsMax - ship.hull.data.sectionsMin + 1);
-                CbAvg *= secsRecip;
-                CpAvg *= secsRecip;
-            }
-            else
-            {
-                int secs = smd.SectionsFromFineness();
-                CbAvg = hData._statsSet[secs].Cb;
-                CpAvg = hData._statsSet[secs].Cp;
-            }
-
-            float speedKtsMin;
-            float speedKtsMax;
-            float CpMin, CpMax;
-            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.3f, rnd);
-            float extraCpOffset = 0f;
-            switch (sType)
-            {
-                case "tb":
-                    CpMin = Util.Remap(hullYear, 1920f, 1930f, 0.5f, 0.61f, true);
-                    CpMax = Util.Remap(hullYear, 1920f, 1930f, 0.55f, 0.65f, true);
-                    speedKtsMin = Util.Remap(avgYear, 1890f, 1935f, 21f, 32f, true);
-                    speedKtsMax = Util.Remap(avgYear, 1890f, 1935f, 26f, 39f, true);
-                    extraCpOffset = Util.Remap(hullYear, 1895f, 1925f, -0.08f, 0f);
-                    break;
-                case "dd":
-                    CpMin = Util.Remap(hullYear, 1920f, 1930f, 0.5f, 0.61f, true);
-                    CpMax = Util.Remap(hullYear, 1920f, 1930f, 0.55f, 0.65f, true);
-                    speedKtsMin = Util.Remap(avgYear, 1895f, 1935f, 24f, 33f, true);
-                    speedKtsMax = Util.Remap(avgYear, 1895f, 1935f, 29f, 40f, true);
-                    extraCpOffset = Util.Remap(hullYear, 1895f, 1925f, -0.08f, 0f);
-                    break;
-                case "cl":
-                    CpMin = 0.54f;
-                    CpMax = 0.62f;
-                    speedKtsMin = Util.Remap(avgYear, 1890f, 1930f, 17f, 28f, true);
-                    speedKtsMax = Util.Remap(avgYear, 1890f, 1930f, 24f, 37f, true);
-                    break;
-                case "ca":
-                    CpMin = 0.56f;
-                    CpMax = 0.64f;
-                    speedKtsMin = Util.Remap(avgYear, 1890f, 1930f, 15f, 28f, true);
-                    speedKtsMax = Util.Remap(avgYear, 1890f, 1930f, 23f, 35f, true);
-                    break;
-                case "bc":
-                    CpMin = 0.56f;
-                    CpMax = 0.64f;
-                    speedKtsMin = Util.Remap(avgYear, 1900f, 1930f, 23f, 26f, true);
-                    speedKtsMax = Util.Remap(avgYear, 1900f, 1930f, 28f, 34f, true);
-                    break;
-                case "bb":
-                    CpMin = 0.57f;
-                    CpMax = 0.69f;
-                    speedKtsMin = Util.Remap(avgYear, 1895f, 1935f, 14f, 21f, true);
-                    speedKtsMax = Util.Remap(avgYear, 1895f, 1935f, 22f, 34f, true);
-                    break;
-                case "ic":
-                    CpMin = 0.6f;
-                    CpMax = 0.7f;
-                    speedKtsMin = 5f;
-                    speedKtsMax = 11f;
-                    break;
-                default: // tr, amc
-                    CpMin = 0.6f;
-                    CpMax = 0.75f;
-                    speedKtsMin = 10f;
-                    speedKtsMax = 14f;
-                    break;
-            }
-            float speedBias = Mathf.Cos(Mathf.PI * Mathf.InverseLerp(CpMin, CpMax, CpAvg)) * 0.5f;
-            float speedKts = Mathf.Lerp(speedKtsMin, speedKtsMax, (0.5f + ModUtils.DistributedRange(0.5f, rnd)) + speedBias) + ModUtils.DistributedRange(0.2f, rnd);
-            speedKts = Mathf.Clamp(ship.hull.data.shipType.speedMin, ship.hull.data.shipType.speedMax, speedKts);
-            // if this is a refit, we'll use this as our goal speed but maybe not hit it.
-
-            if (!_this._isRefitMode_5__2)
-            {
-                ship.SetSpeedMax(speedKts * ShipStats.KnotsToMS);
-
-                // First, set L/B from B/T
-                float desiredLdivB = ShipStats.GetDesiredLdivB(ship.tonnage * ShipStats.TonnesToCubicMetersWater, CbAvg, desiredBdivT, ship.speedMax, sType, hullYear);
-                desiredLdivB *= 1f + ModUtils.DistributedRange(0.05f, rnd);
-
-                // Next figure out which hull (i.e. what fineness)
-                int bestSec = ShipStats.GetDesiredSections(hData, ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, ship.tonnage, ship.speedMax,
-                    desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, ModUtils.DistributedRange(0.01f, 3, null, rnd) + extraCpOffset);
-                // Center freeboard on 0.
-                float freeboard = ModUtils.DistributedRange(0.5f, 3, null, rnd);
-                if (freeboard < 0f)
-                    freeboard = Mathf.Lerp(0f, ShipData._MinFreeboard, -freeboard);
-                else
-                    freeboard = Mathf.Lerp(0f, ShipData._MaxFreeboard, freeboard);
-
-                // Apply values
-                ship.SetBeam(finalBmPct, false);
-                ship.SetDraught(finalDrPct, false);
-                float t = Mathf.InverseLerp(ship.hull.data.sectionsMin, ship.hull.data.sectionsMax, bestSec);
-                smd.SetFineness(Mathf.Lerp(ShipData._MinFineness, ShipData._MaxFineness, 1f - t));
-                smd.SetFreeboard(freeboard);
-
-                if (ship.modelState == Ship.ModelState.Constructor || ship.modelState == Ship.ModelState.Battle)
-                    ship.RefreshHull(false);
-            }
-
-            if (!_this.isSimpleRefit)
-            {
-                ship.CurrentCrewQuarters = (Ship.CrewQuarters)(1 + ModUtils.DistributedRange(1, 1, null, rnd));
-                ship.SetOpRange(_this.customRange.HasValue ? _this.customRange.Value :
-                    (VesselEntity.OpRange)Math.Max(
-                        (int)VesselEntity.OpRange.VeryLow,
-                        Math.Min((int)VesselEntity.OpRange.VeryHigh,
-                        (int)ShipStats.GetDesiredOpRange(sType, hullYear) + Mathf.RoundToInt(ModUtils.DistributedRange(1f, 3, null, rnd)))),
-                    true);
-                ship.survivability = _this.customSurv.HasValue ? _this.customSurv.Value :
-                    (Ship.Survivability)Math.Max((int)Ship.Survivability.VeryLow, Math.Min((int)Ship.Survivability.VeryHigh,
-                    ((int)Ship.Survivability.High + (sType == "dd" || sType == "tb" ? -1 : 0) + Mathf.RoundToInt(ModUtils.DistributedRange(1f, 3, null, rnd)))));
-
-                _this._randArmorRatio_5__6 = ship.GetRandArmorRatio(rnd);
-                float mmArmor;
-                if (_this.customArmor.HasValue)
-                    mmArmor = _this.customArmor.Value;
-                else
-                    mmArmor = ship.shipType.armor * 25.4f * _this._randArmorRatio_5__6;
-
-                ship.armor = Ship.GenerateArmor(mmArmor, ship);
-            }
-            // note: need to block other methods from changing the above in simple refit.
-            // (or even in complex refit, probably)
-            if (!GameManager.IsCampaign)
-                ship.CrewTrainingAmount = ModUtils.Range(17f, 100f, null, rnd);
-
-            ship.Weight();
-            ship.RefreshHullStats();
         }
     }
 }

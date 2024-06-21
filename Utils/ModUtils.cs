@@ -173,17 +173,49 @@ namespace UADRealism
         public static float DistributedRange(float range, Il2CppSystem.Random rnd)
             => DistributedRange(range, 2, null, rnd);
 
-        // Returns a smoothed distribution, i.e.
-        // Random.Range(-range, range) + Random.Range(-range, range)...
-        // divided by steps
-        public static int DistributedRange(int range, int steps = 2)
+        public static float DistributedRange(int steps, Il2CppSystem.Random rnd)
+            => DistributedRange(1f, steps, null, rnd);
+
+        // Biases a random number in the range [-1, 1]
+        // so the midpoint is at the bias
+        public static float BiasRange(float randomNum, float bias)
         {
-            int val = 0;
-            for (int i = steps; i-- > 0;)
-            {
-                val += UnityEngine.Random.Range(-range, range);
-            }
-            return val / steps;
+            if (randomNum > 0f)
+                randomNum *= 1f - bias;
+            else
+                randomNum *= 1f + bias;
+
+            return randomNum + bias;
+        }
+
+        public static int RangeToInt(float input, int size)
+        {
+            input += 1f;
+            input *= 0.5f;
+            // Now in range 0-1
+            int result = (int)(input * size);
+            // Catch if it was -1 to 1 _inclusive_
+            if (result >= size)
+                result = size - 1;
+
+            return result;
+        }
+
+        // Returns a smoothed distribution across an integer range, i.e.
+        // Random.Range(-range, range) + Random.Range(-range, range)...
+        // divided by steps. Note: done as float and remapped.
+        public static int DistributedRange(int range, int steps = 2, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
+            => RangeToInt(DistributedRange(1f, steps, rnd, nativeRnd), range * 2 + 1) - range;
+
+        public static float DistributedRangeWithStepSize(float range, float stepSize, int steps, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
+        {
+            float numSteps = range / stepSize;
+            int intSteps = (int)numSteps;
+            if (numSteps - intSteps < 0.001f) // catch float imprecision
+                ++intSteps;
+
+            int val = DistributedRange(intSteps, steps, rnd, nativeRnd);
+            return val * stepSize;
         }
 
         public static float Range(float a, float b, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
@@ -195,6 +227,64 @@ namespace UADRealism
                 return UnityEngine.Random.Range(a, b);
 
             return (float)rnd.NextDouble() * (b - a) + a;
+        }
+
+        public static int Range(int minInclusive, int maxInclusive, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
+        {
+            if (nativeRnd != null)
+                return (int)(nativeRnd.NextDouble() * (maxInclusive - minInclusive + 1)) + minInclusive;
+
+            if (rnd == null)
+                return UnityEngine.Random.Range(minInclusive, maxInclusive + 1);
+
+            return (int)(rnd.NextDouble() * (maxInclusive - minInclusive + 1)) + minInclusive;
+        }
+
+        public static int Clamp(int value, int min, int max)
+        {
+            if (value < min)
+                return min;
+            if (value > max)
+                return max;
+
+            return value;
+        }
+
+        public static float ClampWithStep(float val, float stepSize, float minVal, float maxVal)
+        {
+            int stepCount = Mathf.RoundToInt(val / stepSize);
+            float steppedVal = stepCount * stepSize;
+            if (steppedVal < minVal)
+                ++stepCount;
+            else if (steppedVal > maxVal)
+                --stepCount;
+            return stepCount * stepSize;
+        }
+
+        public static T RandomOrNull<T>(this List<T> items, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : class
+        {
+            int iC = items.Count;
+            if (iC == 0)
+                return null;
+            return items[Range(0, iC - 1, rnd, nativeRnd)];
+        }
+
+        public static T Random<T>(this Il2CppSystem.Collections.Generic.List<T> items, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
+        {
+            return items[Range(0, items.Count - 1, rnd, nativeRnd)];
+        }
+
+        public static T RandomOrNull<T>(this Il2CppSystem.Collections.Generic.List<T> items, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : class
+        {
+            int iC = items.Count;
+            if (iC == 0)
+                return null;
+            return items[Range(0, iC - 1, rnd, nativeRnd)];
+        }
+
+        public static T Random<T>(this List<T> items, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
+        {
+            return items[Range(0, items.Count - 1, rnd, nativeRnd)];
         }
 
         public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : notnull

@@ -22,7 +22,9 @@ namespace UADRealism
     public struct GunDataM
     {
         private float _minLengthParam;
+        public float minLengthParam => _minLengthParam;
         private float _maxLengthParam;
+        public float maxLengthParam => _maxLengthParam;
         private float _length;
         private float _caliber;
         public float caliber => _caliber;

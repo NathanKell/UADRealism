@@ -170,7 +170,7 @@ namespace UADRealism
             }
             else
             {
-                updateSections =  secsToUse != __instance.hull.middles.Count;
+                updateSections = secsToUse != __instance.hull.middles.Count;
             }
 
             if (hData._statsSet.Length <= secsToUse || secsToUse < 0)
@@ -451,7 +451,7 @@ namespace UADRealism
             }
 
             __state = true;
-            
+
             __result = ShipM.PartMats(__instance, part);
             return false;
         }
@@ -497,6 +497,36 @@ namespace UADRealism
             }
         }
 
+        private static List<Part> _Parts = new List<Part>();
+
+        internal static void ClearMatCache(Ship ship, PartData data)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            foreach (var p in ship.matsCache.Keys)
+                _Parts.Add(p);
+            foreach (var p in _Parts)
+                ship.matsCache.Remove(p);
+            _Parts.Clear();
+        }
+
+        internal static void ClearMatCache(Ship ship, Part part)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            ship.matsCache.Remove(part);
+        }
+
+        internal static void ClearMatCache(Ship ship)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            ship.matsCache.Clear();
+        }
+
         // This is used too many places to just patch one way.
         //[HarmonyPrefix]
         //[HarmonyPatch(nameof(Ship.SizeRatio))]
@@ -518,15 +548,134 @@ namespace UADRealism
             return false;
         }
 
-        [HarmonyPrefix]
-        [HarmonyPatch(nameof(Ship.AdjustHullStats))]
-        internal static bool Prefix_AdjustHullStats(Ship __instance, int delta, float targetWeight, Il2CppSystem.Func<bool> stopCondition, bool allowEditSpeed, bool allowEditArmor, bool allowEditCrewQuarters, Il2CppSystem.Random rnd, Il2CppSystem.Nullable<float> limitArmor, float limitSpeed)
-        {
-            ShipM.AdjustHullStats(__instance, delta, targetWeight, null, stopCondition, allowEditSpeed, allowEditArmor, allowEditCrewQuarters, true, null, rnd);
-            return true;
-        }
+        //[HarmonyPrefix]
+        //[HarmonyPatch(nameof(Ship.AdjustHullStats))]
+        //internal static bool Prefix_AdjustHullStats(Ship __instance, int delta, float targetWeight, Il2CppSystem.Func<bool> stopCondition, bool allowEditSpeed, bool allowEditArmor, bool allowEditCrewQuarters, Il2CppSystem.Random rnd,
+        //    Il2CppSystem.Nullable<float> limitArmor, float limitSpeed)
+        //{
+        //    Melon<UADRealismMod>.Logger.Msg($"Starting AHS. Delta {delta}, Target {targetWeight:F2}, stop null? {(stopCondition == null)}, rnd null? {(rnd == null)}, limitA null? {(limitArmor == null)} hasval? {(limitArmor == null ? false : limitArmor.HasValue)}");
+
+        //    // Stock has a bug where sometimes this is passed as a ratio and sometimes as an actual weight.
+        //    // My version of the function takes the ratio.
+        //    if (targetWeight > 1f)
+        //        targetWeight /= __instance.Tonnage();
+
+        //    ShipM.AdjustHullStats(__instance, delta, targetWeight, null, stopCondition, allowEditSpeed, allowEditArmor, allowEditCrewQuarters, true, null, rnd, limitArmor == null ? -1f : limitArmor.Value, limitSpeed);
+        //    return true;
+        //}
 
         // Not bothering to prefix MinArmorForZone because it can stay as default
         // (all it does is return minArmor for BeltMain, and 0 for everything else)
+
+        internal static GenerateShip GenerateShipHandler = null;
+        [HarmonyPatch(nameof(Ship.GenerateRandomShip))]
+        [HarmonyPrefix]
+        internal static void Prefix_GenerateRandomShip(Ship __instance, ref bool needWait)
+        {
+            // Just in case, set this true.
+            // It's always true in the codebase RIGHT NOW but you never know.
+            // And it needs to be true for the patching of the coroutine to work right.
+            needWait = true;
+            GenerateShipHandler = new GenerateShip(__instance);
+        }
+
+        [HarmonyPatch(nameof(Ship.GenerateRandomShip))]
+        [HarmonyPostfix]
+        internal static void Postfix_GenerateRandomShip(Ship __instance)
+        {
+            GenerateShipHandler = null;
+        }
     }
+
+    [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__566))]
+    internal class Patch_ShipGenRandom
+    {
+        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
+        [HarmonyPrefix]
+        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, out int __state)
+        {
+            __state = __instance.__1__state;
+            switch (__state)
+            {
+                // 0: Setup. We have to postfix this since
+                    // we want to use some stuff it sets/
+                    // we don't want it to clobber our values
+                // 1: Remove parts. This is fine to run.
+                case 2: // Beam/Draught
+                case 3: // Tonnage
+                case 4: // Clamp tonnage.
+                    // We'll skip all these steps and select components instead.
+                    __state = 4;
+                    Patch_Ship.GenerateShipHandler.SelectComponents(GenerateShip.ComponentSelectionPass.Initial);
+                    // We then skip setting base hull stats (we do this in initial design)
+                    // and AdjustHullStats.
+                    __instance.__1__state = 7;
+                    break;
+
+                case 8: // Parts
+                    // Before doing parts, set out how much tonnage is free?
+                    if (!Patch_Ship.GenerateShipHandler.SelectParts())
+                    {
+                    }
+
+                    __instance.__1__state = 10;
+                    break;
+
+                case 11: // AHS and update parts
+                    __instance.__4__this.UpdateHullStats();
+                    foreach (var part in __instance.__4__this.parts)
+                        part.UpdateCollidersSize(__instance.__4__this);
+                    foreach (var part in __instance.__4__this.parts)
+                        Part.GunBarrelLength(part.data, __instance.__4__this, true);
+                    __instance.__1__state = 12;
+                    break;
+
+            }
+            return true;
+        }
+
+        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
+        [HarmonyPostfix]
+        internal static bool Postfix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, int __state)
+        {
+            switch (__instance.__1__state)
+            {
+                case 0: // Initial run. Set minspeed etc.
+                    if (__instance.__1__state == 1)
+                    {
+                        Patch_Ship.GenerateShipHandler.DesignShipInitial(__instance);
+                    }
+                    break;
+            }
+            return true;
+        }
+    }
+
+    //[HarmonyPatch(typeof(Ship._AddRandomPartsNew_d__583))]
+    //internal class Patch_ShipAddParts
+    //{
+    //    [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__583.MoveNext))]
+    //    [HarmonyPrefix]
+    //    internal static bool Prefix_MoveNext(Ship._AddRandomPartsNew_d__583 __instance, out int __state)
+    //    {
+    //        __state = __instance.__1__state;
+    //        switch (__state)
+    //        {
+    //            // 1: Find randpart
+    //            // 2: Add part(s)
+    //        }
+    //        return true;
+    //    }
+
+    //    [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__583.MoveNext))]
+    //    [HarmonyPostfix]
+    //    internal static bool Postfix_MoveNext(Ship._AddRandomPartsNew_d__583 __instance, int __state)
+    //    {
+    //        switch (__instance.__1__state)
+    //        {
+                
+    //        }
+    //        return true;
+    //    }
+    //}
 }
