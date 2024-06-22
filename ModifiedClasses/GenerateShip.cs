@@ -1028,13 +1028,15 @@ namespace UADRealism
                             options.RemoveAt(i);
                     }
                 }
-
-                if (rp.condition == "sec_cal" || rp.condition == "ter_cal")
+                // Game is weird here. If "sec_cal" is not there, it jumps to maincal.
+                // But if "sec_cal" _is_ there, it still goes to maincal unless "ter_cal"
+                // is _also_ specified.
+                if (rp.condition.Contains("ter_cal"))
                 {
                     float bestVal = float.MinValue;
                     foreach (var opt in options)
                     {
-                        var val = SecGunValue(opt);
+                        var val = TertiaryGunValue(opt);
                         if (val > bestVal)
                         {
                             bestVal = val;
@@ -1047,7 +1049,7 @@ namespace UADRealism
                     float bestVal = float.MinValue;
                     foreach (var opt in options)
                     {
-                        var val = MainGunValue(opt);
+                        var val = MainOrSecGunValue(opt);
                         if (val > bestVal)
                         {
                             bestVal = val;
@@ -1064,7 +1066,7 @@ namespace UADRealism
             return ret;
         }
 
-        public float SecGunValue(PartData data)
+        public float TertiaryGunValue(PartData data)
         {
             var sizeAR = _ship.SizeAntiRatio();
             sizeAR *= sizeAR;
@@ -1083,7 +1085,7 @@ namespace UADRealism
             return Util.Range(0f, MonoBehaviourExt.Param("gun_gen_randomness", 5f) + 1f, _this.__8__1.rnd) + adjustedCalValue * yearValue;
         }
 
-        public float MainGunValue(PartData data)
+        public float MainOrSecGunValue(PartData data)
         {
             float barrelValue;
             if (_avoidBarrels != null && _avoidBarrels.Contains(data.barrels))
