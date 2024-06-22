@@ -592,9 +592,10 @@ namespace UADRealism
     {
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
         [HarmonyPrefix]
-        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, out int __state)
+        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, out int __state, ref bool __result)
         {
             __state = __instance.__1__state;
+            var gen = Patch_Ship.GenerateShipHandler;
             switch (__state)
             {
                 // 0: Setup. We have to postfix this since
@@ -606,30 +607,47 @@ namespace UADRealism
                 case 4: // Clamp tonnage.
                     // We'll skip all these steps and select components instead.
                     __state = 4;
-                    Patch_Ship.GenerateShipHandler.SelectComponents(GenerateShip.ComponentSelectionPass.Initial);
+                    gen.SelectComponents(GenerateShip.ComponentSelectionPass.Initial);
                     // We then skip setting base hull stats (we do this in initial design)
                     // and AdjustHullStats.
                     __instance.__1__state = 7;
                     break;
 
+                // 7: UpdateHullStats
+
                 case 8: // Parts
                     // Before doing parts, set out how much tonnage is free?
-                    if (!Patch_Ship.GenerateShipHandler.SelectParts())
-                    {
-                    }
+                    gen.SelectParts();
 
-                    __instance.__1__state = 10;
+                    __instance.__1__state = 9; // this waits a frame and advances to 10
                     break;
 
-                case 11: // AHS and update parts
+                case 10: // wait a frame
+                    // We'll also use this to do work.
+
+                    // Replace step 11.
                     __instance.__4__this.UpdateHullStats();
                     foreach (var part in __instance.__4__this.parts)
                         part.UpdateCollidersSize(__instance.__4__this);
                     foreach (var part in __instance.__4__this.parts)
                         Part.GunBarrelLength(part.data, __instance.__4__this, true);
+                    // let 10 execute, dont' change incoming state. This will set
+                    // next state to 11.
+                    break;
+
+                case 11: // AHS and update parts. Done above.
+                    // Skip this and just run 12.
                     __instance.__1__state = 12;
                     break;
 
+                // 12: Verify maincal guns and barrels
+
+                case 13: // Select components and then reduce weight.
+                    // We'll only do components. Then skip past all the add/reduce steps to
+                    // the end.
+                    gen.SelectComponents(GenerateShip.ComponentSelectionPass.PostParts);
+                    __instance.__1__state = 17;
+                    break;
             }
             return true;
         }
@@ -638,13 +656,12 @@ namespace UADRealism
         [HarmonyPostfix]
         internal static bool Postfix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, int __state)
         {
+            var gen = Patch_Ship.GenerateShipHandler;
             switch (__instance.__1__state)
             {
                 case 0: // Initial run. Set minspeed etc.
                     if (__instance.__1__state == 1)
-                    {
-                        Patch_Ship.GenerateShipHandler.DesignShipInitial(__instance);
-                    }
+                        gen.DesignShipInitial(__instance);
                     break;
             }
             return true;

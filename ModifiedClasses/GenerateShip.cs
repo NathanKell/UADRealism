@@ -551,11 +551,23 @@ namespace UADRealism
                         _ship.shipGunCaliber.RemoveAt(i);
                 }
 
+                for (int i = _ship.shipTurretArmor.Count; i-- > 0;)
+                {
+                    bool remove = true;
+                    foreach (var p in _ship.parts)
+                    {
+                        if (p.data == _ship.shipTurretArmor[i].turretPartData)
+                        {
+                            remove = false;
+                            break;
+                        }
+                    }
+                    if (remove)
+                        _ship.shipGunCaliber.RemoveAt(i);
+                }
+
                 Patch_Ship.ClearMatCache(_ship);
             }
-
-            if (!_hasFunnel || !_mainPlaced || (_needSec && !_secPlaced))
-                return false;
 
             _ship.StartCoroutine(_ship.RefreshDecorDelay());
 
