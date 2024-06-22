@@ -35,7 +35,9 @@ namespace UADRealism
         int _gen;
         bool _mainPlaced = false;
         bool _secPlaced = false;
+#pragma warning disable IDE0052
         bool _hasFunnel = false;
+#pragma warning restore IDE0052
         bool _needSec = true;
         Part _firstPairCreated = null;
         float _offsetX;
@@ -296,14 +298,14 @@ namespace UADRealism
                         (int)Ship.Survivability.VeryHigh);
                 }
 
-                _this._randArmorRatio_5__6 = _ship.GetRandArmorRatio(rnd);
-                float mmArmor;
-                if (_this.customArmor.HasValue)
-                    mmArmor = _this.customArmor.Value;
-                else
-                    mmArmor = _ship.shipType.armor * 25.4f * _this._randArmorRatio_5__6;
+                if (_ship.armor == null)
+                    _ship.armor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                for (Ship.A armor = Ship.A.Belt; armor <= Ship.A.InnerDeck_3rd; armor = (Ship.A)((int)(armor + 1)))
+                    _ship.armor[armor] = 0f;
+                _ship.SetArmor(_ship.armor);
+                // Yes, this is illegal. But we need the ship weight with no armor.
 
-                _ship.armor = Ship.GenerateArmor(mmArmor, _ship);
+                // There won't be any TurretArmors yet.
             }
 
             if (!GameManager.IsCampaign)
@@ -325,9 +327,62 @@ namespace UADRealism
         public void SelectComponents(ComponentSelectionPass pass)
         {
             List<CompType> compTypes = new List<CompType>();
-            
+            if (pass == ComponentSelectionPass.Initial)
+                _seenCompTypes.Clear();
+
             foreach (var ct in G.GameData.compTypes.Values)
             {
+                // Only some types can be changed in refits.
+                if (_this._isRefitMode_5__2)
+                {
+                    switch (ct.name)
+                    {
+                        case "shell_ratio_main":
+                        case "shell_ratio_sec":
+                        case "ammo_shell":
+                        case "ammo_torp":
+                        case "rangefinder":
+                        case "sonar":
+                        case "radio":
+                        case "radar":
+                        // These are possibly illegal because
+                        // they might need chamber/shell-handling redesign
+                        case "shell_he":
+                        case "shell_ap":
+                        case "shell": // light/medium/heavy/super-heavy
+                        case "propellant":
+                        case "explosives":
+                        // Ditto for the fueling apparatus
+                        case "torpedo_prop":
+                            break;
+
+                        case "aux_eng":
+                        case "rudder":
+                        case "steering":
+                        case "torpedo_belt":
+                        case "turret_traverse":
+                        case "gun_reload":
+                        case "torpedo_size":
+                        case "mines":
+                        case "minesweep":
+                        case "depthcharge":
+                        case "plane":
+                        // These are kinda sketchy
+                        case "fuel":
+                        case "engine":
+                        case "boilers":
+                        case "shaft":
+                            if (_this.isSimpleRefit)
+                                continue;
+                            else
+                                break;
+
+                        default:
+                            continue;
+                    }
+
+                }
+
                 if (pass != ComponentSelectionPass.PostParts)
                 {
                     // Skip protection components for now.
@@ -389,7 +444,8 @@ namespace UADRealism
             {
                 // record weight before adding protection components
                 // NOTE: turret type will be counted as part of armament weight
-                // even though it's kinda hull weight.
+                // even though it's kinda hull weight. That's because it won't
+                // show up unless there are gun parts on the ship.
                 _baseHullWeight = _ship.Weight();
                 SelectComponents(ComponentSelectionPass.Armor);
             }

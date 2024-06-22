@@ -505,10 +505,13 @@ namespace UADRealism
                 return;
 
             foreach (var p in ship.matsCache.Keys)
-                _Parts.Add(p);
+                if (p.data == data)
+                    _Parts.Add(p);
             foreach (var p in _Parts)
                 ship.matsCache.Remove(p);
             _Parts.Clear();
+
+            ship.weightsValid = false;
         }
 
         internal static void ClearMatCache(Ship ship, Part part)
@@ -517,6 +520,7 @@ namespace UADRealism
                 return;
 
             ship.matsCache.Remove(part);
+            ship.weightsValid = false;
         }
 
         internal static void ClearMatCache(Ship ship)
@@ -525,6 +529,7 @@ namespace UADRealism
                 return;
 
             ship.matsCache.Clear();
+            ship.weightsValid = false;
         }
 
         // This is used too many places to just patch one way.
