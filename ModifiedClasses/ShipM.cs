@@ -1154,6 +1154,14 @@ namespace UADRealism
                     if (gunPartData == null)
                         break;
                     var gdm = new GunDataM(gunPartData, ship, false);
+                    if (gdm.calInch < 4f)
+                    {
+                        if (armorA != Ship.A.TurretSide)
+                            return 0f;
+
+                        thickness = 25.4f;
+                        break;
+                    }
                     float mult = armorA == Ship.A.TurretTop ? 0.75f : 1.5f;
                     thickness = mult * gdm.caliber;
                     if (gdm.isCasemate)
