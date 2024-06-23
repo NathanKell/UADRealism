@@ -183,8 +183,9 @@ namespace UADRealism
                     {
                         // Assume 1.6t launcher (i.e. 1/10th NAR).
                         // It varies from 1.6t to 1.76t (mark 1-5).
-                        // 400kg, 1892
-                        // 615kg, 1899
+                        // Torp weights:
+                        // 18" 400kg, 1892
+                        // 18" 615kg, 1899
                         // 21" 680kg US, 1900-4
                         // 21" 953/1270kg, 1908
                         // 1454kg, 1913
@@ -196,39 +197,38 @@ namespace UADRealism
                         // 21.65" Fr 2068kg, 1923
                         // 24" Jp 2700kg, 1933
 
-                        // There are also -2.5% weights in 1895,05,10,20,30
-                        float baseWeight = 300f;
+                        float baseWeight = 0.320f;
                         float weight = idx switch
                         {
-                            2 => 0.400f, // 16in, 1892. Treat as early Whitehead 18"
-                            3 => 0.550f, // 17in, 1895. Treat as mid-late Whitehead 18"
-                            4 => 0.630f, // 18in, 1899. Treat as developed 18in or early 21"
-                            5 => 0.950f, // 19in, 1909. Treat as 21", mix between first and early WWI
-                            6 => 1.250f, // 20in, 1917. Treat as early WWI 21"
-                            7 => 1.500f, // 21in, 1921. Treat as later 21"
-                            8 => 1.750f, // 22in, 1925. Treat as standard WWII 21"
-                            9 => 2.068f, // 23in, 1935. Treat as heavy torp
+                            1 => 0.400f, // 16in, 1892. Treat as early Whitehead 18"
+                            2 => 0.550f, // 17in, 1895. Treat as mid-late Whitehead 18"
+                            3 => 0.630f, // 18in, 1899. Treat as developed 18in or early 21"
+                            4 => 0.950f, // 19in, 1909. Treat as 21", mix between first and early WWI
+                            5 => 1.250f, // 20in, 1917. Treat as early WWI 21"
+                            6 => 1.500f, // 21in, 1921. Treat as later 21"
+                            7 => 1.750f, // 22in, 1925. Treat as standard WWII 21"
+                            8 => 2.068f, // 23in, 1935. Treat as heavy torp
                             _ => 2.700f, // 24in, 1939. Treat as Type 93
                         };
                         float weightDelta = (weight - baseWeight) * torpCount;
-                        float mult = weightDelta / 1.6f;
-                        mult += idx switch
+                        // Account for torpedo marks
+                        float mult = -weightDelta * (1 / 1.6f) / idx switch
                         {
-                            2 => 0,
-                            3 or 4 => 0.025f,
-                            5 or 6 => 0.075f,
-                            7 or 8 => 0.1f,
-                            _ => 0.125f
+                            3 or 4 => 1.025f,
+                            5 or 6 or 7 => 1.05f,
+                            8 => 1.075f,
+                            9 => 1.1f,
+                            _ => 1f
                         };
                         mult *= 100f;
-                        // Torpedo marks
-                        mult *= idx switch
+                        // There are also -2.5% weights in 1895,05,10,20,30
+                        mult -= idx switch
                         {
-                            4 or 5 => 1f / 1.025f,
-                            6 or 7 or 8 => 1f / 1.05f,
-                            9 => 1f / 1.075f,
-                            10 => 1f / 1.1f,
-                            _ => 1f
+                            1 => 0,
+                            2 or 3 => 2.5f,
+                            4 => 7.5f,
+                            5 or 6 => 10f,
+                            _ => 12.5f
                         };
 
                         foreach (var kvpE in tech.effects)

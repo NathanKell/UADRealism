@@ -377,15 +377,15 @@ $component_name_short_torpedo_belt_2;AntiTorp II
 $component_name_short_torpedo_belt_3;AntiTorp III
 $component_name_short_torpedo_belt_4;AntiTorp IV
 $component_name_short_torpedo_belt_5;AntiTorp V
-$component_name_short_torpedo_diameter_0;15-inch
-$component_name_short_torpedo_diameter_1;16-inch
-$component_name_short_torpedo_diameter_2;17-inch
+$component_name_short_torpedo_diameter_0;14-inch
+$component_name_short_torpedo_diameter_1;Short Whitehead
+$component_name_short_torpedo_diameter_2;Long Whitehead
 $component_name_short_torpedo_diameter_3;18-inch
-$component_name_short_torpedo_diameter_4;19-inch
-$component_name_short_torpedo_diameter_5;20-inch
-$component_name_short_torpedo_diameter_6;21-inch
-$component_name_short_torpedo_diameter_7;22-inch
-$component_name_short_torpedo_diameter_8;23-inch
+$component_name_short_torpedo_diameter_4;21-inch Mk1
+$component_name_short_torpedo_diameter_5;21-inch Mk2
+$component_name_short_torpedo_diameter_6;21-inch Mk3
+$component_name_short_torpedo_diameter_7;21-inch Mk4
+$component_name_short_torpedo_diameter_8;22-inch
 $component_name_short_torpedo_diameter_9;24-inch
 $component_name_short_torpedo_prop_electric;Electric
 $component_name_short_torpedo_prop_fast;Fast
