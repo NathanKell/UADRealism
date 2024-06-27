@@ -15,6 +15,7 @@ namespace TweaksAndFixes
         internal static void Postfix_PostProcessAll(GameData __instance)
         {
             Database.FillDatabase();
+            Melon<TweaksAndFixes>.Logger.Msg("Loaded database");
         }
     }
 }

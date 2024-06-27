@@ -12,6 +12,8 @@ namespace TweaksAndFixes
     {
         public static Ship GetSharedDesign(CampaignController _this, Player player, ShipType shipType, int year, bool checkTech = true, bool isEarlySavedShip = false)
         {
+            Melon<TweaksAndFixes>.Logger.Msg($"Getting shared design for {shipType.name} of {player.data.name}");
+
             if (!G.GameData.sharedDesignsPerNation.TryGetValue(player.data.name, out var designs))
                 return null;
 
@@ -43,6 +45,7 @@ namespace TweaksAndFixes
                         oldestNew = store.YearCreated;
                 }
             }
+            Melon<TweaksAndFixes>.Logger.Msg($"Found {newerShips.Count} / {olderShips.Count} ships");
             if (newerShips.Count == 0 && olderShips.Count == 0)
                 return null;
 
@@ -59,6 +62,7 @@ namespace TweaksAndFixes
                     }
                 }
             }
+            Melon<TweaksAndFixes>.Logger.Msg($"Counts now {newerShips.Count} / {olderShips.Count} ships");
 
             for (int i = 0; i < newerShips.Count; ++i)
             {
@@ -66,6 +70,7 @@ namespace TweaksAndFixes
                 var guid = new Il2CppSystem.Nullable<Il2CppSystem.Guid>();
                 if (!ship.FromStore(newerShips[i], guid, null, null, false))
                 {
+                    Melon<TweaksAndFixes>.Logger.Error($"Couldn't load {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated})");
                     ship.Erase();
                     continue;
                 }
@@ -79,6 +84,7 @@ namespace TweaksAndFixes
                         continue;
                 }
                 float techVal = TechMatchRatio(ship, player);
+                Melon<TweaksAndFixes>.Logger.Error($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
                 if (checkTech && techVal < 0f)
                     continue;
                 techCoverage[i] = techVal;
@@ -99,6 +105,7 @@ namespace TweaksAndFixes
             if (indices.Count == 0)
                 return null;
 
+            Melon<TweaksAndFixes>.Logger.Error($"Choosing from {indices.Count} choices");
             int idx = indices[ModUtils.Range(0, indices.Count - 1)];
             var shipRet = Ship.Create(null, null, false, false, false);
             var guidRet = new Il2CppSystem.Nullable<Il2CppSystem.Guid>();
