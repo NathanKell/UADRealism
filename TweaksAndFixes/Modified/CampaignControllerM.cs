@@ -60,9 +60,6 @@ namespace TweaksAndFixes
                 }
             }
 
-            // Take newest ships first.
-            newerShips.Sort((a, b) => a.YearCreated > b.YearCreated ? -1 : (a.YearCreated == b.YearCreated ? 0 : -1));
-
             for (int i = 0; i < newerShips.Count; ++i)
             {
                 var ship = Ship.Create(null, null, false, false, false);
