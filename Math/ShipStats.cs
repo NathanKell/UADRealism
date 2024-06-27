@@ -1,4 +1,5 @@
-﻿#define LOGHULLSTATS
+﻿//#define LOGHULLSTATS
+//#define LOGRANDPARTS
 //#define LOGHULLSCALES
 //#define LOGPARTSTATS
 //#define LOGGUNSTATS
@@ -276,6 +277,9 @@ namespace UADRealism
             int num = 1;
             Melon<UADRealismMod>.Logger.Msg("time,order,name,model,sections,tonnage,scaleMaxPct,newScale,Lwl,Beam,Bulge,Draught,L/B,B/T,HN,dCb,year,Cb,Cm,Cp,Cwp,Cvp,Catr,Cv,bowLen,BL/B,iE,Lr/L,lcb/L,DD,Kn,SHP,NormTng,T,B/T,Cb,Cm,Cp,ammo,range,SHP");
 #endif
+#if LOGRANDPARTS
+            List<string> rpLines = new List<string>();
+#endif
             foreach (var kvp in gameData.parts)
             {
                 var data = kvp.Value;
@@ -318,7 +322,36 @@ namespace UADRealism
                     ++num;
                 }
 #endif
+#if LOGRANDPARTS
+                string lstr = $"{data.name}:";
+                foreach (var rp in data.shipType.randParts)
+                {
+                    bool isScheme = false;
+                    string scheme = string.Empty;
+                    if (rp.paramx.TryGetValue("scheme", out var schemeL))
+                    {
+                        isScheme = true;
+                        scheme = string.Join(", ", schemeL);
+                    }
+                    if (!ShipM.CheckOperations(data, rp, out var vars))
+                        continue;
+                    lstr += $"\n\t{rp.name.Substring(0, rp.name.IndexOf("/"))}: {rp.type} Chance={rp.chance}, {rp.min}-{rp.max}, P={rp.paired}, C={rp.center}, S={rp.side}, {rp.rangeZFrom:G3}/{rp.rangeZTo:G3}. G={rp.group}, E={rp.effect}, C={rp.condition}.";
+                    if (isScheme)
+                        lstr += $" SCHEME={scheme}";
+                    lstr += " " + vars;
+                }
+                //Melon<UADRealismMod>.Logger.Msg(lstr);
+                rpLines.Add(lstr);
+#endif
             }
+#if LOGRANDPARTS
+            string basePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "UADRealism");
+            if (!Directory.Exists(basePath))
+                Directory.CreateDirectory(basePath);
+
+            string pathHData = Path.Combine(basePath, "rpusage.txt");
+            File.WriteAllLines(pathHData, rpLines);
+#endif
         }
 
         private static void ApplyHullData(PartData hull, HullData hData)
@@ -1421,6 +1454,21 @@ namespace UADRealism
             float hpCruise = GetSHPRequired(stats, speedMS, false) * engineMult;
             const float fuelToKM = 524f;
             return Mathf.RoundToInt(effectiveTons / hpCruise * speedMS * fuelToKM);
+        }
+
+        public static float GetArmamentRatio(string sType, float year)
+        {
+            return sType switch
+            {
+                "tb" => 0.95f,
+                "dd" => Util.Remap(year, 1900f, 1940f, 0.9f, 0.85f, true),
+                "cl" => Util.Remap(year, 1890f, 1940f, 0.18f, 0.25f, true),
+                "ca" => Util.Remap(year, 1890f, 1940f, 0.15f, 0.18f, true),
+                "bc" => Util.Remap(year, 1915f, 1935f, 0.21f, 0.15f, true),
+                "bb" => Util.Remap(year, 1895f, 1935f, 0.18f, 0.15f, true),
+                "ic" => 0.15f,
+                _ => 0.9f
+            };
         }
 
         public static System.Collections.IEnumerator CalculateHullData(bool checkMountsOnly)
