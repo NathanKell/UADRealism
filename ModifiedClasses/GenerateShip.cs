@@ -9,6 +9,8 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8602
@@ -21,6 +23,10 @@ namespace UADRealism
 {
     public class GenerateShip
     {
+        static Dictionary<ComponentData, float> _CompWeights = new Dictionary<ComponentData, float>();
+        static List<PartData> _Options = new List<PartData>();
+        static Dictionary<PartData, float> _OptionWeights = new Dictionary<PartData, float>();
+
         float _hullYear;
         float _designYear;
         float _avgYear;
@@ -33,25 +39,59 @@ namespace UADRealism
         Ship _ship;
         bool _isMissionMainShip;
         int _gen;
+        float _tngRatio;
         bool _mainPlaced = false;
         bool _secPlaced = false;
-#pragma warning disable IDE0052
         bool _hasFunnel = false;
-#pragma warning restore IDE0052
         bool _needSec = true;
+        List<RandPartOperation> _selectedRandParts = new List<RandPartOperation>();
         Part _firstPairCreated = null;
         float _offsetX;
         float _offsetZ;
-        // string not PartData to avoid Il2Cpp GC
-        Dictionary<string, string> _partDataForGroup = new Dictionary<string, string>();
-        // Let's hope this doesn't trip GC.
+        Dictionary<string, PartData> _partDataForGroup = new Dictionary<string, PartData>();
         HashSet<PartData> _gunSideRefs = new HashSet<PartData>();
         HashSet<PartData> _gunCenterRefs = new HashSet<PartData>();
-        HashSet<int> _avoidBarrels = null;
+        HashSet<int> _avoidBarrels = new HashSet<int>();
+        Dictionary<Ship.A, float> _ArmorMultipliers = new Dictionary<Ship.A, float>();
+        bool _partsInitOK = false;
 
         HashSet<string> _seenCompTypes = new HashSet<string>();
 
+        enum GunCal
+        {
+            Main,
+            Sec,
+            Ter,
+
+            COUNT
+        }
+        enum GunAlign
+        {
+            Center,
+            Side,
+            Both,
+
+            COUNT
+        }
+        class GunInfo
+        {
+            public GunCal _cal;
+            public GunAlign _align;
+            public HashSet<PartData> _datas = new HashSet<PartData>();
+            public List<RandPartOperation> _rps = new List<RandPartOperation>();
+            public float _caliber;
+            public float _length;
+            public PartData _mainData = null;
+        }
+        Dictionary<RandPartOperation, GunInfo> _gunInfosByRPO = new Dictionary<RandPartOperation, GunInfo>();
+        Dictionary<string, GunInfo> _gunInfosByGroup = new Dictionary<string, GunInfo>();
+        List<GunInfo> _gunInfos = new List<GunInfo>();
+        readonly int[] _CalCounts = new int[(int)GunCal.COUNT];
+        readonly int[] _CalLimits = new int[(int)GunCal.COUNT];
+
         float _baseHullWeight;
+        float _totalHullWeight;
+        float _armStopWeight;
 
         public GenerateShip(Ship ship)
         {
@@ -65,6 +105,14 @@ namespace UADRealism
             _isLight = _sType == "dd" || _sType == "tb";
             _gen = ship.hull.data.Generation;
             _isMissionMainShip = GameManager.IsMission && _ship.player.isMain && BattleManager.Instance.MissionMainShip == _ship;
+            _tngRatio = Mathf.InverseLerp(ship.TonnageMin(), Math.Min(ship.TonnageMax(), _tngLimit), ship.Tonnage());
+
+            if (_ship.shipType.paramx.TryGetValue("avoid_barrels", out var avoidB))
+            {
+                foreach (var s in avoidB)
+                    _avoidBarrels.Add(int.Parse(s));
+            }
+            _partsInitOK = InitParts();
         }
 
         public void DesignShipInitial(Ship._GenerateRandomShip_d__566 coroutine)
@@ -315,8 +363,6 @@ namespace UADRealism
             _ship.RefreshHullStats();
         }
 
-        private static Dictionary<ComponentData, float> _CompWeights = new Dictionary<ComponentData, float>();
-
         public enum ComponentSelectionPass
         {
             Initial,
@@ -329,6 +375,10 @@ namespace UADRealism
             List<CompType> compTypes = new List<CompType>();
             if (pass == ComponentSelectionPass.Initial)
                 _seenCompTypes.Clear();
+
+            CompType mines = null;
+            CompType dc = null;
+            CompType sweep = null;
 
             foreach (var ct in G.GameData.compTypes.Values)
             {
@@ -380,7 +430,6 @@ namespace UADRealism
                         default:
                             continue;
                     }
-
                 }
 
                 if (pass != ComponentSelectionPass.PostParts)
@@ -409,8 +458,28 @@ namespace UADRealism
                 // Just handle new ones.
                 if (_ship.IsComponentTypeAvailable(ct) && Ui.NeedComponentsActive(ct, null, _ship, true, false))
                 {
-                    if (pass == ComponentSelectionPass.PostParts && _seenCompTypes.Contains(ct.name))
+                    if (_seenCompTypes.Contains(ct.name))
                         continue;
+
+                    // These count as part of armament so need to get installed later.
+                    if (!_this._isRefitMode_5__2)
+                    {
+                        if (ct.name == "mines")
+                        {
+                            mines = ct;
+                            continue;
+                        }
+                        else if (ct.name == "depthcharge")
+                        {
+                            dc = ct;
+                            continue;
+                        }
+                        else if (ct.name == "minesweep")
+                        {
+                            sweep = ct;
+                            continue;
+                        }
+                    }
 
                     compTypes.Add(ct);
                     _seenCompTypes.Add(ct.name);
@@ -422,23 +491,10 @@ namespace UADRealism
                 return;
 
             foreach (var ct in compTypes)
-            {
-                foreach (var comp in G.GameData.components.Values)
-                {
-                    if (Ui.NeedComponentsActive(ct, comp, _ship, true, false))
-                    {
-                        _CompWeights[comp] = comp.weight;
-                    }
-                }
-                if (_CompWeights.Count == 0)
-                    continue;
-                var newComp = ModUtils.RandomByWeights(_CompWeights, null, _this.__8__1.rnd);
-                if (newComp != null)
-                    _ship.InstallComponent(newComp, true);
-                _CompWeights.Clear();
-            }
+                InstallRandomComponentForType(ct);
 
             _ship.RefreshHullStats();
+            _ship.NeedRecalcCache();
 
             if (pass == ComponentSelectionPass.Initial)
             {
@@ -447,11 +503,453 @@ namespace UADRealism
                 // even though it's kinda hull weight. That's because it won't
                 // show up unless there are gun parts on the ship.
                 _baseHullWeight = _ship.Weight();
+
+                if (!_this._isRefitMode_5__2)
+                {
+                    if (mines != null)
+                        InstallRandomComponentForType(mines);
+                    if (dc != null)
+                        InstallRandomComponentForType(dc);
+                    if (sweep != null)
+                        InstallRandomComponentForType(sweep);
+                }
+                _ship.RefreshHullStats();
+                _ship.NeedRecalcCache();
+                _totalHullWeight = _ship.Weight();
+
                 SelectComponents(ComponentSelectionPass.Armor);
             }
         }
 
+        private void InstallRandomComponentForType(CompType ct)
+        {
+            foreach (var comp in G.GameData.components.Values)
+            {
+                if (Ui.NeedComponentsActive(ct, comp, _ship, true, false))
+                {
+                    _CompWeights[comp] = comp.weight;
+                }
+            }
+            if (_CompWeights.Count == 0)
+                return;
+            var newComp = ModUtils.RandomByWeights(_CompWeights, null, _this.__8__1.rnd);
+            if (newComp != null)
+                _ship.InstallComponent(newComp, true);
+            _CompWeights.Clear();
+        }
+
+        private bool InitParts()
+        {
+            if (_this.isSimpleRefit)
+                return true;
+
+            var st = _ship.shipType;
+            if (st.randParts.Count == 0)
+            {
+                // Log error?
+                return false;
+            }
+
+            _mainPlaced = false;
+            _secPlaced = false;
+            _needSec = _sType != "tr";
+            if (_needSec)
+            {
+                PartCategoryData secPCD = null;
+                foreach (var kvp in G.GameData.partCategories)
+                {
+                    if (kvp.Key == "tower_sec")
+                    {
+                        secPCD = kvp.Value;
+                    }
+                }
+
+                _needSec = false;
+                foreach (var kvp in G.GameData.parts)
+                {
+                    if (_ship.BelongsToCategory(kvp.Value, secPCD) && _ship.IsPartAvailable(kvp.Value))
+                    {
+                        _needSec = true;
+                        break;
+                    }
+                }
+            }
+            _hasFunnel = false;
+
+            return true;
+        }
+
+        private class RandPartOperation
+        {
+            public RandPart _rp;
+            public bool _isDelete;
+            public int _desiredNum;
+            public PartData _data;
+            public float _zMin;
+            public float _zMax;
+            public bool _isNormal;
+        }
+
+        private static HashSet<string> _PrevTypes = new HashSet<string>();
+        private bool HandleSpecialRP(RandPart rp, RandPartOperation rpo)
+        {
+            _PrevTypes.Clear();
+            int idx = 0;
+            bool combineRPs = true;
+            switch (rp.type)
+            {
+                case "tower_main":
+                    break;
+                case "tower_sec":
+                    _PrevTypes.Add("tower_main");
+                    break;
+                case "funnel":
+                    combineRPs = false;
+                    _PrevTypes.Add("tower_main");
+                    _PrevTypes.Add("tower_sec");
+                    _PrevTypes.Add("funnel");
+                    break;
+                default:
+                    return false;
+            }
+            for(; idx < _selectedRandParts.Count; ++idx)
+            {
+                var srp = _selectedRandParts[idx];
+                if (srp._isDelete)
+                    continue;
+                if (srp._rp.type == rp.type)
+                {
+                    if (combineRPs)
+                        break;
+                    else
+                        continue;
+                }
+                if (!_PrevTypes.Contains(srp._rp.type))
+                    break;
+            }
+            if (idx < _selectedRandParts.Count && _selectedRandParts[idx] is var existingSRP && existingSRP._rp.type == rp.type)
+            {
+                float x = -1f;
+                float y = 1f;
+                if (rp.rangeZ.HasValue)
+                {
+                    x = rp.rangeZ.Value.x;
+                    y = rp.rangeZ.Value.y;
+                }
+                if (existingSRP._zMin > x)
+                    existingSRP._zMin = x;
+                if (existingSRP._zMax > y)
+                    existingSRP._zMax = y;
+                return true;
+            }
+
+            if (rp.rangeZ.HasValue)
+            {
+                rpo._zMin = rp.rangeZ.Value.x;
+                rpo._zMax = rp.rangeZ.Value.y;
+            }
+            else
+            {
+                rpo._zMin = -1f;
+                rpo._zMax = 1f;
+            }
+            rpo._isNormal = false;
+            _selectedRandParts.Insert(idx, rpo);
+            return true;
+        }
+
+        private void FillSelectedRandParts()
+        {
+            var randParts = _this._isRefitMode_5__2 ? _ship.shipType.randPartsRefit : _ship.shipType.randParts;
+            _selectedRandParts.Clear();
+
+            foreach (var rp in randParts)
+            {
+                var chance = rp.chance;
+                if (rp.paramx.TryGetValue("tr_rand_mod", out var trmod))
+                {
+                    var paramInit = MonoBehaviourExt.Param("initial_tr_transport_armed", 0.1f);
+                    var armed = _ship.TechA("armed_transports");
+                    chance *= paramInit * armed;
+                }
+
+                if (!Util.Chance(chance, _this.__8__1.rnd))
+                    continue;
+
+                if (rp.paramx.TryGetValue("scheme", out var scheme))
+                {
+                    if (_ship.hull.hullInfo != null && !_ship.hull.hullInfo.schemes.Contains(scheme[0]))
+                        continue;
+                }
+                if (!_ship.CheckOperations(rp))
+                    continue;
+
+                var rpo = new RandPartOperation();
+                rpo._rp = rp;
+                rpo._isNormal = true;
+                if (rp.paramx.ContainsKey("delete_unmounted") || (_this._isRefitMode_5__2 && rp.paramx.ContainsKey("delete_refit")))
+                {
+                    rpo._isDelete = true;
+                }
+                else
+                {
+                    int num = Util.FromTo(rp.min, rp.max, _this.__8__1.rnd);
+                    if (rp.paired)
+                    {
+                        num = 2 * Util.RoundToIntProb(num * 0.5f, _this.__8__1.rnd);
+                    }
+                    rpo._desiredNum = num;
+
+                    // Special handling for towers/funnels.
+                    // We put them in order main,sec,funnels
+                    // and for towers, we combine multiple RPs
+                    // of the same type into one with an expanded range.
+                    if (HandleSpecialRP(rp, rpo))
+                        continue;
+                }
+                rpo._isNormal = true;
+                _selectedRandParts.Add(rpo);
+
+                if (rp.type == "gun")
+                    HandleGunRP(rpo);
+            }
+        }
+
+        private static HashSet<PartData> _TempPartDataSet = new HashSet<PartData>();
+        private void HandleGunRP(RandPartOperation rpo)
+        {
+            _TempPartDataSet.Clear();
+
+            var rp = rpo._rp;
+            var parts = _ship.GetParts(rp, _this.limitCaliber);
+            foreach (var p in parts)
+                _TempPartDataSet.Add(p);
+            if (rp.group != string.Empty && _gunInfosByGroup.TryGetValue(rp.group, out var foundGI))
+            {
+                if (rp.center != rp.side)
+                {
+                    if (foundGI._align == (rp.side ? GunAlign.Center : GunAlign.Side))
+                        foundGI._align = GunAlign.Both;
+                }
+                else
+                {
+                    if (foundGI._align != GunAlign.Both)
+                        foundGI._align = GunAlign.Both;
+                }
+                foundGI._datas.IntersectWith(_TempPartDataSet);
+                foundGI._rps.Add(rpo);
+                _gunInfosByRPO[rpo] = foundGI;
+                return;
+            }
+
+            GunCal cal = GunCal.Main;
+            if (rp.condition.Contains("main"))
+                cal = GunCal.Main;
+            else if (rp.condition.Contains("sec"))
+                cal = GunCal.Sec;
+            else if (rp.condition.Contains("ter"))
+                cal = GunCal.Ter;
+            else if (rp.effect.Contains("main") || rp.group.Contains("mg") || rp.group.Contains("mc") || rp.group.Contains("ms") || rp.group.Contains("main"))
+                cal = GunCal.Main;
+            else if (rp.effect.Contains("sec") || rp.group.Contains("sec") || rp.group.Contains("sc") || rp.group.Contains("sg"))
+                cal = GunCal.Sec;
+            else if (rp.effect.Contains("tert") || rp.group.Contains("ter") || rp.group.Contains("tg"))
+                cal = GunCal.Ter;
+            else if (rp.effect.Contains("small"))
+                cal = GunCal.Sec;
+
+            GunAlign align = rp.center == rp.side ? GunAlign.Both : (rp.center ? GunAlign.Center : GunAlign.Side);
+
+            foreach (var gi in _gunInfos)
+            {
+                if (gi._cal == cal && _TempPartDataSet.SetEquals(gi._datas))
+                {
+                    if (gi._align != align)
+                        gi._align = GunAlign.Both;
+
+                    gi._rps.Add(rpo);
+                    _gunInfosByRPO[rpo] = gi;
+                    if (rp.group != string.Empty)
+                        _gunInfosByGroup[rp.group] = gi;
+                    return;
+                }
+            }
+
+            var newGI = new GunInfo();
+            newGI._cal = cal;
+            newGI._align = align;
+            foreach (var p in _TempPartDataSet)
+                newGI._datas.Add(p);
+            newGI._rps.Add(rpo);
+            _gunInfosByRPO[rpo] = newGI;
+            if (rp.group != string.Empty)
+                _gunInfosByGroup[rp.group] = newGI;
+            _gunInfos.Add(newGI);
+        }
+
+        private void MergeGunInfos()
+        {
+            for (int i = 0; i < _CalCounts.Length; ++i)
+            {
+                _CalCounts[i] = 0;
+                _CalLimits[i] = 1;
+            }
+
+            switch (_sType)
+            {
+                case "tb":
+                case "dd":
+                    _CalLimits[(int)GunCal.Ter] = 0;
+                    break;
+
+                case "ca":
+                    if (_hullYear < 1915)
+                        _CalLimits[(int)GunCal.Main] = 2;
+                    break;
+
+                case "bb":
+                    if (_hullYear < 1905)
+                        _CalLimits[(int)GunCal.Sec] = 2;
+                    break;
+            }
+
+            bool needMerge = false;
+            foreach (var gi in _gunInfos)
+            {
+                int idx = (int)gi._cal;
+                _CalCounts[idx] += 1;
+                if (_CalCounts[idx] > _CalLimits[idx])
+                    needMerge = true;
+            }
+
+        }
+
         public bool SelectParts()
+        {
+            FillSelectedRandParts();
+            MergeGunInfos();
+
+            float nonHullTonnage = _ship.Tonnage() - _baseHullWeight;
+            float armRatio = ShipStats.GetArmamentRatio(_sType, _avgYear);
+            float prePartsWeight = _ship.Weight();
+
+            // We need to _actually_ mount the towers/funnels
+            // to know the weight.
+            foreach (var rpo in _selectedRandParts)
+            {
+                if (rpo._isNormal)
+                    break;
+
+
+                if (!TryAddPartsForRandPart(rpo._rp, rpo._desiredNum))
+                    return false;
+            }
+            if (!_hasFunnel || !_mainPlaced || (_needSec && !_secPlaced))
+                return false;
+
+            float weightDelta = _ship.Weight() - prePartsWeight; // weight of towers/funnels
+            nonHullTonnage -= weightDelta; // nominal payload tonnage
+            float armamentTonnage = nonHullTonnage * armRatio;
+            armamentTonnage -= (_totalHullWeight - _baseHullWeight); // mines/DC/sweeping counts as armament
+            if (armamentTonnage < 0f)
+                armamentTonnage = 0.05f * (_ship.Tonnage() - _ship.Weight());
+            if (armamentTonnage < 0f)
+                return true;
+
+            _armStopWeight = _ship.Weight() + armamentTonnage;
+
+            for (int pass = 0; pass < 50; ++pass)
+            {
+                foreach (var rpo in _selectedRandParts)
+                {
+                    if (rpo._isDelete || !rpo._isNormal)
+                        continue;
+
+                    var rp = rpo._rp;
+
+
+
+                    if (rp.group != string.Empty)
+                        _partDataForGroup[rp.group] = rpo._data;
+
+                    // Store the ref away so we can keep main and side gun calibers in sync
+                    if (rp.group == "mc" || rpo._data.paramx.ContainsKey("main_center") || rpo._data.paramx.ContainsKey("small_center"))
+                        _gunCenterRefs.Add(rpo._data);
+                    if (rp.group == "ms" || rpo._data.paramx.ContainsKey("main_side") || rpo._data.paramx.ContainsKey("small_side"))
+                        _gunSideRefs.Add(rpo._data);
+                }
+            }
+
+            if (_ship.parts.Count > 0)
+            {
+                for (int i = _ship.parts.Count; i-- > 0;)
+                {
+                    var part = _ship.parts[i];
+                    var data = part.data;
+                    if (data.isGun ? _ship.IsMainCal(data) : data.isTorpedo)
+                    {
+                        if (!part.CanPlaceSoft(false) || !part.CanPlaceSoftLight())
+                        {
+                            _ship.RemovePart(part, true, true);
+                        }
+                    }
+                }
+                for (int i = _ship.shipGunCaliber.Count; i-- > 0;)
+                {
+                    bool remove = true;
+                    foreach (var p in _ship.parts)
+                    {
+                        if (p.data == _ship.shipGunCaliber[i].turretPartData)
+                        {
+                            remove = false;
+                            break;
+                        }
+                    }
+                    if (remove)
+                        _ship.shipGunCaliber.RemoveAt(i);
+                }
+
+                for (int i = _ship.shipTurretArmor.Count; i-- > 0;)
+                {
+                    bool remove = true;
+                    foreach (var p in _ship.parts)
+                    {
+                        if (p.data == _ship.shipTurretArmor[i].turretPartData)
+                        {
+                            remove = false;
+                            break;
+                        }
+                    }
+                    if (remove)
+                        _ship.shipGunCaliber.RemoveAt(i);
+                }
+
+                ShipM.ClearMatCache(_ship);
+            }
+
+            _ship.StartCoroutine(_ship.RefreshDecorDelay());
+
+            foreach (var part in _ship.parts)
+                part.OnPostAdd();
+
+            return true;
+        }
+
+        private void ResetPassState(bool countTowersFunnels = true)
+        {
+            _gunSideRefs.Clear();
+            _gunCenterRefs.Clear();
+            _partDataForGroup.Clear();
+            _firstPairCreated = null;
+            if (countTowersFunnels)
+            {
+                _mainPlaced = false;
+                _secPlaced = false;
+                _hasFunnel = false;
+            }
+        }
+
+        public bool SelectPartsStock()
         {
             if (_this.isSimpleRefit)
                 return true;
@@ -462,13 +960,6 @@ namespace UADRealism
             {
                 // Log error?
                 return false;
-            }
-            _avoidBarrels = null;
-            if (st.paramx.TryGetValue("avoid_barrels", out var avoidB))
-            {
-                _avoidBarrels = new HashSet<int>();
-                foreach (var s in avoidB)
-                    _avoidBarrels.Add(int.Parse(s));
             }
 
             // Not sure why the game creates this but never adds it
@@ -622,7 +1113,7 @@ namespace UADRealism
                         _ship.shipGunCaliber.RemoveAt(i);
                 }
 
-                Patch_Ship.ClearMatCache(_ship);
+                ShipM.ClearMatCache(_ship);
             }
 
             _ship.StartCoroutine(_ship.RefreshDecorDelay());
@@ -636,26 +1127,18 @@ namespace UADRealism
         private bool TryAddPartsForRandPart(RandPart rp, int desiredAmount)
         {
             var parts = _ship.GetParts(rp, _this.limitCaliber);
-            List<PartData> options = new List<PartData>();
             for (int loop = 0; loop < 250; ++loop)
             {
                 PartData data = null;
                 Part part = null;
 
-                if (rp.group != string.Empty && _partDataForGroup.TryGetValue(rp.group, out var pdName) && pdName != string.Empty)
+                data = FindPartDataForRP(rp, parts);
+                if (_ship.badData.Contains(data))
                 {
-                    data = G.GameData.parts[pdName];
-                    if (_ship.badData.Contains(data))
-                    {
-                        // We could be adding main guns and gone over-limit
-                        // with the last one. Or other reasons why this part
-                        // might have started out good but ended up bad.
-                        break;
-                    }
-                }
-                else
-                {
-                    data = FindPartDataForRP(rp, parts, options);
+                    // We could be adding main guns and gone over-limit
+                    // with the last one. Or other reasons why this part
+                    // might have started out good but ended up bad.
+                    break;
                 }
 
                 if (data == null)
@@ -685,17 +1168,17 @@ namespace UADRealism
                 if (data.isGun)
                     part.UpdateCollidersSize(_ship);
 
-                float weight = _ship.Weight(true);
-                if (weight > _ship.Tonnage() * 1.4f && !part.data.isWeapon)
+                if (!PlacePart(part, rp))
                 {
-                    // This part will never work, it takes us over limit.
-                    _ship.badData.Add(data);
                     MarkBadTry(part, data);
                     continue;
                 }
 
-                if (!PlacePart(part, rp))
+                float weight = _ship.Weight(true);
+                if (weight > _ship.Tonnage() * 1.4f && (data.isWeapon || data.isBarbette))
                 {
+                    // This part will never work, it takes us over limit.
+                    _ship.badData.Add(data);
                     MarkBadTry(part, data);
                     continue;
                 }
@@ -725,7 +1208,7 @@ namespace UADRealism
 
                 if (rp.group != string.Empty)
                 {
-                    _partDataForGroup[rp.group] = data.name;
+                    _partDataForGroup[rp.group] = data;
                 }
 
                 if (data.isGun)
@@ -764,8 +1247,8 @@ namespace UADRealism
                         _ship.badMounts[part.data] = set;
                     }
                     set.Add(part.mount);
-                    _ship.RemovePart(part);
                 }
+                _ship.RemovePart(part);
             }
             if (_firstPairCreated)
             {
@@ -1039,24 +1522,30 @@ namespace UADRealism
             return _ship.shipGunCaliber[_ship.shipGunCaliber.Count - 1]; // stupid that the previous method doesn't return the added TC
         }
 
-        private PartData FindPartDataForRP(RandPart rp, Il2CppSystem.Collections.Generic.List<PartData> parts, List<PartData> options)
+        private PartData FindPartDataForRP(RandPart rp, Il2CppSystem.Collections.Generic.List<PartData> parts)
         {
+            if (rp.group != string.Empty && _partDataForGroup.TryGetValue(rp.group, out var gpart) && gpart != null)
+                return gpart;
+
+            if (rp.paired && _firstPairCreated != null)
+                return _firstPairCreated.data;
+
             PartData ret = null;
             foreach (var data in parts)
             {
                 if (_ship.badData.Contains(data) || data.type != rp.type)
                     continue;
 
-                options.Add(data);
+                _Options.Add(data);
             }
 
-            if (options.Count == 0)
+            if (_Options.Count == 0)
                 return null;
 
             if (rp.type == "torpedo")
             {
                 float bestVal = float.MinValue;
-                foreach (var opt in options)
+                foreach (var opt in _Options)
                 {
                     var val = TorpedoValue(opt);
                     if (val > bestVal)
@@ -1079,9 +1568,9 @@ namespace UADRealism
 
                 if (refData != null)
                 {
-                    for (int i = options.Count; i-- > 0;)
+                    for (int i = _Options.Count; i-- > 0;)
                     {
-                        var opt = options[i];
+                        var opt = _Options[i];
 
                         bool remove = true;
                         foreach (var r in refData)
@@ -1093,7 +1582,7 @@ namespace UADRealism
                             }
                         }
                         if (remove)
-                            options.RemoveAt(i);
+                            _Options.RemoveAt(i);
                     }
                 }
                 // Game is weird here. If "sec_cal" is not there, it jumps to maincal.
@@ -1102,7 +1591,7 @@ namespace UADRealism
                 if (rp.condition.Contains("ter_cal"))
                 {
                     float bestVal = float.MinValue;
-                    foreach (var opt in options)
+                    foreach (var opt in _Options)
                     {
                         var val = TertiaryGunValue(opt);
                         if (val > bestVal)
@@ -1115,7 +1604,7 @@ namespace UADRealism
                 else
                 {
                     float bestVal = float.MinValue;
-                    foreach (var opt in options)
+                    foreach (var opt in _Options)
                     {
                         var val = MainOrSecGunValue(opt);
                         if (val > bestVal)
@@ -1126,11 +1615,46 @@ namespace UADRealism
                     }
                 }
             }
-            else if (options.Count > 0)
+            else if (_Options.Count > 0)
             {
-                ret = options.Random(null, _this.__8__1.rnd);
-            }
+                if (rp.type != "tower_main" && rp.type != "tower_sec")
+                {
+                    ret = _Options.Random(null, _this.__8__1.rnd);
+                }
+                else
+                {
+                    // try to do something smarter than random
+                    float maxCost = 0f;
+                    float minTon = float.MaxValue;
+                    float maxTon = float.MinValue;
+                    foreach (var o in _Options)
+                    {
+                        if (o.cost > maxCost)
+                            maxCost = o.cost;
+                        if (minTon > o.weight)
+                            minTon = o.weight;
+                        if (maxTon < o.weight)
+                            maxTon = o.weight;
+                    }
+                    float costMult = Mathf.Pow(10f, -Mathf.Floor(Mathf.Log10(maxCost)));
+                    float tonMult = 1f - minTon / maxTon;
+                    foreach (var o in _Options)
+                    {
+                        float cost = o.cost * costMult;
+                        float year = Database.GetYear(o);
+                        if (year > 0f)
+                            cost *= Mathf.Pow(2f, (year - 1890f) * 0.5f);
 
+                        // Try to weight based on where ship is within the tonnage range
+                        cost *= 1.2f - Mathf.Abs(Mathf.InverseLerp(minTon, maxTon, o.weight) - _tngRatio) * tonMult;
+
+                        _OptionWeights[o] = cost;
+                    }
+                    ret = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
+                    _OptionWeights.Clear();
+                }
+            }
+            _Options.Clear();
             return ret;
         }
 
@@ -1156,7 +1680,7 @@ namespace UADRealism
         public float MainOrSecGunValue(PartData data)
         {
             float barrelValue;
-            if (_avoidBarrels != null && _avoidBarrels.Contains(data.barrels))
+            if (_avoidBarrels.Contains(data.barrels))
                 barrelValue = -25f;
             else
                 barrelValue = 2f;
@@ -1191,7 +1715,7 @@ namespace UADRealism
         public float MainGunValue_Unused(PartData data)
         {
             float barrelValue;
-            if (_avoidBarrels != null && _avoidBarrels.Contains(data.barrels))
+            if (_avoidBarrels.Contains(data.barrels))
                 barrelValue = -25f;
             else
                 barrelValue = 2f;
@@ -1225,6 +1749,99 @@ namespace UADRealism
         public float TorpedoValue(PartData data)
         {
             return Util.Range(0f, MonoBehaviourExt.Param("torpedo_gen_randomness", 1.2f)) + data.barrels;
+        }
+
+        public void AddArmorToLimit(float maxWeight = -1f)
+        {
+            if (maxWeight < 0f)
+                maxWeight = _ship.Tonnage();
+
+            if (_ship.Weight() >= maxWeight)
+                return;
+
+            float deckPortion = Util.Remap(_hullYear, 1890f, 1930f, 0.15f, 0.67f, true);
+            deckPortion *= 1f + ModUtils.DistributedRange(0.1f, 4, null, _this.__8__1.rnd);
+            _ArmorMultipliers[Ship.A.Deck] = deckPortion;
+            _ArmorMultipliers[Ship.A.DeckBow] = _ArmorMultipliers[Ship.A.DeckStern] = deckPortion * (0.5f + ModUtils.DistributedRange(0.1f, 2, null, _this.__8__1.rnd));
+            _ArmorMultipliers[Ship.A.Belt] = 1f;
+            _ArmorMultipliers[Ship.A.BeltBow] = _ArmorMultipliers[Ship.A.BeltStern] = 0.5f + ModUtils.DistributedRange(0.1f, 2, null, _this.__8__1.rnd);
+            _ArmorMultipliers[Ship.A.Barbette] = 1f + ModUtils.DistributedRange(0.2f, 4, null, _this.__8__1.rnd);
+            _ArmorMultipliers[Ship.A.TurretSide] = 1f + Mathf.Abs(ModUtils.DistributedRange(0.5f, 2, null, _this.__8__1.rnd));
+            _ArmorMultipliers[Ship.A.TurretTop] = _ArmorMultipliers[Ship.A.TurretSide] * deckPortion * (0.8f + ModUtils.DistributedRange(0.125f, 2, null, _this.__8__1.rnd));
+            _ArmorMultipliers[Ship.A.ConningTower] = 1f + ModUtils.DistributedRange(0.2f, 3, null, _this.__8__1.rnd);
+            _ArmorMultipliers[Ship.A.Superstructure] = Math.Max(_ArmorMultipliers[Ship.A.Belt], _ArmorMultipliers[Ship.A.ConningTower]) * (0.375f + ModUtils.DistributedRange(0.125f, 2, null, _this.__8__1.rnd));
+            float maxMult = 0f;
+            foreach (var m in _ArmorMultipliers.Values)
+                if (maxMult < m)
+                    maxMult = m;
+            _ArmorMultipliers[Ship.A.InnerBelt_1st] = _ArmorMultipliers[Ship.A.InnerBelt_2nd] = _ArmorMultipliers[Ship.A.InnerBelt_3rd]
+                = _ArmorMultipliers[Ship.A.InnerDeck_1st] = _ArmorMultipliers[Ship.A.InnerDeck_2nd] = _ArmorMultipliers[Ship.A.InnerDeck_3rd] = 99f;
+
+            float armorVal = _ship.shipType.armor * 25.4f;
+            for (; _ship.Weight() <= maxWeight; armorVal += G.settings.armorStep)
+                SetArmorValues(armorVal);
+            // we overshoot by definition, so pull back one step.
+            SetArmorValues(armorVal - G.settings.armorStep);
+        }
+
+        private bool SetArmorValues(float value)
+        {
+            bool shouldAbort = true;
+            for (Ship.A a = Ship.A.Belt; a <= Ship.A.InnerDeck_3rd; a = (Ship.A)((int)a + 1))
+            {
+                float val = G.settings.RoundToArmorStep(Math.Min(ShipM.MaxArmorForZone(_ship, a, null), value * _ArmorMultipliers[a]));
+                _ship.armor.TryGetValue(a, out var oldVal);
+                if (val != oldVal)
+                {
+                    _ship.armor[a] = val;
+                    shouldAbort = false;
+                }
+            }
+            foreach (var ta in _ship.shipTurretArmor)
+            {
+                float armLimitSideBarb = float.MaxValue;
+                float armLimitTop = float.MaxValue;
+                if (!Ship.IsMainCal(ta.turretPartData, _ship.shipType))
+                {
+                    var tc = ShipM.FindMatchingTurretCaliber(_ship, ta.turretPartData);
+                    float mmCal = ta.turretPartData.caliber;
+                    if (tc != null)
+                        mmCal += tc.diameter;
+                    armLimitSideBarb = mmCal;
+                    armLimitTop = _ArmorMultipliers[Ship.A.TurretTop] / _ArmorMultipliers[Ship.A.TurretSide] * mmCal;
+                }
+                float val = G.settings.RoundToArmorStep(Math.Min(ShipM.MaxArmorForZone(_ship, Ship.A.TurretTop, ta.turretPartData),
+                    Math.Min(armLimitTop, value * (ta.isCasemateGun ? _ArmorMultipliers[Ship.A.Deck] : _ArmorMultipliers[Ship.A.TurretTop]))));
+                if (ta.topTurretArmor != val)
+                {
+                    ta.topTurretArmor = val;
+                    shouldAbort = false;
+                }
+
+                val = G.settings.RoundToArmorStep(Math.Min(ShipM.MaxArmorForZone(_ship, Ship.A.TurretSide, ta.turretPartData),
+                    Math.Min(armLimitSideBarb, value * (ta.isCasemateGun ? _ArmorMultipliers[Ship.A.Belt] * 0.5f : _ArmorMultipliers[Ship.A.TurretSide]))));
+                if (ta.sideTurretArmor != val)
+                {
+                    ta.sideTurretArmor = val;
+                    shouldAbort = false;
+                }
+                
+                val = G.settings.RoundToArmorStep(Math.Min(ShipM.MaxArmorForZone(_ship, Ship.A.Barbette, ta.turretPartData),
+                    Math.Min(armLimitSideBarb, value * _ArmorMultipliers[Ship.A.Barbette])));
+                if (ta.barbetteArmor != val)
+                {
+                    ta.barbetteArmor = val;
+                    shouldAbort = false;
+                }
+            }
+
+            if (shouldAbort)
+                return false;
+
+            _ship.SetArmor(_ship.armor);
+            _ship.RefreshHullStats();
+            _ship.RefreshGunsStats();
+            return true;
         }
     }
 }

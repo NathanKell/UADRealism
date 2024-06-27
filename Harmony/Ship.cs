@@ -583,6 +583,7 @@ namespace UADRealism
                     // We'll only do components. Then skip past all the add/reduce steps to
                     // the end.
                     gen.SelectComponents(GenerateShip.ComponentSelectionPass.PostParts);
+                    gen.AddArmorToLimit(__instance.__4__this.Tonnage());
                     __instance.__1__state = 17;
                     break;
             }
@@ -591,7 +592,7 @@ namespace UADRealism
 
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
         [HarmonyPostfix]
-        internal static bool Postfix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, int __state)
+        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, int __state)
         {
             var gen = Patch_Ship.GenerateShipHandler;
             switch (__instance.__1__state)
@@ -601,7 +602,6 @@ namespace UADRealism
                         gen.DesignShipInitial(__instance);
                     break;
             }
-            return true;
         }
     }
 
