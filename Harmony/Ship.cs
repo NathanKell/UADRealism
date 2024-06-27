@@ -439,7 +439,7 @@ namespace UADRealism
         internal static bool Prefix_PartMats(Ship __instance, PartData part, ref bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result, out bool __state)
         {
             // Always use cache if available
-            var cachedList = GetCachedPartMats(__instance, part);
+            var cachedList = ShipM.GetCachedPartMats(__instance, part);
             if (cachedList != null)
             {
                 __result = cachedList;
@@ -461,75 +461,7 @@ namespace UADRealism
         internal static void Postfix_PartMats(Ship __instance, PartData part, bool calcCosts, ref Il2CppSystem.Collections.Generic.List<Ship.MatInfo> __result, bool __state)
         {
             if (__state)
-                CachePartMats(__instance, part, __result);
-        }
-
-        private static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> GetCachedPartMats(Ship ship, PartData data)
-        {
-            if (ship.matsCache == null)
-            {
-                ship.matsCache = new Il2CppSystem.Collections.Generic.Dictionary<Part, Il2CppSystem.Collections.Generic.List<Ship.MatInfo>>();
-                return null;
-            }
-
-            foreach (var part in ship.matsCache.Keys)
-                if (part.data == data)
-                    return ship.matsCache[part];
-
-            return null;
-        }
-
-        private static void CachePartMats(Ship ship, PartData data, Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats)
-        {
-            if (ship.matsCache == null)
-                return;
-
-            if (data == ship.hull.data)
-            {
-                ship.matsCache[ship.hull] = mats;
-                return;
-            }
-
-            foreach (var part in ship.parts)
-            {
-                if (part.data == data)
-                    ship.matsCache[part] = mats;
-            }
-        }
-
-        private static List<Part> _Parts = new List<Part>();
-
-        internal static void ClearMatCache(Ship ship, PartData data)
-        {
-            if (ship.matsCache == null)
-                return;
-
-            foreach (var p in ship.matsCache.Keys)
-                if (p.data == data)
-                    _Parts.Add(p);
-            foreach (var p in _Parts)
-                ship.matsCache.Remove(p);
-            _Parts.Clear();
-
-            ship.weightsValid = false;
-        }
-
-        internal static void ClearMatCache(Ship ship, Part part)
-        {
-            if (ship.matsCache == null)
-                return;
-
-            ship.matsCache.Remove(part);
-            ship.weightsValid = false;
-        }
-
-        internal static void ClearMatCache(Ship ship)
-        {
-            if (ship.matsCache == null)
-                return;
-
-            ship.matsCache.Clear();
-            ship.weightsValid = false;
+                ShipM.CachePartMats(__instance, part, __result);
         }
 
         // This is used too many places to just patch one way.

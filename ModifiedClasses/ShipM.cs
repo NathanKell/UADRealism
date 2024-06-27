@@ -116,7 +116,7 @@ namespace UADRealism
             return Mathf.RoundToInt(speed / step * (1f / ShipStats.KnotsToMS)) * ShipStats.KnotsToMS * step;
         }
 
-        public static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, Il2CppSystem.Func<bool> nativeStop, 
+        public static void AdjustHullStats(Ship ship, int delta, float targetWeight, Func<bool> stopCondition, Il2CppSystem.Func<bool> nativeStop,
             bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null, float limitArmor = -1, float limitSpeed = 0f)
         {
             float year = ship.GetYear(ship);
@@ -134,7 +134,7 @@ namespace UADRealism
                 });
             else if (stopCondition != null)
                 stopFunc = stopCondition;
-            else if(delta > 0)
+            else if (delta > 0)
                 stopFunc = new Func<bool>(() =>
                 {
                     return ship.Weight() / ship.Tonnage() >= targetWeight;
@@ -154,9 +154,9 @@ namespace UADRealism
                     _OpRangeValues = new string[vals.Length];
                     for (int i = vals.Length; i-- > 0;)
                         _OpRangeValues[i] = Util.ToStringShort(vals.GetValue(i).ToString()).ToLower();
-                }   
+                }
 
-                for(int i = 0; i < _OpRangeValues.Length; ++i)
+                for (int i = 0; i < _OpRangeValues.Length; ++i)
                 {
                     if (_OpRangeValues[i] == minRange[0].ToLower())
                     {
@@ -260,7 +260,7 @@ namespace UADRealism
 
                 foreach (var kvp in ship.armor)
                     newArmor[kvp.Key] = Mathf.Min(armorLimit, MaxArmorForZone(ship, kvp.Key, null));
-                foreach(var key in ship.GetCitadelArmor())
+                foreach (var key in ship.GetCitadelArmor())
                     newArmor[key] = Mathf.Min(armorLimit, MaxArmorForZone(ship, key, null));
 
                 ship.SetArmor(newArmor);
@@ -284,7 +284,7 @@ namespace UADRealism
 
             for (int j = 0; j < 699; ++j)
             {
-                if(stopFunc())
+                if (stopFunc())
                     return;
 
                 // Recreate, since we might have touched citadel armor
@@ -325,7 +325,7 @@ namespace UADRealism
                                 _AdjustPriorityArmorLocal.Add(kvp.Key, kvp.Value);
                         }
                     }
-                    if(_AdjustPriorityArmorLocal.Count > 0)
+                    if (_AdjustPriorityArmorLocal.Count > 0)
                     {
                         var randomA = ModUtils.RandomByWeights(_AdjustPriorityArmorLocal);
                         armorMinHint.TryGetValue(randomA, out var minHint);
@@ -1205,7 +1205,7 @@ namespace UADRealism
                         return deckThick2 * 0.8f;
                     break;
             }
-            
+
             thickness = G.settings.RoundToArmorStep(thickness);
             if (thickness != 0f)
                 return thickness;
@@ -1222,6 +1222,176 @@ namespace UADRealism
                 return 0f;
 
             return ship.shipType.armorMin * 25.4f;
+        }
+
+        public static Il2CppSystem.Collections.Generic.List<Ship.MatInfo> GetCachedPartMats(Ship ship, PartData data)
+        {
+            if (ship.matsCache == null)
+            {
+                ship.matsCache = new Il2CppSystem.Collections.Generic.Dictionary<Part, Il2CppSystem.Collections.Generic.List<Ship.MatInfo>>();
+                return null;
+            }
+
+            foreach (var part in ship.matsCache.Keys)
+                if (part.data == data)
+                    return ship.matsCache[part];
+
+            return null;
+        }
+
+        public static void CachePartMats(Ship ship, PartData data, Il2CppSystem.Collections.Generic.List<Ship.MatInfo> mats)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            if (data == ship.hull.data)
+            {
+                ship.matsCache[ship.hull] = mats;
+                return;
+            }
+
+            foreach (var part in ship.parts)
+            {
+                if (part.data == data)
+                    ship.matsCache[part] = mats;
+            }
+        }
+
+        private static List<Part> _Parts = new List<Part>();
+
+        public static void ClearMatCache(Ship ship, PartData data)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            foreach (var p in ship.matsCache.Keys)
+                if (p.data == data)
+                    _Parts.Add(p);
+            foreach (var p in _Parts)
+                ship.matsCache.Remove(p);
+            _Parts.Clear();
+
+            ship.weightsValid = false;
+        }
+
+        public static void ClearMatCache(Ship ship, Part part)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            ship.matsCache.Remove(part);
+            ship.weightsValid = false;
+        }
+
+        public static void ClearMatCache(Ship ship)
+        {
+            if (ship.matsCache == null)
+                return;
+
+            ship.matsCache.Clear();
+            ship.weightsValid = false;
+        }
+
+        private static readonly char[] _OpSplitChars = new char[] { '[', ']' };
+        private enum RPOperation
+        {
+            Tag = 0,
+            NotTag,
+            Zero,
+            NotZero,
+        }
+        private static List<KeyValuePair<RPOperation, string>> CheckOperationsGetArgs(Il2CppSystem.Collections.Generic.List<string> args)
+        {
+            List<KeyValuePair<RPOperation, string>> kvps = new List<KeyValuePair<RPOperation, string>>();
+            if (args == null)
+                return kvps;
+
+            foreach (var arg in args)
+            {
+                var split = arg.Split(_OpSplitChars, StringSplitOptions.RemoveEmptyEntries);
+                if (split.Length != 2)
+                    continue;
+                var key = split[0];
+                RPOperation op = split[0] switch
+                {
+                    "tag" => RPOperation.Tag,
+                    "!tag" => RPOperation.NotTag,
+                    "zero" => RPOperation.Zero,
+                    _ => RPOperation.NotZero
+                };
+                kvps.Add(new KeyValuePair<RPOperation, string>(op, split[1]));
+            }
+            return kvps;
+        }
+
+        private static bool CheckOperationsProcess(PartData hull, RPOperation op, string arg)
+        {
+            // ignore techvar for now
+            switch (op)
+            {
+                case RPOperation.Tag:
+                    return hull.paramx.ContainsKey(arg);
+                default:
+                    return !hull.paramx.ContainsKey(arg);
+            }
+        }
+
+        public static bool CheckOperations(PartData hull, RandPart rp, out string vars)
+        {
+            var varsOr = string.Empty;
+            var varsAnd = string.Empty;
+            rp.paramx.TryGetValue("or", out var ors);
+            var orOps = CheckOperationsGetArgs(ors);
+            rp.paramx.TryGetValue("and", out var ands);
+            var andOps = CheckOperationsGetArgs(ands);
+
+            foreach (var op in orOps)
+            {
+                if (op.Key > RPOperation.NotTag)
+                {
+                    if (varsOr == string.Empty)
+                        varsOr = "Or vars:";
+                    if (op.Key == RPOperation.Zero)
+                        varsOr += " " + op.Value + "=0";
+                    else
+                        varsOr += " " + op.Value + "!=0";
+                }
+            }
+            foreach (var op in andOps)
+            {
+                if (op.Key > RPOperation.NotTag)
+                {
+                    if (varsAnd == string.Empty)
+                        varsAnd = "And vars:";
+                    if (op.Key == RPOperation.Zero)
+                        varsAnd += " " + op.Value + "=0";
+                    else
+                        varsAnd += " " + op.Value + "!=0";
+                }
+            }
+            vars = varsOr + ((varsOr != string.Empty && varsAnd != string.Empty) ? " / " : string.Empty) + varsAnd;
+
+            bool ok = orOps.Count == 0;
+            foreach (var op in orOps)
+            {
+                if (CheckOperationsProcess(hull, op.Key, op.Value))
+                {
+                    ok = true;
+                    break;
+                }
+            }
+            if (!ok || andOps.Count == 0)
+                return ok;
+
+            foreach (var op in andOps)
+            {
+                if (!CheckOperationsProcess(hull, op.Key, op.Value))
+                {
+                    ok = false;
+                    break;
+                }
+            }
+            return ok;
         }
     }
 }
