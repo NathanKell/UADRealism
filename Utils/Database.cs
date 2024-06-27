@@ -1,10 +1,13 @@
-﻿using System;
+﻿//#define LOGGUNYEARS
+using System;
 using System.Collections.Generic;
 using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 
+#pragma warning disable CS8600
+#pragma warning disable CS8601
 #pragma warning disable CS8603
 
 namespace UADRealism
@@ -30,13 +33,28 @@ namespace UADRealism
                     switch (kvpE.Key)
                     {
                         case "unlock":
-                        case "unlockpart":
                             foreach (var effList in kvpE.Value)
                             {
                                 foreach (var v in effList)
                                 {
                                     if (G.GameData.parts.TryGetValue(v, out var pData))
                                     {
+                                        //Melon<UADRealismMod>.Logger.Msg($"Part {pData.name} needs tech {kvpT.key} of year {kvpT.Value.year}");
+                                        _PartTechs[pData.name] = kvpT.Key;
+                                        _PartYears[pData.name] = kvpT.Value.year;
+                                    }
+                                }
+                            }
+                            break;
+                        case "unlockpart":
+                            foreach (var effList in kvpE.Value)
+                            {
+                                foreach (var v in effList)
+                                {
+                                    foreach (var pData in G.GameData.parts.Values)
+                                    {
+                                        if (pData.NeedUnlock != v)
+                                            continue;
                                         //Melon<UADRealismMod>.Logger.Msg($"Part {pData.name} needs tech {kvpT.key} of year {kvpT.Value.year}");
                                         _PartTechs[pData.name] = kvpT.Key;
                                         _PartYears[pData.name] = kvpT.Value.year;
@@ -187,6 +205,53 @@ namespace UADRealism
 
                 _PartToHulls.Add(part.name, possibleHulls);
             }
+
+            // Pass 3: Catch any parts that have missing years
+            foreach (var pData in G.GameData.parts.Values)
+            {
+                if (_PartTechs.ContainsKey(pData.name) || pData.isHull)
+                    continue;
+
+                // Find the earliest hull that can mount this part
+                if (!_PartToHulls.TryGetValue(pData.name, out var set))
+                    continue;
+
+                int earliest = int.MaxValue;
+                string tech = string.Empty;
+                foreach (var h in set)
+                {
+                    if (!_PartYears.TryGetValue(h, out var year))
+                        continue;
+                    if (earliest > year && _PartTechs.TryGetValue(h, out tech))
+                        earliest = year;
+                        
+                }
+                if (earliest == int.MaxValue)
+                    continue;
+                _PartTechs[pData.name] = tech;
+                _PartYears[pData.name] = earliest;
+            }
+
+#if LOGGUNYEARS
+            string gunLogStr = "Gun data:\nCal |  G1  |  G2  |  G3  |  G4  |  G1  |";
+            for (int c = 2; c < 21; ++c)
+            {
+                //gunLogStr += $"\n{c}:";
+                //if (_GunGradeTechs[c, 1] != null && G.GameData.technologies.TryGetValue(_GunGradeTechs[c, 1], out var tech) && !tech.effects.ContainsKey("start"))
+                //    gunLogStr += $" {_GunGradeYears[c, 1]}: {_GunGradeTechs[c, 1]}";
+
+                //for (int g = 2; g < 6; ++g)
+                //    gunLogStr += $"\n Grade {g}: {_GunGradeYears[c, g]}: {_GunGradeTechs[c, g]}";
+                gunLogStr += $"\n{(c < 10 ? " " : string.Empty)}{c}:";
+                for (int g = 1; g < 6; ++g)
+                    if (_GunGradeTechs[c, g] != null && G.GameData.technologies.TryGetValue(_GunGradeTechs[c, g], out var tech) && tech.effects.ContainsKey("start"))
+                        gunLogStr += " | ----";
+                    else
+                        gunLogStr += " | " + _GunGradeYears[c, g];
+                gunLogStr += " |";
+            }
+            Melon<UADRealismMod>.Logger.Msg(gunLogStr);
+#endif
         }
 
         public static void FillDatabase()
