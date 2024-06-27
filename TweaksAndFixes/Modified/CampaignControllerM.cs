@@ -84,7 +84,7 @@ namespace TweaksAndFixes
                         continue;
                 }
                 float techVal = TechMatchRatio(ship, player);
-                Melon<TweaksAndFixes>.Logger.Error($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
+                Melon<TweaksAndFixes>.Logger.Msg($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
                 if (checkTech && techVal < 0f)
                     continue;
                 techCoverage[i] = techVal;
@@ -92,12 +92,18 @@ namespace TweaksAndFixes
                 ship.Erase();
             }
             List<int> indices = new List<int>();
+            List<int> indicesMed = new List<int>();
             List<int> indicesLow = new List<int>();
             for (int i = 0; i < techCoverage.Count; ++i)
                 if (techCoverage[i] > 0.9f)
                     indices.Add(i);
                 else if (techCoverage[i] > 0.75f)
+                    indicesMed.Add(i);
+                else if (techCoverage[i] > 0.5f)
                     indicesLow.Add(i);
+
+            if (indices.Count == 0)
+                indices = indicesMed;
 
             if (indices.Count == 0)
                 indices = indicesLow;
@@ -105,12 +111,13 @@ namespace TweaksAndFixes
             if (indices.Count == 0)
                 return null;
 
-            Melon<TweaksAndFixes>.Logger.Error($"Choosing from {indices.Count} choices");
+            Melon<TweaksAndFixes>.Logger.Msg($"Choosing from {indices.Count} choices");
             int idx = indices[ModUtils.Range(0, indices.Count - 1)];
             var shipRet = Ship.Create(null, null, false, false, false);
             var guidRet = new Il2CppSystem.Nullable<Il2CppSystem.Guid>();
             if (!shipRet.FromStore(newerShips[idx], guidRet, null, null, false))
             {
+                Melon<TweaksAndFixes>.Logger.Error($"Couldn't load {newerShips[idx].vesselName} ({newerShips[idx].hullName}, {newerShips[idx].YearCreated})");
                 shipRet.Erase();
                 return null;
             }
@@ -252,7 +259,7 @@ namespace TweaksAndFixes
                 if (p.data.isTorpedo && torpedoTubes < bar)
                     torpedoTubes = bar;
             }
-
+            Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: torps {torpedoTubes}");
             // Kinda slow, but eh.
             foreach (var c in G.GameData.components.Values)
                 if (design.IsComponentAvailable(c))
@@ -270,11 +277,13 @@ namespace TweaksAndFixes
                     ++_TechRelevanceCountsPlayer[(int)rel];
                 }
             }
+            Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: Found {_TechsPlayer.Count} player techs, {design.techs} ship techs");
 
             foreach (var tech in design.techs)
             {
                 var rel = GetTechRelevance(design, tech, true, _CompTypes, torpedoTubes);
-                ++_TechRelevanceCountsPlayer[(int)rel];
+                Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: tech {tech.name} has relevance {rel}");
+                ++_TechRelevanceCountsShip[(int)rel];
                 if (rel == TechRelevance.Required && !_TechsPlayer.Contains(tech))
                     return -1f;
             }
