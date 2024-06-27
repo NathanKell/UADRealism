@@ -267,10 +267,6 @@ namespace TweaksAndFixes
                 }
             }
 
-            var hullTech = Database.GetPartTech(design.hull.data);
-            if (G.GameData.technologies.TryGetValue(hullTech, out var htd) && !_TechsPlayer.Contains(htd))
-                return -1f;
-
             foreach (var tech in design.techs)
             {
                 var rel = GetTechRelevance(design, tech, true, _CompTypes, torpedoTubes);
