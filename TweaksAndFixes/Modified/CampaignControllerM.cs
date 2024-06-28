@@ -277,7 +277,7 @@ namespace TweaksAndFixes
                     ++_TechRelevanceCountsPlayer[(int)rel];
                 }
             }
-            Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: Found {_TechsPlayer.Count} player techs, {design.techs} ship techs");
+            Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: Found {_TechsPlayer.Count} player techs, {design.techs.Count} ship techs");
 
             foreach (var tech in design.techs)
             {
