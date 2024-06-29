@@ -16,7 +16,7 @@ using MelonLoader;
 [assembly: AssemblyCulture("")]
 
 [assembly: MelonGame("Game Labs", "Ultimate Admiral Dreadnoughts")]
-[assembly: MelonInfo(typeof(UADRealism.UADRealismMod), "UADRealism", "0.2.0.0", "NathanKell")]
+[assembly: MelonInfo(typeof(UADRealism.UADRealismMod), "UADRealism", "3.0.0", "NathanKell")]
 
 // Setting ComVisible to false makes the types in this assembly not visible
 // to COM components.  If you need to access a type in this assembly from

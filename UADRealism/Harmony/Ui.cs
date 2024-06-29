@@ -5,6 +5,7 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 using UnityEngine.UI;
+using static TweaksAndFixes.ModUtils;
 
 #pragma warning disable CS8604
 #pragma warning disable CS8625

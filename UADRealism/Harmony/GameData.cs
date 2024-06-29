@@ -20,8 +20,6 @@ namespace UADRealism
 
             // Make actual changes to NAR
             NARChanges(__instance);
-
-            Database.FillDatabase();
         }
 
         private static void FixForNewSystems(GameData __instance)

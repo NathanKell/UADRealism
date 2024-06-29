@@ -5,12 +5,9 @@
 
 using System;
 using System.Collections.Generic;
-using MelonLoader;
-using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
-using System.Reflection;
-using System.Text.RegularExpressions;
+using TweaksAndFixes;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8602

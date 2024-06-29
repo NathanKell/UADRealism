@@ -14,6 +14,13 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Postfix_PostProcessAll(GameData __instance)
         {
+            // Run after other things have a chance to update GameData
+            MelonCoroutines.Start(FillDatabase());
+        }
+
+        internal static System.Collections.IEnumerator FillDatabase()
+        {
+            yield return new WaitForEndOfFrame();
             Database.FillDatabase();
             Melon<TweaksAndFixes>.Logger.Msg("Loaded database");
         }

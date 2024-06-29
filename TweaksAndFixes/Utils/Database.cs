@@ -24,6 +24,21 @@ namespace TweaksAndFixes
         private static readonly Dictionary<string, HashSet<string>> _PartToHulls = new Dictionary<string, HashSet<string>>();
         private static readonly List<string> _AllHulls = new List<string>();
 
+        public static void FillDatabase()
+        {
+            _PartYears.Clear();
+            _PartTechs.Clear();
+            _TechParts.Clear();
+            _ComponentTechs.Clear();
+            _ComponentYears.Clear();
+            _ParamToHulls.Clear();
+            _PartToHulls.Clear();
+            _AllHulls.Clear();
+
+            FillTechData();
+            FillPartDatabase();
+        }
+
         private static void FillTechData()
         {
             foreach (var kvpT in G.GameData.technologies)
@@ -243,12 +258,6 @@ namespace TweaksAndFixes
                 _PartTechs[pData.name] = tech;
                 _PartYears[pData.name] = earliest;
             }
-        }
-
-        public static void FillDatabase()
-        {
-            FillTechData();
-            FillPartDatabase();
         }
 
         public static int GetYear(PartData data)

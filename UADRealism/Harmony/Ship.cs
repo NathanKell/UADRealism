@@ -4,6 +4,7 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using TweaksAndFixes;
 
 #pragma warning disable CS8603
 #pragma warning disable CS8604

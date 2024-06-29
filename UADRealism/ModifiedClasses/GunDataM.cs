@@ -9,6 +9,7 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using TweaksAndFixes;
 
 #pragma warning disable CS8601
 #pragma warning disable CS8602
