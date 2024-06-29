@@ -522,9 +522,9 @@ namespace UADRealism
         {
             foreach (var comp in G.GameData.components.Values)
             {
-                if (Ui.NeedComponentsActive(ct, comp, _ship, true, false))
+                if (_ship.IsComponentAvailable(comp, out _) && Ui.NeedComponentsActive(ct, comp, _ship, true, false))
                 {
-                    _CompWeights[comp] = comp.weight;
+                    _CompWeights[comp] = TweaksAndFixes.ComponentDataM.GetWeight(comp, _sType);
                 }
             }
             if (_CompWeights.Count == 0)
