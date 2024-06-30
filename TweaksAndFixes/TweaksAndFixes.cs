@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEngine;
 
 [assembly: MelonGame("Game Labs", "Ultimate Admiral Dreadnoughts")]
-[assembly: MelonInfo(typeof(TweaksAndFixes.TweaksAndFixes), "TweaksAndFixes", "1.1.0", "NathanKell")]
+[assembly: MelonInfo(typeof(TweaksAndFixes.TweaksAndFixes), "TweaksAndFixes", "1.2.0", "NathanKell")]
 [assembly: MelonColor(255, 220, 220, 0)]
 namespace TweaksAndFixes
 {
