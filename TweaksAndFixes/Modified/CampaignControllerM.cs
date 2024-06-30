@@ -83,10 +83,23 @@ namespace TweaksAndFixes
                     if (!PlayerController.Instance.CanBuildShipsFromDesign(ship, out _))
                         continue;
                 }
-                float techVal = TechMatchRatio(ship, player);
+                float techVal;
+                if (checkTech)
+                {
+                    techVal = TechMatchRatio(ship, player);
+                }
+                else
+                {
+                    // until checking further whether tech will be reliable, don't trust tech commonality in this case
+                    float yearDelta = Mathf.Abs(year - newerShips[i].YearCreated);
+                    yearDelta += 1f;
+                    yearDelta *= yearDelta;
+                    techVal = 1f / (1f + yearDelta * 0.018f);
+                }
                 Melon<TweaksAndFixes>.Logger.Msg($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
-                if (checkTech && techVal < 0f)
+                if (techVal < 0f)
                     continue;
+
                 techCoverage[i] = techVal;
 
                 ship.Erase();
