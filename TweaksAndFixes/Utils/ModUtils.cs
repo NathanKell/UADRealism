@@ -322,8 +322,8 @@ namespace TweaksAndFixes
             return default(T);
         }
 
-        private static List<int> _ShuffleIndices = new List<int>();
-        private static List<int> _ShuffleRemainingOptions = new List<int>();
+        private readonly static List<int> _ShuffleIndices = new List<int>();
+        private readonly static List<int> _ShuffleRemainingOptions = new List<int>();
         public static void Shuffle<T>(this List<T> list)
         {
             int iC = list.Count;
