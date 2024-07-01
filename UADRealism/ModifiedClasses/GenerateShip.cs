@@ -82,7 +82,7 @@ namespace UADRealism
         {
             public GunCal _cal;
             public GunAlign _align;
-            public HashSet<PartData> _datas = new HashSet<PartData>();
+            public HashSet<int> _calInchOptions = new HashSet<int>();
             public List<RandPartOperation> _rps = new List<RandPartOperation>();
             public float _caliber;
             public float _length;
@@ -722,44 +722,8 @@ namespace UADRealism
             }
         }
 
-        private static readonly HashSet<PartData> _TempPartDataSet = new HashSet<PartData>();
-        private static readonly List<GunInfo> _TempGunInfos = new List<GunInfo>();
-        private void HandleGunRP(RandPartOperation rpo)
+        private GunCal GunCaliberFromRP(RandPart rp)
         {
-            _TempPartDataSet.Clear();
-
-            var rp = rpo._rp;
-            var parts = _ship.GetParts(rp, _this.limitCaliber);
-            foreach (var p in parts)
-                if (!_ship.badData.Contains(p))
-                    _TempPartDataSet.Add(p);
-
-            if (rp.group != string.Empty && _gunInfosByGroup.TryGetValue(rp.group, out var foundGI))
-            {
-                if (rp.center != rp.side)
-                {
-                    if (foundGI._align == (rp.side ? GunAlign.Center : GunAlign.Side))
-                        foundGI._align = GunAlign.Both;
-                }
-                else
-                {
-                    if (foundGI._align != GunAlign.Both)
-                        foundGI._align = GunAlign.Both;
-                }
-                // Do this in reverse so if we end up with no options,
-                // we don't commit.
-                _TempPartDataSet.IntersectWith(foundGI._datas);
-                if (_TempPartDataSet.Count > 0)
-                {
-                    foundGI._datas.Clear();
-                    foreach (var p in _TempPartDataSet)
-                        foundGI._datas.Add(p);
-                }
-                foundGI._rps.Add(rpo);
-                _gunInfosByRPO[rpo] = foundGI;
-                return;
-            }
-
             GunCal cal = GunCal.Main;
             if (rp.condition.Contains("main"))
                 cal = GunCal.Main;
@@ -773,17 +737,68 @@ namespace UADRealism
                 cal = GunCal.Sec;
             else if (rp.effect.Contains("tert") || rp.group.Contains("ter") || rp.group.Contains("tg"))
                 cal = GunCal.Ter;
-            else if (rp.effect.Contains("small"))
-                cal = GunCal.Sec;
+
+            return cal;
+        }
+
+        private static readonly HashSet<int> _TempCalSet = new HashSet<int>();
+        private static readonly List<GunInfo> _TempGunInfos = new List<GunInfo>();
+        private void HandleGunRP(RandPartOperation rpo)
+        {
+            _TempCalSet.Clear();
+
+            var rp = rpo._rp;
+            var parts = _ship.GetParts(rp, _this.limitCaliber);
+            var refType = GunRef.None;
+            foreach (var p in parts)
+            {
+                if (_ship.badData.Contains(p))
+                    continue;
+
+                _TempCalSet.Add(Mathf.RoundToInt(p.caliber * (1f / 25.4f)));
+                refType |= GunReferenceType(p, rp);
+            }
+
+            if (rp.group != string.Empty && _gunInfosByGroup.TryGetValue(rp.group, out var foundGI))
+            {
+                if (rp.center != rp.side)
+                {
+                    if (foundGI._align == (rp.side ? GunAlign.Center : GunAlign.Side))
+                        foundGI._align = GunAlign.Both;
+                }
+                else
+                {
+                    if (foundGI._align != GunAlign.Both)
+                        foundGI._align = GunAlign.Both;
+                }
+
+                // Do this in reverse so if we end up with no options,
+                // we don't commit.
+                _TempCalSet.IntersectWith(foundGI._calInchOptions);
+                if (_TempCalSet.Count > 0)
+                {
+                    foundGI._reference |= refType;
+                    foundGI._calInchOptions.Clear();
+                    foreach (var c in _TempCalSet)
+                        foundGI._calInchOptions.Add(c);
+                }
+                foundGI._rps.Add(rpo);
+                _gunInfosByRPO[rpo] = foundGI;
+                return;
+            }
+
+            GunCal cal = GunCaliberFromRP(rp);
 
             GunAlign align = rp.center == rp.side ? GunAlign.Both : (rp.center ? GunAlign.Center : GunAlign.Side);
 
             foreach (var gi in _gunInfos)
             {
-                if (gi._cal == cal && _TempPartDataSet.SetEquals(gi._datas))
+                if (gi._cal == cal
+                    && (_TempCalSet.SetEquals(gi._calInchOptions) || (gi._reference != GunRef.None && refType != GunRef.None)))
                 {
                     if (gi._align != align)
                         gi._align = GunAlign.Both;
+                    gi._reference |= refType;
 
                     gi._rps.Add(rpo);
                     _gunInfosByRPO[rpo] = gi;
@@ -796,8 +811,9 @@ namespace UADRealism
             var newGI = new GunInfo();
             newGI._cal = cal;
             newGI._align = align;
-            foreach (var p in _TempPartDataSet)
-                newGI._datas.Add(p);
+            newGI._reference = refType;
+            foreach (var c in _TempCalSet)
+                newGI._calInchOptions.Add(c);
             newGI._rps.Add(rpo);
             _gunInfosByRPO[rpo] = newGI;
             if (rp.group != string.Empty)
@@ -853,8 +869,6 @@ namespace UADRealism
             }
         }
 
-        private static readonly List<RandPartOperation> _KeysRPO = new List<RandPartOperation>();
-        private static readonly List<string> _KeysString = new List<string>();
         private void MergeCaliber(GunCal cal, int limit)
         {
             if (limit == 0)
@@ -865,29 +879,13 @@ namespace UADRealism
                     if (gi._cal != cal)
                         continue;
 
-                    _TempGunInfos.Add(gi);
+                    foreach (var rpo in gi._rps)
+                    {
+                        _gunInfosByRPO.Remove(rpo);
+                        _gunInfosByGroup.Remove(rpo._rp.group);
+                    }
                     _gunInfos.RemoveAt(i);
                 }
-
-                foreach (var kvp in _gunInfosByRPO)
-                {
-                    if (_TempGunInfos.Contains(kvp.Value))
-                        _KeysRPO.Add(kvp.Key);
-                }
-                foreach (var rpo in _KeysRPO)
-                    _gunInfosByRPO.Remove(rpo);
-
-                foreach (var kvp in _gunInfosByGroup)
-                {
-                    if (_TempGunInfos.Contains(kvp.Value))
-                        _KeysString.Add(kvp.Key);
-                }
-                foreach (var s in _KeysString)
-                    _gunInfosByGroup.Remove(s);
-
-                _TempGunInfos.Clear();
-                _KeysRPO.Clear();
-                _KeysString.Clear();
 
                 return;
             }
@@ -906,17 +904,23 @@ namespace UADRealism
                     _TempGunInfos.Add(gi);
                     continue;
                 }
+                _gunInfos.RemoveAt(i);
+                --i; // will be incremented by for loop
 
                 GunInfo target = null;
                 bool intersect = true;
+                // We could see which intersection leaves a larger set
+                // but at most there will be 2 of these, so let's just
+                // shuffle.
+                _TempGunInfos.Shuffle();
                 foreach (var ogi in _TempGunInfos)
                 {
-                    _TempPartDataSet.Clear();
-                    foreach (var p in gi._datas)
-                        _TempPartDataSet.Add(p);
+                    _TempCalSet.Clear();
+                    foreach (var p in gi._calInchOptions)
+                        _TempCalSet.Add(p);
 
-                    _TempPartDataSet.IntersectWith(ogi._datas);
-                    if (_TempPartDataSet.Count > 0)
+                    _TempCalSet.IntersectWith(ogi._calInchOptions);
+                    if (_TempCalSet.Count > 0)
                     {
                         target = ogi;
                         break;
@@ -925,12 +929,31 @@ namespace UADRealism
                 if (target == null)
                 {
                     intersect = false;
+                    target = _TempGunInfos.Random(null, _this.__8__1.rnd);
+                }
+                if (intersect)
+                {
+                    target._calInchOptions.IntersectWith(gi._calInchOptions);
+                }
+                // FIXME: what to do in the else case?
+
+                if (target._align != gi._align)
+                    target._align = GunAlign.Both;
+                target._reference |= gi._reference;
+
+
+                foreach (var rpo in gi._rps)
+                {
+                    target._rps.Add(rpo);
+                    _gunInfosByRPO[rpo] = target;
+                    if (rpo._rp.group != string.Empty)
+                        _gunInfosByGroup[rpo._rp.group] = target;
                 }
             }
             _TempGunInfos.Clear();
         }
 
-        private GunRef ReferenceType(PartData data, RandPart rp)
+        private GunRef GunReferenceType(PartData data, RandPart rp)
         {
             var ret = GunRef.None;
             if (rp.group == "mc" || data.paramx.ContainsKey("main_center") || data.paramx.ContainsKey("small_center"))
@@ -990,7 +1013,7 @@ namespace UADRealism
                         _partDataForGroup[rp.group] = rpo._data;
 
                     // Store the ref away so we can keep main and side gun calibers in sync
-                    var refType = ReferenceType(rpo._data, rp);
+                    var refType = GunReferenceType(rpo._data, rp);
                     if ((refType & GunRef.Center) != 0)
                         _gunCenterRefs.Add(rpo._data);
                     if ((refType & GunRef.Side) != 0)
@@ -1334,7 +1357,7 @@ namespace UADRealism
                     _ship.AddShipTurretArmor(part);
 
                     // Store the ref away so we can keep main and side gun calibers in sync
-                    var refType = ReferenceType(data, rp);
+                    var refType = GunReferenceType(data, rp);
                     if ((refType & GunRef.Center) != 0)
                         _gunCenterRefs.Add(data);
                     if ((refType & GunRef.Side) != 0)
