@@ -79,9 +79,15 @@ namespace TweaksAndFixes
                 if (!isEarlySavedShip)
                 {
                     if (PlayerController.Instance == null)
+                    {
+                        ship.Erase();
                         continue;
+                    }
                     if (!PlayerController.Instance.CanBuildShipsFromDesign(ship, out _))
+                    {
+                        ship.Erase();
                         continue;
+                    }
                 }
                 float techVal;
                 if (checkTech)
@@ -98,7 +104,10 @@ namespace TweaksAndFixes
                 }
                 Melon<TweaksAndFixes>.Logger.Msg($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
                 if (techVal < 0f)
+                {
+                    ship.Erase();
                     continue;
+                }
 
                 techCoverage[i] = techVal;
 
