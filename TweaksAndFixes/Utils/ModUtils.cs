@@ -231,6 +231,9 @@ namespace TweaksAndFixes
 
         public static int Range(int minInclusive, int maxInclusive, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
         {
+            if (minInclusive == maxInclusive)
+                return minInclusive;
+
             if (nativeRnd != null)
                 return (int)(nativeRnd.NextDouble() * (maxInclusive - minInclusive + 1)) + minInclusive;
 

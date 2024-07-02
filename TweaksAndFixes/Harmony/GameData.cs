@@ -49,6 +49,14 @@ namespace TweaksAndFixes
                 fixKeys.Clear();
             }
 
+            foreach (var data in __instance.parts.Values)
+            {
+                if (!data.isGun)
+                    continue;
+
+                data.GetCaliberInch();
+            }
+
             // Run after other things have a chance to update GameData
             MelonCoroutines.Start(FillDatabase());
         }
