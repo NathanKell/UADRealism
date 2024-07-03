@@ -102,6 +102,9 @@ namespace UADRealism
                 else
                     kvp.Value.armorMin *= 0.5f;
 
+                if (kvp.Key == "tb")
+                    kvp.Value.mainTo = 3;
+
                 if (kvp.Key != "ic")
                     kvp.Value.speedMin -= 2f;
             }
@@ -174,6 +177,14 @@ namespace UADRealism
             foreach (var kvp in __instance.technologies)
             {
                 var tech = kvp.Value;
+                if (!tech.effects.ContainsKey("start") && tech.effects.TryGetValue("var", out var varLst))
+                {
+                    foreach (var sub in varLst)
+                    {
+                        if (sub.Count > 1 && sub[0] == "use_main_side_guns")
+                            sub[1] = "1";
+                    }
+                }
                 if (tech.name.StartsWith("torpedo_size_") && tech.name != "torpedo_size_end")
                 {
                     int idx = int.Parse(tech.name.Replace("torpedo_size_", string.Empty));

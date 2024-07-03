@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Il2Cpp;
 using TweaksAndFixes;
+using UADRealism.Data;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8602
@@ -54,7 +55,7 @@ namespace UADRealism
 
         HashSet<string> _seenCompTypes = new HashSet<string>();
 
-        enum GunCal
+        public enum GunCal
         {
             Main,
             Sec,
@@ -62,7 +63,7 @@ namespace UADRealism
 
             COUNT
         }
-        enum GunAlign
+        public enum GunAlign
         {
             Center,
             Side,
@@ -84,8 +85,8 @@ namespace UADRealism
             public GunAlign _align;
             public HashSet<int> _calInchOptions = new HashSet<int>();
             public List<RandPartOperation> _rps = new List<RandPartOperation>();
-            public float _caliber;
-            public float _length;
+            public float _caliber = -1f;
+            public float _length = -1f;
             public PartData _mainData = null;
             public GunRef _reference;
         }
@@ -794,7 +795,8 @@ namespace UADRealism
             foreach (var gi in _gunInfos)
             {
                 if (gi._cal == cal
-                    && (_TempCalSet.SetEquals(gi._calInchOptions) || (gi._reference != GunRef.None && refType != GunRef.None)))
+                    && (_TempCalSet.SetEquals(gi._calInchOptions)))
+                    //|| (gi._reference != GunRef.None && refType != GunRef.None)))
                 {
                     if (gi._align != align)
                         gi._align = GunAlign.Both;
@@ -819,9 +821,10 @@ namespace UADRealism
             if (rp.group != string.Empty)
                 _gunInfosByGroup[rp.group] = newGI;
             _gunInfos.Add(newGI);
+            ++_CalCounts[(int)newGI._cal];
         }
 
-        private void MergeGunInfos()
+        private void SetupGunInfos()
         {
             for (int i = 0; i < _CalCounts.Length; ++i)
             {
@@ -834,6 +837,7 @@ namespace UADRealism
             {
                 case "tb":
                     _CalLimits[(int)GunCal.Main] = 2;
+                    _CalLimits[(int)GunCal.Sec] = 0;
                     _CalLimits[(int)GunCal.Ter] = 0;
                     break;
 
@@ -843,19 +847,39 @@ namespace UADRealism
 
                 case "ca":
                     if (_hullYear < 1915)
-                        _CalLimits[(int)GunCal.Main] = 2;
+                    {
+                        // Armored cruiser. Generally:
+                        // 2 main turrets, sidemounted semi-main, casemate sec, ATB guns
+                        // The semi-main could either be main or sec.
+                        if (_CalCounts[(int)GunCal.Main] > 1)
+                        {
+                            if (_CalCounts[(int)GunCal.Sec] <= 1)
+                                _CalLimits[(int)GunCal.Main] = 2;
+                        }
+                        else if (_CalCounts[(int)GunCal.Sec] > 1)
+                        {
+                            if (_CalCounts[(int)GunCal.Main] == 1)
+                                _CalLimits[(int)GunCal.Sec] = 2;
+                        }
+                    }
                     break;
 
                 case "bb":
-                    if (_hullYear < 1905)
+                    if (!_ship.hull.name.StartsWith("bb"))
+                    {
                         _CalLimits[(int)GunCal.Sec] = 2;
+                        if (_ship.TechVar("use_main_side_guns") == 0f && _gunInfosByGroup.ContainsKey("ms") && (_gunInfosByGroup.ContainsKey("mg") || _gunInfosByGroup.ContainsKey("mc")))
+                            _CalLimits[(int)GunCal.Main] = 2;
+                    }
                     break;
             }
+        }
 
+        private void MergeGunInfos()
+        {
             foreach (var gi in _gunInfos)
             {
                 int idx = (int)gi._cal;
-                _CalCounts[idx] += 1;
                 if (_CalCounts[idx] > _CalLimits[idx])
                     _CalMerge[idx] = true;
             }
@@ -882,6 +906,9 @@ namespace UADRealism
                     foreach (var rpo in gi._rps)
                     {
                         _gunInfosByRPO.Remove(rpo);
+                        // This is safe because, even if there are other
+                        // guninfos of this group, since they all share
+                        // their caliber, they will all be removed.
                         _gunInfosByGroup.Remove(rpo._rp.group);
                     }
                     _gunInfos.RemoveAt(i);
@@ -891,21 +918,25 @@ namespace UADRealism
             }
 
             int total = 0;
-
-            for (int i = 0; i < _gunInfos.Count; ++i)
+            int firstGunToRemove;
+            for (firstGunToRemove = 0; firstGunToRemove < _gunInfos.Count; ++firstGunToRemove)
             {
-                var gi = _gunInfos[i];
+                var gi = _gunInfos[firstGunToRemove];
                 if (gi._cal != cal)
                     continue;
 
-                if (total < limit)
-                {
-                    ++total;
-                    _TempGunInfos.Add(gi);
-                    continue;
-                }
+                if (total == limit)
+                    break;
+
+                ++total;
+                _TempGunInfos.Add(gi);
+            }
+            --firstGunToRemove;
+
+            for(int i = _gunInfos.Count - 1; i > firstGunToRemove; --i)
+            {
+                var gi = _gunInfos[i];
                 _gunInfos.RemoveAt(i);
-                --i; // will be incremented by for loop
 
                 GunInfo target = null;
                 bool intersect = true;
@@ -936,6 +967,8 @@ namespace UADRealism
                     target._calInchOptions.IntersectWith(gi._calInchOptions);
                 }
                 // FIXME: what to do in the else case?
+                // For now, just drop this set on the floor and use the
+                // original set.
 
                 if (target._align != gi._align)
                     target._align = GunAlign.Both;
@@ -966,6 +999,7 @@ namespace UADRealism
 
         public bool SelectParts()
         {
+            SetupGunInfos();
             FillSelectedRandParts();
             MergeGunInfos();
 
@@ -979,7 +1013,6 @@ namespace UADRealism
             {
                 if (rpo._isNormal)
                     break;
-
 
                 if (!TryAddPartsForRandPart(rpo._rp, rpo._desiredNum))
                     return false;
@@ -998,15 +1031,27 @@ namespace UADRealism
 
             _armStopWeight = _ship.Weight() + armamentTonnage;
 
+            List<Part> addedParts = new List<Part>();
             for (int pass = 0; pass < 50; ++pass)
             {
                 foreach (var rpo in _selectedRandParts)
                 {
-                    if (rpo._isDelete || !rpo._isNormal)
-                        continue;
-
                     var rp = rpo._rp;
 
+                    if (rpo._isDelete)
+                    {
+                        if (_this._isRefitMode_5__2)
+                            _ship.RemoveDeleteRefitPartsNew(rp.type, _this.isSimpleRefit);
+                        else
+                            _ship.DeleteUnmounted(rp.type);
+                        continue;
+                    }
+
+                    if (rp.type == "gun")
+                    {
+                        var gi = _gunInfosByRPO[rpo];
+
+                    }
 
 
                     if (rp.group != string.Empty)

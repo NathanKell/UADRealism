@@ -2,7 +2,9 @@
 using Il2Cpp;
 using UnityEngine;
 using TweaksAndFixes;
-using Il2CppSystem.Linq.Expressions.Interpreter;
+
+#pragma warning disable CS8603
+#pragma warning disable CS8625
 
 namespace UADRealism.Data
 {
@@ -171,6 +173,90 @@ namespace UADRealism.Data
                     }
                 }
             }
+        }
+
+        private struct GradeInfo
+        {
+            public int _calInch;
+            public int _grade;
+            public List<GunInfo> _infos;
+        }
+
+        private static readonly List<GradeInfo> _TempGradeInfo = new List<GradeInfo>();
+        private static readonly int[] _TempGunGrades = new int[21];
+        public static GunInfo GetInfoForOptions(Ship ship, GenerateShip.GunCal cal, HashSet<int> calOptions, int numInCal, GunInfo existing = null)
+        {
+            if (!_NationGunInfos.TryGetValue(ship.player.data.name, out var gunArr))
+                return null;
+
+            int calStart, calEnd;
+            switch (cal)
+            {
+                case GenerateShip.GunCal.Sec:
+                    calStart = (int)ship.shipType.secFrom;
+                    calEnd = (int)ship.shipType.secTo;
+                    break;
+                case GenerateShip.GunCal.Ter:
+                    calStart = (int)ship.shipType.secFrom;
+                    calEnd = (int)(ship.shipType.secTo * 0.5f); // this is what stock does
+                    break;
+                default:
+                    calStart = (int)ship.shipType.mainFrom;
+                    calEnd = (int)ship.shipType.mainTo;
+                    break;
+            }
+
+            int foundCalStart = int.MaxValue;
+            int foundCalEnd = int.MinValue;
+
+            bool isMonitor = false;
+            bool isVirginia = false;
+            if (ship.hull.name.StartsWith("ironclad"))
+            {
+                if (ship.hull.name == "ironclad_monitor")
+                    isMonitor = true;
+                isVirginia = !isMonitor;
+            }
+            for (int iCal = 2; iCal < 21; ++iCal)
+            {
+                _TempGunGrades[iCal] = -1;
+                if (iCal > calEnd || iCal < calStart || !calOptions.Contains(iCal))
+                    continue;
+
+                PartData example;
+                if ((isMonitor && G.GameData.parts.TryGetValue($"monitor_gun_{iCal}_x1", out example))
+                    || (isVirginia && (G.GameData.parts.TryGetValue($"virginia_casemate_{iCal}", out example) || G.GameData.parts.TryGetValue($"virginia_gun_{iCal}_x1", out example)))
+                    || G.GameData.parts.TryGetValue($"gun_{iCal}_x1", out example))
+                {
+                    int grade = ship.TechGunGrade(example);
+                    var infos = gunArr[iCal, grade];
+                    if (infos == null)
+                        continue;
+
+                    _TempGradeInfo.Add(new GradeInfo() { _calInch = iCal, _grade = grade, _infos = infos });
+                    _TempGunGrades[iCal] = grade;
+                    if (iCal > foundCalEnd)
+                        foundCalEnd = iCal;
+                    if (iCal < foundCalStart)
+                        foundCalStart = iCal;
+                }
+            }
+            if (_TempGradeInfo.Count == 0)
+                return null;
+
+            //_TempGradeInfo.Sort((a, b) => b._grade.CompareTo(a._grade));
+
+            if (cal == GenerateShip.GunCal.Main)
+            {
+                switch (ship.shipType.name)
+                {
+                    case "tb":
+
+                        break;
+                }
+            }
+
+            return null;
         }
 
         public static void FillData()

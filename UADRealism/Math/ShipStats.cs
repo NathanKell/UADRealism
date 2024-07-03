@@ -324,6 +324,16 @@ namespace UADRealism
                 string lstr = $"{data.name}:";
                 foreach (var rp in data.shipType.randParts)
                 {
+                    if (rp.paramx.ContainsKey("delete_unmounted") || rp.paramx.ContainsKey("delete_refit"))
+                    {
+                        lstr += $"\n\t{rp.name.Substring(0, rp.name.IndexOf("/"))}: {rp.type} Chance={rp.chance}, Delete.";
+                        continue;
+                    }
+                    if (rp.paramx.ContainsKey("tr_rand_mod"))
+                    {
+                        lstr += $"\n\t{rp.name.Substring(0, rp.name.IndexOf("/"))}: Chance={rp.chance}, tr_rand_mod.";
+                        continue;
+                    }
                     bool isScheme = false;
                     string scheme = string.Empty;
                     if (rp.paramx.TryGetValue("scheme", out var schemeL))
@@ -333,12 +343,12 @@ namespace UADRealism
                     }
                     if (!ShipM.CheckOperations(data, rp, out var vars))
                         continue;
-                    lstr += $"\n\t{rp.name.Substring(0, rp.name.IndexOf("/"))}: {rp.type} Chance={rp.chance}, {rp.min}-{rp.max}, P={rp.paired}, C={rp.center}, S={rp.side}, {rp.rangeZFrom:G3}/{rp.rangeZTo:G3}. G={rp.group}, E={rp.effect}, C={rp.condition}.";
+                    lstr += $"\n\t{rp.name.Substring(0, rp.name.IndexOf("/"))}: {rp.type} {rp.chance}% {rp.min}-{rp.max} P={(rp.paired ? 1 : 0)}, {(rp.side ? "S" : (rp.center ? "C" : "F"))}/{rp.rangeZFrom:G3}/{rp.rangeZTo:G3}. G={rp.group}, E={rp.effect}, C={rp.condition}.";
                     if (isScheme)
                         lstr += $" SCHEME={scheme}";
-                    lstr += " " + vars;
+                    if (vars != string.Empty)
+                        lstr += " " + vars;
                 }
-                //Melon<UADRealismMod>.Logger.Msg(lstr);
                 rpLines.Add(lstr);
 #endif
             }
