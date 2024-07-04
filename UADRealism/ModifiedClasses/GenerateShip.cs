@@ -9,6 +9,7 @@ using UnityEngine;
 using Il2Cpp;
 using TweaksAndFixes;
 using UADRealism.Data;
+using Il2CppMessagePack.Formatters;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8602
@@ -29,6 +30,7 @@ namespace UADRealism
         float _designYear;
         float _avgYear;
         string _sType;
+        string _nation;
         HullData _hData;
         float _tngLimit;
         bool _isLight;
@@ -55,6 +57,20 @@ namespace UADRealism
 
         HashSet<string> _seenCompTypes = new HashSet<string>();
 
+        class RandPartOperation
+        {
+            public RandPart _rp;
+            public bool _isDelete;
+            public int _desiredNum;
+            public PartData _data;
+            public float _zMin;
+            public float _zMax;
+            public bool _isNormal;
+            public CalInfo _calInfo;
+        }
+
+        int[] _gunGrades = new int[21];
+
         public enum GunCal
         {
             Main,
@@ -63,6 +79,7 @@ namespace UADRealism
 
             COUNT
         }
+
         public enum GunAlign
         {
             Center,
@@ -73,29 +90,40 @@ namespace UADRealism
         }
 
         [Flags]
-        enum GunRef
+        public enum GunRef
         {
             None = 0,
             Center = 1 << 0,
             Side = 1 << 1,
         }
-        class GunInfo
+        
+        class GunRP
         {
             public GunCal _cal;
             public GunAlign _align;
-            public HashSet<int> _calInchOptions = new HashSet<int>();
-            public List<RandPartOperation> _rps = new List<RandPartOperation>();
-            public float _caliber = -1f;
-            public float _length = -1f;
-            public PartData _mainData = null;
-            public GunRef _reference;
+            public List<string> _groups = new List<string>();
+            public int _countNonGroup = 0;
         }
-        Dictionary<RandPartOperation, GunInfo> _gunInfosByRPO = new Dictionary<RandPartOperation, GunInfo>();
-        Dictionary<string, GunInfo> _gunInfosByGroup = new Dictionary<string, GunInfo>();
-        List<GunInfo> _gunInfos = new List<GunInfo>();
-        readonly int[] _CalCounts = new int[(int)GunCal.COUNT];
-        readonly int[] _CalLimits = new int[(int)GunCal.COUNT];
-        readonly bool[] _CalMerge = new bool[(int)GunCal.COUNT];
+
+        public enum CalPref
+        {
+            Light,
+            Medium,
+            Heavy
+        }
+
+        public class CalInfo
+        {
+            public GunCal _cal;
+            public CalPref _pref;
+            public GunDatabase.GunInfo _info;
+
+            public CalInfo(GunCal c, CalPref p) { _cal = c; _pref = p; }
+        }
+
+        Dictionary<string, GunRP> _gunRPsByGroup = new Dictionary<string, GunRP>();
+        List<GunRP> _gunRPs = new List<GunRP>();
+        List<CalInfo> _calInfos;
 
         float _baseHullWeight;
         float _totalHullWeight;
@@ -108,6 +136,7 @@ namespace UADRealism
             _designYear = ship.GetYear(ship);
             _avgYear = (_hullYear + _designYear) * 0.5f;
             _sType = ship.shipType.name;
+            _nation = ship.player.data.name;
             _hData = ShipStats.GetData(ship);
             _tngLimit = ship.player.TonnageLimit(ship.shipType);
             _isLight = _sType == "dd" || _sType == "tb";
@@ -587,17 +616,6 @@ namespace UADRealism
             return true;
         }
 
-        private class RandPartOperation
-        {
-            public RandPart _rp;
-            public bool _isDelete;
-            public int _desiredNum;
-            public PartData _data;
-            public float _zMin;
-            public float _zMax;
-            public bool _isNormal;
-        }
-
         private static HashSet<string> _PrevTypes = new HashSet<string>();
         private bool HandleSpecialRP(RandPart rp, RandPartOperation rpo)
         {
@@ -742,49 +760,22 @@ namespace UADRealism
             return cal;
         }
 
-        private static readonly HashSet<int> _TempCalSet = new HashSet<int>();
-        private static readonly List<GunInfo> _TempGunInfos = new List<GunInfo>();
         private void HandleGunRP(RandPartOperation rpo)
         {
-            _TempCalSet.Clear();
-
             var rp = rpo._rp;
-            var parts = _ship.GetParts(rp, _this.limitCaliber);
-            var refType = GunRef.None;
-            foreach (var p in parts)
-            {
-                if (_ship.badData.Contains(p))
-                    continue;
 
-                _TempCalSet.Add(Mathf.RoundToInt(p.caliber * (1f / 25.4f)));
-                refType |= GunReferenceType(p, rp);
-            }
-
-            if (rp.group != string.Empty && _gunInfosByGroup.TryGetValue(rp.group, out var foundGI))
+            if (rp.group != string.Empty && _gunRPsByGroup.TryGetValue(rp.group, out var foundgrp))
             {
                 if (rp.center != rp.side)
                 {
-                    if (foundGI._align == (rp.side ? GunAlign.Center : GunAlign.Side))
-                        foundGI._align = GunAlign.Both;
+                    if (foundgrp._align == (rp.side ? GunAlign.Center : GunAlign.Side))
+                        foundgrp._align = GunAlign.Both;
                 }
                 else
                 {
-                    if (foundGI._align != GunAlign.Both)
-                        foundGI._align = GunAlign.Both;
+                    if (foundgrp._align != GunAlign.Both)
+                        foundgrp._align = GunAlign.Both;
                 }
-
-                // Do this in reverse so if we end up with no options,
-                // we don't commit.
-                _TempCalSet.IntersectWith(foundGI._calInchOptions);
-                if (_TempCalSet.Count > 0)
-                {
-                    foundGI._reference |= refType;
-                    foundGI._calInchOptions.Clear();
-                    foreach (var c in _TempCalSet)
-                        foundGI._calInchOptions.Add(c);
-                }
-                foundGI._rps.Add(rpo);
-                _gunInfosByRPO[rpo] = foundGI;
                 return;
             }
 
@@ -792,198 +783,357 @@ namespace UADRealism
 
             GunAlign align = rp.center == rp.side ? GunAlign.Both : (rp.center ? GunAlign.Center : GunAlign.Side);
 
-            foreach (var gi in _gunInfos)
+            foreach (var grp in _gunRPs)
             {
-                if (gi._cal == cal
-                    && (_TempCalSet.SetEquals(gi._calInchOptions)))
-                    //|| (gi._reference != GunRef.None && refType != GunRef.None)))
+                if (grp._cal == cal && grp._align == align)
                 {
-                    if (gi._align != align)
-                        gi._align = GunAlign.Both;
-                    gi._reference |= refType;
-
-                    gi._rps.Add(rpo);
-                    _gunInfosByRPO[rpo] = gi;
-                    if (rp.group != string.Empty)
-                        _gunInfosByGroup[rp.group] = gi;
+                    if (rp.group == string.Empty)
+                    {
+                        ++grp._countNonGroup;
+                    }
+                    else
+                    {
+                        grp._groups.Add(rp.group);
+                        _gunRPsByGroup[rp.group] = grp;
+                    }
                     return;
                 }
             }
 
-            var newGI = new GunInfo();
-            newGI._cal = cal;
-            newGI._align = align;
-            newGI._reference = refType;
-            foreach (var c in _TempCalSet)
-                newGI._calInchOptions.Add(c);
-            newGI._rps.Add(rpo);
-            _gunInfosByRPO[rpo] = newGI;
-            if (rp.group != string.Empty)
-                _gunInfosByGroup[rp.group] = newGI;
-            _gunInfos.Add(newGI);
-            ++_CalCounts[(int)newGI._cal];
+            var newgrp = new GunRP();
+            newgrp._cal = cal;
+            newgrp._align = align;
+
+            if (rp.group == string.Empty)
+            {
+                ++newgrp._countNonGroup;
+            }
+            else
+            {
+                _gunRPsByGroup[rp.group] = newgrp;
+                newgrp._groups.Add(rp.group);
+            }
+            _gunRPs.Add(newgrp);
+            ++_CalCounts[(int)newgrp._cal];
         }
 
-        private void SetupGunInfos()
+        private void SetupGunInfo()
         {
-            for (int i = 0; i < _CalCounts.Length; ++i)
-            {
-                _CalCounts[i] = 0;
-                _CalLimits[i] = 1;
-                _CalMerge[i] = false;
-            }
+            GunDatabase.TechGunGrades(_ship, _gunGrades);
 
             switch (_sType)
             {
-                case "tb":
-                    _CalLimits[(int)GunCal.Main] = 2;
-                    _CalLimits[(int)GunCal.Sec] = 0;
-                    _CalLimits[(int)GunCal.Ter] = 0;
-                    break;
-
-                case "dd":
-                    _CalLimits[(int)GunCal.Ter] = 0;
-                    break;
+                case "tb": _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, CalPref.Medium), new CalInfo(GunCal.Main, CalPref.Light) }; break;
+                case "dd":_calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, CalPref.Medium), new CalInfo(GunCal.Sec, CalPref.Light) }; break;
 
                 case "ca":
-                    if (_hullYear < 1915)
+                    if (_hullYear < 1905)
                     {
-                        // Armored cruiser. Generally:
-                        // 2 main turrets, sidemounted semi-main, casemate sec, ATB guns
-                        // The semi-main could either be main or sec.
-                        if (_CalCounts[(int)GunCal.Main] > 1)
+                        // Traditional armored cruiser
+                        switch (_nation)
                         {
-                            if (_CalCounts[(int)GunCal.Sec] <= 1)
-                                _CalLimits[(int)GunCal.Main] = 2;
+                            case "france":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Light),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                break;
+                            case "usa":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                break;
+                            case "japan":
+                            case "russia":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                break;
+
+                            case "austria":
+                            case "germany":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                break;
+
+                            case "italy":
+                            case "spain":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Light),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                break;
+
+                            default:
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                break;
                         }
-                        else if (_CalCounts[(int)GunCal.Sec] > 1)
+                    }
+                    else if (_hullYear < 1917)
+                    {
+                        // Late armored cruiser.
+                        // These will either have unified main armament
+                        // (Blucher) or battleship-class main guns with
+                        // heavy main-class "secondaries" (Ibuki)
+                        switch (_nation)
                         {
-                            if (_CalCounts[(int)GunCal.Main] == 1)
-                                _CalLimits[(int)GunCal.Sec] = 2;
+                            case "france":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Light),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                break;
+
+                            case "japan":
+                            case "russia":
+                            case "usa":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                break;
+
+                            case "austria":
+                            case "germany":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                break;
+
+                            case "italy":
+                            case "spain":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy) };
+                                break;
+
+                            default:
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                break;
                         }
+                    }
+                    else
+                    {
+                        // Treaty cruiser
+                        _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
                     }
                     break;
 
+                case "cl":
+                    if (_hullYear < 1916)
+                    {
+                        _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Light),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                    }
+                    else if (_hullYear < 1919)
+                    {
+                        _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium) };
+                    }
+                    else
+                    {
+                        // Treaty light cruiser
+                        _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                    }
+                    break;
+
+                case "bc":
                 case "bb":
-                    if (!_ship.hull.name.StartsWith("bb"))
+                    // predreads
+                    if (_sType != "bc" && !_ship.hull.name.StartsWith("bb"))
                     {
-                        _CalLimits[(int)GunCal.Sec] = 2;
-                        if (_ship.TechVar("use_main_side_guns") == 0f && _gunInfosByGroup.ContainsKey("ms") && (_gunInfosByGroup.ContainsKey("mg") || _gunInfosByGroup.ContainsKey("mc")))
-                            _CalLimits[(int)GunCal.Main] = 2;
+                        switch (_nation)
+                        {
+                            case "usa":
+                            case "france":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                break;
+
+                            case "austria":
+                            case "germany":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Light),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                break;
+
+                            default:
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                break;
+                        }
+
+                        // semi-dreads
+                        if (_ship.TechVar("use_main_side_guns") != 0f)
+                        {
+                            foreach (var ci in _calInfos)
+                            {
+                                if (ci._cal == GunCal.Sec && (_nation == "france" || ci._pref != CalPref.Heavy))
+                                {
+                                    ci._cal = GunCal.Main;
+                                    ci._pref = CalPref.Light;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Dreadnoughts / Battlecruisers
+                    else
+                    {
+                        if (_avgYear < 1919)
+                        {
+                            switch (_nation)
+                            {
+                                case "usa":
+                                case "france":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium) };
+                                    break;
+
+                                case "austria":
+                                case "germany":
+                                case "japan":
+                                case "russia":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    break;
+
+                                case "italy":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Light),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    break;
+
+                                default:
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    break;
+                            }
+                            if (_hullYear >= 1910)
+                            {
+                                if (_nation == "britain")
+                                {
+                                    _calInfos[1]._pref = CalPref.Medium;
+                                    _calInfos.Insert(1, new CalInfo(GunCal.Sec, CalPref.Medium));
+                                }
+
+                                if ((_nation != "germany" || _sType == "bb") && GunDatabase.HasGunOrGreaterThan(_ship, 14, _gunGrades))
+                                {
+                                    _calInfos[0]._pref = CalPref.Heavy;
+                                }
+                            }
+                        }
+                        else if (_hullYear < 1927)
+                        {
+                            switch (_nation)
+                            {
+                                case "japan":
+                                case "usa":
+                                case "russia":
+                                case "austria":
+                                case "germany":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    break;
+
+                                case "italy":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy)};
+                                    break;
+
+                                default:
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium)};
+                                    break;
+                            }
+                        }
+                        else // Fast Battleship
+                        {
+                            switch (_nation)
+                            {
+                                case "japan":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium)};
+                                    break;
+
+                                case "austria":
+                                case "germany":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Heavy)};
+                                    break;
+
+                                case "italy":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Medium)};
+                                    break;
+
+                                case "usa":
+                                case "britain":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Ter, CalPref.Light)};
+                                    break;
+
+                                default:
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium),
+                                    new CalInfo(GunCal.Sec, CalPref.Medium)};
+                                    break;
+                            }
+                        }
                     }
                     break;
             }
-        }
-
-        private void MergeGunInfos()
-        {
-            foreach (var gi in _gunInfos)
-            {
-                int idx = (int)gi._cal;
-                if (_CalCounts[idx] > _CalLimits[idx])
-                    _CalMerge[idx] = true;
-            }
-            
-            for (int i = 0; i < (int)GunCal.COUNT; ++i)
-            {
-                if (!_CalMerge[i])
-                    continue;
-
-                MergeCaliber((GunCal)i, _CalLimits[i]);
-            }
-        }
-
-        private void MergeCaliber(GunCal cal, int limit)
-        {
-            if (limit == 0)
-            {
-                for (int i = _gunInfos.Count; i-- > 0;)
-                {
-                    var gi = _gunInfos[i];
-                    if (gi._cal != cal)
-                        continue;
-
-                    foreach (var rpo in gi._rps)
-                    {
-                        _gunInfosByRPO.Remove(rpo);
-                        // This is safe because, even if there are other
-                        // guninfos of this group, since they all share
-                        // their caliber, they will all be removed.
-                        _gunInfosByGroup.Remove(rpo._rp.group);
-                    }
-                    _gunInfos.RemoveAt(i);
-                }
-
-                return;
-            }
-
-            int total = 0;
-            int firstGunToRemove;
-            for (firstGunToRemove = 0; firstGunToRemove < _gunInfos.Count; ++firstGunToRemove)
-            {
-                var gi = _gunInfos[firstGunToRemove];
-                if (gi._cal != cal)
-                    continue;
-
-                if (total == limit)
-                    break;
-
-                ++total;
-                _TempGunInfos.Add(gi);
-            }
-            --firstGunToRemove;
-
-            for(int i = _gunInfos.Count - 1; i > firstGunToRemove; --i)
-            {
-                var gi = _gunInfos[i];
-                _gunInfos.RemoveAt(i);
-
-                GunInfo target = null;
-                bool intersect = true;
-                // We could see which intersection leaves a larger set
-                // but at most there will be 2 of these, so let's just
-                // shuffle.
-                _TempGunInfos.Shuffle();
-                foreach (var ogi in _TempGunInfos)
-                {
-                    _TempCalSet.Clear();
-                    foreach (var p in gi._calInchOptions)
-                        _TempCalSet.Add(p);
-
-                    _TempCalSet.IntersectWith(ogi._calInchOptions);
-                    if (_TempCalSet.Count > 0)
-                    {
-                        target = ogi;
-                        break;
-                    }
-                }
-                if (target == null)
-                {
-                    intersect = false;
-                    target = _TempGunInfos.Random(null, _this.__8__1.rnd);
-                }
-                if (intersect)
-                {
-                    target._calInchOptions.IntersectWith(gi._calInchOptions);
-                }
-                // FIXME: what to do in the else case?
-                // For now, just drop this set on the floor and use the
-                // original set.
-
-                if (target._align != gi._align)
-                    target._align = GunAlign.Both;
-                target._reference |= gi._reference;
-
-
-                foreach (var rpo in gi._rps)
-                {
-                    target._rps.Add(rpo);
-                    _gunInfosByRPO[rpo] = target;
-                    if (rpo._rp.group != string.Empty)
-                        _gunInfosByGroup[rpo._rp.group] = target;
-                }
-            }
-            _TempGunInfos.Clear();
         }
 
         private GunRef GunReferenceType(PartData data, RandPart rp)
@@ -999,9 +1149,8 @@ namespace UADRealism
 
         public bool SelectParts()
         {
-            SetupGunInfos();
+            SetupGunInfo();
             FillSelectedRandParts();
-            MergeGunInfos();
 
             float nonHullTonnage = _ship.Tonnage() - _baseHullWeight;
             float armRatio = ShipStats.GetArmamentRatio(_sType, _avgYear);
@@ -1049,7 +1198,7 @@ namespace UADRealism
 
                     if (rp.type == "gun")
                     {
-                        var gi = _gunInfosByRPO[rpo];
+                        var gi = _gunRPsbyRPO[rpo];
 
                     }
 

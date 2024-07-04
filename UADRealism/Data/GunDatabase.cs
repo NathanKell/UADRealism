@@ -175,40 +175,8 @@ namespace UADRealism.Data
             }
         }
 
-        private struct GradeInfo
+        public static int TechGunGrade(Ship ship, int cal)
         {
-            public int _calInch;
-            public int _grade;
-            public List<GunInfo> _infos;
-        }
-
-        private static readonly List<GradeInfo> _TempGradeInfo = new List<GradeInfo>();
-        private static readonly int[] _TempGunGrades = new int[21];
-        public static GunInfo GetInfoForOptions(Ship ship, GenerateShip.GunCal cal, HashSet<int> calOptions, int numInCal, GunInfo existing = null)
-        {
-            if (!_NationGunInfos.TryGetValue(ship.player.data.name, out var gunArr))
-                return null;
-
-            int calStart, calEnd;
-            switch (cal)
-            {
-                case GenerateShip.GunCal.Sec:
-                    calStart = (int)ship.shipType.secFrom;
-                    calEnd = (int)ship.shipType.secTo;
-                    break;
-                case GenerateShip.GunCal.Ter:
-                    calStart = (int)ship.shipType.secFrom;
-                    calEnd = (int)(ship.shipType.secTo * 0.5f); // this is what stock does
-                    break;
-                default:
-                    calStart = (int)ship.shipType.mainFrom;
-                    calEnd = (int)ship.shipType.mainTo;
-                    break;
-            }
-
-            int foundCalStart = int.MaxValue;
-            int foundCalEnd = int.MinValue;
-
             bool isMonitor = false;
             bool isVirginia = false;
             if (ship.hull.name.StartsWith("ironclad"))
@@ -217,46 +185,143 @@ namespace UADRealism.Data
                     isMonitor = true;
                 isVirginia = !isMonitor;
             }
-            for (int iCal = 2; iCal < 21; ++iCal)
+
+            return TechGunGrade(ship, cal, isMonitor, isVirginia);
+        }
+
+        private static int TechGunGrade(Ship ship, int cal, bool isMonitor, bool isVirginia)
+        {
+            PartData example;
+            if ((isMonitor && G.GameData.parts.TryGetValue($"monitor_gun_{cal}_x1", out example))
+                || (isVirginia && (G.GameData.parts.TryGetValue($"virginia_casemate_{cal}", out example) || G.GameData.parts.TryGetValue($"virginia_gun_{cal}_x1", out example)))
+                || G.GameData.parts.TryGetValue($"gun_{cal}_x1", out example))
             {
-                _TempGunGrades[iCal] = -1;
-                if (iCal > calEnd || iCal < calStart || !calOptions.Contains(iCal))
+                return ship.TechGunGrade(example);
+            }
+
+            return -1;
+        }
+
+        public static void TechGunGrades(Ship ship, int[] gunGrades)
+        {
+            bool isMonitor = false;
+            bool isVirginia = false;
+            if (ship.hull.name.StartsWith("ironclad"))
+            {
+                if (ship.hull.name == "ironclad_monitor")
+                    isMonitor = true;
+                isVirginia = !isMonitor;
+            }
+
+            gunGrades[0] = gunGrades[1] = -1;
+
+            for (int i = 2; i < 21; ++i)
+                gunGrades[i] = TechGunGrade(ship, i, isMonitor, isVirginia);
+        }
+
+        public static bool HasGunOrGreaterThan(Ship ship, int cal, int[] gunGrades)
+        {
+            if (!_NationGunInfos.TryGetValue(ship.player.data.name, out var gunArr))
+                return false;
+
+            for (int i = cal; i < 21; ++i)
+            {
+                if (gunGrades[i] < 1)
+                    continue;
+                if (gunArr[cal, gunGrades[i]] != null && gunArr[cal, gunGrades[i]].Count > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private struct GradeInfo
+        {
+            public int _calInch;
+            public int _grade;
+            public List<GunInfo> _infos;
+        }
+
+        private static readonly List<GradeInfo> _TempGradeInfo = new List<GradeInfo>();
+        private static readonly HashSet<GunInfo> _TempUsedInfos = new HashSet<GunInfo>();
+        public static bool GetGunInfoForShip(Ship ship, List<GenerateShip.CalInfo> info, int[] gunGrades)
+        {
+            if (!_NationGunInfos.TryGetValue(ship.player.data.name, out var gunArr))
+                return false;
+
+            _TempUsedInfos.Clear();
+
+            for (GenerateShip.GunCal cal = GenerateShip.GunCal.Main; cal < GenerateShip.GunCal.COUNT; ++cal)
+            {
+                _TempGradeInfo.Clear();
+
+                int count = 0;
+                foreach (var ci in info)
+                    if (ci._cal == cal)
+                        ++count;
+
+                if (count == 0)
                     continue;
 
-                PartData example;
-                if ((isMonitor && G.GameData.parts.TryGetValue($"monitor_gun_{iCal}_x1", out example))
-                    || (isVirginia && (G.GameData.parts.TryGetValue($"virginia_casemate_{iCal}", out example) || G.GameData.parts.TryGetValue($"virginia_gun_{iCal}_x1", out example)))
-                    || G.GameData.parts.TryGetValue($"gun_{iCal}_x1", out example))
+                int calStart, calEnd;
+                switch (cal)
                 {
-                    int grade = ship.TechGunGrade(example);
-                    var infos = gunArr[iCal, grade];
+                    case GenerateShip.GunCal.Sec:
+                        calStart = (int)ship.shipType.secFrom;
+                        calEnd = (int)ship.shipType.secTo;
+                        break;
+                    case GenerateShip.GunCal.Ter:
+                        calStart = (int)ship.shipType.secFrom;
+                        calEnd = (int)(ship.shipType.secTo * 0.5f); // this is what stock does
+                        break;
+                    default:
+                        calStart = (int)ship.shipType.mainFrom;
+                        calEnd = (int)ship.shipType.mainTo;
+                        break;
+                }
+
+                int foundCalStart = int.MaxValue;
+                int foundCalEnd = int.MinValue;
+
+                for (int iCal = calStart; iCal <= calEnd; ++iCal)
+                {
+                    if (gunGrades[iCal] < 1)
+                        continue;
+                    var infos = gunArr[iCal, gunGrades[iCal]];
                     if (infos == null)
                         continue;
+                    bool noNew = true;
+                    foreach (var gi in infos)
+                    {
+                        if (!_TempUsedInfos.Contains(gi))
+                        {
+                            noNew = false;
+                            break;
+                        }
+                    }
+                    if (noNew)
+                        continue;
 
-                    _TempGradeInfo.Add(new GradeInfo() { _calInch = iCal, _grade = grade, _infos = infos });
-                    _TempGunGrades[iCal] = grade;
+                    _TempGradeInfo.Add(new GradeInfo() { _calInch = iCal, _grade = gunGrades[iCal], _infos = infos });
                     if (iCal > foundCalEnd)
                         foundCalEnd = iCal;
                     if (iCal < foundCalStart)
                         foundCalStart = iCal;
                 }
-            }
-            if (_TempGradeInfo.Count == 0)
-                return null;
+                if (_TempGradeInfo.Count == 0)
+                    return false;
 
-            //_TempGradeInfo.Sort((a, b) => b._grade.CompareTo(a._grade));
-
-            if (cal == GenerateShip.GunCal.Main)
-            {
-                switch (ship.shipType.name)
+                foreach (var ci in info)
                 {
-                    case "tb":
+                    // three ways to calculate desired caliber:
+                    // across _TempGradeInfo, a range between
+                    // found calibers, and a range between shiptype
+                    // caliber limits.
+                    float selector = ci._pref == GenerateShip.CalPref.Heavy ? 0.667f : (ci._pref == GenerateShip.CalPref.Medium ? 0.333f : 0f);
 
-                        break;
                 }
             }
-
-            return null;
+            return true;
         }
 
         public static void FillData()

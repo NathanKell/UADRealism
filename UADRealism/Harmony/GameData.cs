@@ -102,11 +102,18 @@ namespace UADRealism
                 else
                     kvp.Value.armorMin *= 0.5f;
 
-                if (kvp.Key == "tb")
-                    kvp.Value.mainTo = 3;
-
-                if (kvp.Key != "ic")
-                    kvp.Value.speedMin -= 2f;
+                switch (kvp.Key)
+                {
+                    case "tb":
+                        kvp.Value.mainTo = 3;
+                        break;
+                    case "ca":
+                        kvp.value.secTo = 7;
+                        break;
+                    case "ic":
+                        kvp.Value.speedMin -= 2f;
+                        break;
+                }
             }
 
             foreach (var kvp in __instance.parts)
@@ -160,6 +167,12 @@ namespace UADRealism
                         // "dd_5_nose_large_usa" -- Porter
                         // "dd_5_akizuki_stern_flat" -- Farragut
 
+                        // ** Japan **
+                        case "ca_4_ibuki":
+                            part.shipType = G.GameData.shipTypes["ca"];
+                            if (part.paramx.TryGetValue("type", out var ibukiType) && ibukiType.Count > 0)
+                                ibukiType[0] = "ca";
+                            break;
                     }
                 }
             }
@@ -185,6 +198,21 @@ namespace UADRealism
                             sub[1] = "1";
                     }
                 }
+
+
+                if (kvp.Key == "hull_cruiser_35")
+                {
+                    if (tech.effects.TryGetValue("unlock", out var frahull) && frahull.Count == 1 && frahull[0].Count == 1 && frahull[0][0] == "ca_5_france")
+                        tech.effects.Remove("unlock");
+                    else if (frahull != null && frahull.Count == 1)
+                        frahull[0].Remove("ca_5_france");
+                }
+                if (kvp.Key == "hull_cruiser_32")
+                {
+                    if (tech.effects.TryGetValue("unlock", out var frahull2) && frahull2.Count == 1)
+                        frahull2[0].Add("ca_5_france");
+                }
+
                 if (tech.name.StartsWith("torpedo_size_") && tech.name != "torpedo_size_end")
                 {
                     int idx = int.Parse(tech.name.Replace("torpedo_size_", string.Empty));
