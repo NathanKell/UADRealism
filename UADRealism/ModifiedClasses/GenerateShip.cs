@@ -105,20 +105,25 @@ namespace UADRealism
             public int _countNonGroup = 0;
         }
 
-        public enum CalPref
-        {
-            Light,
-            Medium,
-            Heavy
-        }
-
         public class CalInfo
         {
             public GunCal _cal;
-            public CalPref _pref;
+            public float _min;
+            public float _max;
+            public bool _required;
             public GunDatabase.GunInfo _info;
 
-            public CalInfo(GunCal c, CalPref p) { _cal = c; _pref = p; }
+            public CalInfo(GunCal c, float min, float max, bool req = true)
+            { 
+                _cal = c; 
+                _min = min;
+                if (_min < 21f)
+                    _min *= 25.4f;
+                _max = max;
+                if (_max < 21f)
+                    _max *= 25.4f;
+                _required = req;
+            }
         }
 
         Dictionary<string, GunRP> _gunRPsByGroup = new Dictionary<string, GunRP>();
@@ -814,17 +819,17 @@ namespace UADRealism
                 newgrp._groups.Add(rp.group);
             }
             _gunRPs.Add(newgrp);
-            ++_CalCounts[(int)newgrp._cal];
-        }
+        }        
 
         private void SetupGunInfo()
         {
             GunDatabase.TechGunGrades(_ship, _gunGrades);
-
+            float agTert = _nation == "austria" ? 47 : 88;
+            int agTert2 = _nation == "austria" ? 66 : 88;
             switch (_sType)
             {
-                case "tb": _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, CalPref.Medium), new CalInfo(GunCal.Main, CalPref.Light) }; break;
-                case "dd":_calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, CalPref.Medium), new CalInfo(GunCal.Sec, CalPref.Light) }; break;
+                case "tb": _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 88), new CalInfo(GunCal.Main, 30, 50, false) }; break;
+                case "dd":_calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 75, 140), new CalInfo(GunCal.Sec, 37, 57) }; break;
 
                 case "ca":
                     if (_hullYear < 1905)
@@ -834,49 +839,64 @@ namespace UADRealism
                         {
                             case "france":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Light),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 190, 195),
+                                    new CalInfo(GunCal.Sec, 137, 165),
+                                    new CalInfo(GunCal.Ter, 75, 75),
+                                    new CalInfo(GunCal.Ter, 47, 57) };
                                 break;
+
                             case "usa":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 8, 10),
+                                    new CalInfo(GunCal.Sec, 4, 6),
+                                    new CalInfo(GunCal.Ter, 57, 77),
+                                    new CalInfo(GunCal.Ter, 47, 57) };
                                 break;
                             case "japan":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 8, 10),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3),
+                                    new CalInfo(GunCal.Ter, 47, 57) };
+                                break;
+
                             case "russia":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 8, 8),
+                                    new CalInfo(GunCal.Sec, 4, 6),
+                                    new CalInfo(GunCal.Ter, 75, 75),
+                                    new CalInfo(GunCal.Ter, 37, 47) };
                                 break;
 
                             case "austria":
                             case "germany":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 210, 240),
+                                    new CalInfo(GunCal.Sec, 150, 150),
+                                    new CalInfo(GunCal.Ter, agTert, agTert) };
                                 break;
 
                             case "italy":
                             case "spain":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Light),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 10, 11),
+                                    new CalInfo(GunCal.Sec, 5, 7),
+                                    new CalInfo(GunCal.Sec, 3, 3),
+                                    new CalInfo(GunCal.Ter, 40, 65) };
+                                break;
+
+                            case "britain":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 9.2f, 9.2f),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3) };
                                 break;
 
                             default:
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 8, 10),
+                                    new CalInfo(GunCal.Sec, 5, 6),
+                                    new CalInfo(GunCal.Ter, 47, 88) };
                                 break;
                         }
                     }
@@ -890,41 +910,48 @@ namespace UADRealism
                         {
                             case "france":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Light),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    new CalInfo(GunCal.Main, 190, 195),
+                                    new CalInfo(GunCal.Ter, 75, 75) };
                                 break;
 
-                            case "japan":
                             case "russia":
                             case "usa":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 10, 11),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3),
+                                    new CalInfo(GunCal.Ter, 47, 57) };
+                                break;
+
+                            case "japan":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 12, 12),
+                                    new CalInfo(GunCal.Main, 8, 8),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3) };
                                 break;
 
                             case "austria":
                             case "germany":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    new CalInfo(GunCal.Main, 200, 210),
+                                    new CalInfo(GunCal.Sec, 150, 150),
+                                    new CalInfo(GunCal.Ter, agTert, agTert) };
                                 break;
 
                             case "italy":
                             case "spain":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy) };
+                                    new CalInfo(GunCal.Main, 10, 11),
+                                    new CalInfo(GunCal.Sec, 6, 7),
+                                    new CalInfo(GunCal.Sec, 3, 3) };
                                 break;
 
                             default:
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 9.2f, 9.2f),
+                                    new CalInfo(GunCal.Sec, 7.5f, 7.5f),
+                                    new CalInfo(GunCal.Ter, 57, 57) };
                                 break;
                         }
                     }
@@ -932,9 +959,9 @@ namespace UADRealism
                     {
                         // Treaty cruiser
                         _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 8, 8),
+                                    new CalInfo(GunCal.Sec, 4, 5.5f),
+                                    new CalInfo(GunCal.Ter, 40, 88) };
                     }
                     break;
 
@@ -942,22 +969,22 @@ namespace UADRealism
                     if (_hullYear < 1916)
                     {
                         _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Light),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 95, 110),
+                                    new CalInfo(GunCal.Ter, 37, 88) };
                     }
                     else if (_hullYear < 1919)
                     {
                         _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 5, 6),
+                                    new CalInfo(GunCal.Sec, 3, 4) };
                     }
                     else
                     {
                         // Treaty light cruiser
                         _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 120, 160),
+                                    new CalInfo(GunCal.Sec, 4, 5),
+                                    new CalInfo(GunCal.Ter, 40, 3) };
                     }
                     break;
 
@@ -969,41 +996,70 @@ namespace UADRealism
                         switch (_nation)
                         {
                             case "usa":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 12, 13),
+                                    new CalInfo(GunCal.Sec, 6, 8),
+                                    new CalInfo(GunCal.Ter, 3, 3),
+                                    new CalInfo(GunCal.Ter, 47, 57) };
+                                break;
+
                             case "france":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 300, 13),
+                                    new CalInfo(GunCal.Main, 270, 280, false),
+                                    new CalInfo(GunCal.Sec, 137, 195),
+                                    new CalInfo(GunCal.Ter, 65, 100),
+                                    new CalInfo(GunCal.Ter, 47, 47) };
                                 break;
 
                             case "austria":
                             case "germany":
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Light),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 240, 290),
+                                    new CalInfo(GunCal.Sec, 150, 150),
+                                    new CalInfo(GunCal.Ter, agTert, agTert) };
+                                break;
+
+                            case "russia":
+                                _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 10, 12),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Ter, 75, 75),
+                                    new CalInfo(GunCal.Ter, 47, 47) };
                                 break;
 
                             default:
                                 _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Light) };
+                                    new CalInfo(GunCal.Main, 11, 13.5f),
+                                    new CalInfo(GunCal.Sec, _nation == "britain" ? 6 : 5, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3),
+                                    new CalInfo(GunCal.Ter, 47, 57) };
                                 break;
                         }
 
                         // semi-dreads
                         if (_ship.TechVar("use_main_side_guns") != 0f)
                         {
-                            foreach (var ci in _calInfos)
+                            if (_nation == "russia")
                             {
-                                if (ci._cal == GunCal.Sec && (_nation == "france" || ci._pref != CalPref.Heavy))
+                                _calInfos.RemoveAt(3);
+                                _calInfos.Insert(1, new CalInfo(GunCal.Sec, 8, 8));
+                            }
+                            else
+                            {
+                                if (_calInfos[1]._cal == GunCal.Main)
                                 {
-                                    ci._cal = GunCal.Main;
-                                    ci._pref = CalPref.Light;
-                                    break;
+                                    _calInfos.RemoveAt(1);
+                                }
+                                foreach (var ci in _calInfos)
+                                {
+                                    if (ci._cal == GunCal.Sec && ci._max < 8 * 25.4f)
+                                    {
+                                        ci._cal = GunCal.Main;
+                                        ci._min = 230f;
+                                        ci._max = 270f;
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -1015,47 +1071,65 @@ namespace UADRealism
                         {
                             switch (_nation)
                             {
-                                case "usa":
                                 case "france":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 12, 16),
+                                    new CalInfo(GunCal.Sec, 127, 140) };
+                                    break;
+
+                                case "usa":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 12, 16),
+                                    new CalInfo(GunCal.Sec, 5, 5) }; // Technically South Carolina didn't use the 5/51.
                                     break;
 
                                 case "austria":
                                 case "germany":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 279, 310),
+                                    new CalInfo(GunCal.Sec, 150, 150),
+                                    new CalInfo(GunCal.Ter, agTert2, agTert2) };
+                                    break;
+
                                 case "japan":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 12, 16),
+                                    new CalInfo(GunCal.Sec, 5, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3, false) };
+                                    break;
+
                                 case "russia":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 12, 16),
+                                    new CalInfo(GunCal.Sec, 119, 131),
+                                    new CalInfo(GunCal.Ter, 3, 3) };
                                     break;
 
                                 case "italy":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Light),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    new CalInfo(GunCal.Main, 12, 15),
+                                    new CalInfo(GunCal.Sec, 100, 125),
+                                    new CalInfo(GunCal.Ter, 3, 3) };
                                     break;
 
                                 default:
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy) };
+                                    new CalInfo(GunCal.Main, 12, 15),
+                                    new CalInfo(GunCal.Ter, 4, 4) };
                                     break;
                             }
                             if (_hullYear >= 1910)
                             {
                                 if (_nation == "britain")
                                 {
-                                    _calInfos[1]._pref = CalPref.Medium;
-                                    _calInfos.Insert(1, new CalInfo(GunCal.Sec, CalPref.Medium));
+                                    _calInfos[1]._min = 3 * 25.4f;
+                                    _calInfos[1]._max = 3 * 25.4f;
+                                    _calInfos.Insert(1, new CalInfo(GunCal.Sec, 5, 6));
                                 }
 
-                                if ((_nation != "germany" || _sType == "bb") && GunDatabase.HasGunOrGreaterThan(_ship, 14, _gunGrades))
+                                if (_calInfos[0]._max < 380 && GunDatabase.HasGunOrGreaterThan(_ship, 14, _gunGrades))
                                 {
-                                    _calInfos[0]._pref = CalPref.Heavy;
+                                    _calInfos[0]._max = 385;
                                 }
                             }
                         }
@@ -1063,29 +1137,54 @@ namespace UADRealism
                         {
                             switch (_nation)
                             {
-                                case "japan":
                                 case "usa":
-                                case "russia":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 14, 16),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Ter, 3, 3) };
+                                    break;
+
+                                case "japan":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 14, 18),
+                                    new CalInfo(GunCal.Sec, 140, 140),
+                                    new CalInfo(GunCal.Ter, 120, 120, false) };
+                                    break;
+
                                 case "austria":
                                 case "germany":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium) };
+                                    new CalInfo(GunCal.Main, 335, 420),
+                                    new CalInfo(GunCal.Sec, 150, 150),
+                                    new CalInfo(GunCal.Ter, agTert2, agTert2) };
+                                    break;
+
+                                case "russia":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 13, 16),
+                                    new CalInfo(GunCal.Sec, 120, 140),
+                                    new CalInfo(GunCal.Ter, 3, 3) };
                                     break;
 
                                 case "italy":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy)};
+                                    new CalInfo(GunCal.Main, 15, 15),
+                                    new CalInfo(GunCal.Sec, 120, 155),
+                                    new CalInfo(GunCal.Ter, 75, 120)};
+                                    break;
+
+                                case "britain":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 15, 18),
+                                    new CalInfo(GunCal.Sec, 6, 6),
+                                    new CalInfo(GunCal.Sec, 120, 120)};
                                     break;
 
                                 default:
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium)};
+                                    new CalInfo(GunCal.Main, 14, 18),
+                                    new CalInfo(GunCal.Sec, 120, 155),
+                                    new CalInfo(GunCal.Sec, 65, 120)};
                                     break;
                             }
                         }
@@ -1093,41 +1192,49 @@ namespace UADRealism
                         {
                             switch (_nation)
                             {
+                                case "france":
+                                    _calInfos = new List<CalInfo>() {
+                                    new CalInfo(GunCal.Main, 380, 20),
+                                    new CalInfo(GunCal.Sec, 140, 160),
+                                    new CalInfo(GunCal.Ter, 90, 120)};
+                                    break;
+
                                 case "japan":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Heavy),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium)};
+                                    new CalInfo(GunCal.Main, 16, 20),
+                                    new CalInfo(GunCal.Sec, 140, 210),
+                                    new CalInfo(GunCal.Sec, 120, 130)};
                                     break;
 
                                 case "austria":
                                 case "germany":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Heavy)};
+                                    new CalInfo(GunCal.Main, 380, 460),
+                                    new CalInfo(GunCal.Sec, 150, 155),
+                                    new CalInfo(GunCal.Ter, 100, 110)};
                                     break;
 
                                 case "italy":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Medium)};
+                                    new CalInfo(GunCal.Main, 15, 18),
+                                    new CalInfo(GunCal.Sec, 145, 155),
+                                    new CalInfo(GunCal.Ter, 100, 125),
+                                    new CalInfo(GunCal.Ter, 65, 90)};
                                     break;
 
                                 case "usa":
                                 case "britain":
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Ter, CalPref.Light)};
+                                    new CalInfo(GunCal.Main, 14, 18),
+                                    new CalInfo(GunCal.Sec, 120, 5.25f),
+                                    new CalInfo(GunCal.Ter, 40, 80)};
                                     break;
 
                                 default:
                                     _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium),
-                                    new CalInfo(GunCal.Sec, CalPref.Medium)};
+                                    new CalInfo(GunCal.Main, 14, 20),
+                                    new CalInfo(GunCal.Sec, 120, 170),
+                                    new CalInfo(GunCal.Ter, 65, 120)};
                                     break;
                             }
                         }

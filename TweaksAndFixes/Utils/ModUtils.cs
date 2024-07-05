@@ -367,6 +367,9 @@ namespace TweaksAndFixes
             list[desired] = elem;
         }
 
+        public static float RoundToStep(float val, float step)
+            => Mathf.RoundToInt(val / step) * step;
+
         public static string ArmorString(Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armor)
         {
             //return $"{armor[Ship.A.Belt]:F1}/{armor[Ship.A.BeltBow]:F1}/{armor[Ship.A.BeltStern]:F1}, {armor[Ship.A.Deck]:F1}/{armor[Ship.A.DeckBow]:F1}/{armor[Ship.A.DeckStern]:F1} "
