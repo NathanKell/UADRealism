@@ -199,7 +199,6 @@ namespace UADRealism
                     }
                 }
 
-
                 if (kvp.Key == "hull_cruiser_35")
                 {
                     if (tech.effects.TryGetValue("unlock", out var frahull) && frahull.Count == 1 && frahull[0].Count == 1 && frahull[0][0] == "ca_5_france")
@@ -211,6 +210,88 @@ namespace UADRealism
                 {
                     if (tech.effects.TryGetValue("unlock", out var frahull2) && frahull2.Count == 1)
                         frahull2[0].Add("ca_5_france");
+                }
+
+                if (kvp.Key.StartsWith("hull_destroyer_"))
+                {
+                    switch (kvp.Key)
+                    {
+                        case "hull_destroyer_2":
+                            {
+                                if (tech.effects.TryGetValue("unlock", out var tbdhull2))
+                                {
+                                    tbdhull2[0].Add("tb_highbow_large");
+                                }
+                                else
+                                {
+                                    var uList = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.List<string>>();
+                                    uList.Add(new Il2CppSystem.Collections.Generic.List<string>());
+                                    uList[0].Add("tb_highbow_large");
+                                    tech.effects["unlock"] = uList;
+                                }
+                                tech.desc = "$technology_desc_hull_destroyer_4";
+
+                                if (tech.effects.TryGetValue("tonnage", out var tbt))
+                                    tbt[0][1] = "450";
+                            }
+                            break;
+
+                        case "hull_destroyer_3":
+                            {
+                                if (tech.effects.TryGetValue("tonnage", out var tbt))
+                                    tbt[0][1] = "500";
+                            }
+                            break;
+
+                        case "hull_destroyer_4":
+                            {
+                                if (tech.effects.TryGetValue("unlock", out var tbdhull) && tbdhull.Count == 1 && tbdhull[0].Count == 1 && tbdhull[0][0] == "tb_highbow_large")
+                                    tech.effects.Remove("unlock");
+                                else if (tbdhull != null && tbdhull.Count == 1)
+                                    tbdhull[0].Remove("tb_highbow_large");
+
+                                tech.desc = "$technology_desc_hull_destroyer_1";
+
+                                if (tech.effects.TryGetValue("tonnage", out var tbt))
+                                    tbt[0][1] = "600";
+                            }
+                            break;
+
+                        case "hull_destroyer_5":
+                            {
+                                if (tech.effects.TryGetValue("tonnage", out var tbt))
+                                {
+                                    tbt.Add(new Il2CppSystem.Collections.Generic.List<string>());
+                                    tbt[1].Add("tb");
+                                    tbt[1].Add("700");
+                                }
+                            }
+                            break;
+
+                        case "hull_destroyer_6":
+                            {
+                                if (tech.effects.TryGetValue("tonnage", out var tbt))
+                                {
+                                    tbt.Add(new Il2CppSystem.Collections.Generic.List<string>());
+                                    tbt[1].Add("tb");
+                                    tbt[1].Add("800");
+                                }
+                            }
+                            break;
+                    }
+                    if (tech.effects.TryGetValue("tonnage", out var ddt))
+                    {
+                        foreach (var tList in ddt)
+                        {
+                            if (tList[0] != "dd")
+                                continue;
+                            if (!int.TryParse(tList[1], out var ddTng))
+                                continue;
+
+                            ddTng -= 200;
+                            tList[1] = ddTng.ToString();
+                        }
+                    }
                 }
 
                 if (tech.name.StartsWith("torpedo_size_") && tech.name != "torpedo_size_end")

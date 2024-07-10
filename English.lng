@@ -3267,7 +3267,7 @@ $technology_name_hull_destroyer_16;1,700 tons Destroyer
 $technology_name_hull_destroyer_17;1,800 tons Destroyer
 $technology_name_hull_destroyer_18;1,900 tons Destroyer
 $technology_name_hull_destroyer_19;2,200 tons DD & 1,000 tons TB
-$technology_name_hull_destroyer_2;500 tons Torpedo Boat
+$technology_name_hull_destroyer_2;Torpedo Boat Destroyer
 $technology_name_hull_destroyer_20;2,400 tons Destroyer
 $technology_name_hull_destroyer_21;2,600 tons Destroyer
 $technology_name_hull_destroyer_22;2,800 tons Destroyer
@@ -3276,8 +3276,8 @@ $technology_name_hull_destroyer_24;3,300 tons Destroyer
 $technology_name_hull_destroyer_25;3,500 tons Destroyer
 $technology_name_hull_destroyer_26;4,000 tons Destroyer
 $technology_name_hull_destroyer_27;7,500 tons Destroyer
-$technology_name_hull_destroyer_3;700 tons Torpedo Boat
-$technology_name_hull_destroyer_4;Torpedo Boat Destroyer
+$technology_name_hull_destroyer_3;700 tons TBD
+$technology_name_hull_destroyer_4;800 tons TBD
 $technology_name_hull_destroyer_5;Destroyer class
 $technology_name_hull_destroyer_6;900 tons Destroyer
 $technology_name_hull_destroyer_7;950 tons Destroyer
