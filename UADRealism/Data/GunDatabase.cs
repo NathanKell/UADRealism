@@ -264,17 +264,24 @@ namespace UADRealism.Data
                     maxInch = ci._info._calInch;
             }
 
-            float idealCal = IdealCalForTonnage(ship, minCal, maxCal);
-            float bestDelta = float.MaxValue;
             int bestIdx = -1;
-            for (int i = 0; i < _TempGradeInfo.Count; ++i)
+            float idealCal = IdealCalForTonnage(ship, minCal, maxCal);
+            if (idealCal < 0f)
             {
-                var ci = _TempGradeInfo[i];
-                float delta = Mathf.Abs(ci._info._caliber - idealCal);
-                if (delta < bestDelta)
+                bestIdx = ModUtils.Range(0, _TempGradeInfo.Count - 1);
+            }
+            else
+            {
+                float bestDelta = float.MaxValue;
+                for (int i = 0; i < _TempGradeInfo.Count; ++i)
                 {
-                    bestDelta = delta;
-                    bestIdx = i;
+                    var ci = _TempGradeInfo[i];
+                    float delta = Mathf.Abs(ci._info._caliber - idealCal);
+                    if (delta < bestDelta)
+                    {
+                        bestDelta = delta;
+                        bestIdx = i;
+                    }
                 }
             }
 
@@ -306,24 +313,63 @@ namespace UADRealism.Data
             return closest._info;
         }
 
-        private static int IdealCalForTonnage(Ship ship, int min, int max)
+        private static float IdealCalForTonnage(Ship ship, float min, float max)
         {
+            int year = Database.GetYear(ship.hull.data);
+            if (max < 60 && max >= 40 && year > 1920)
+                return 40f;
+
+            float tng = ship.Tonnage();
+
             switch (ship.shipType.name)
             {
-                case "tb": return Mathf.RoundToInt(Util.Remap(ship.Tonnage(), 100f, 500f, min, max, true));
-                case "dd": return Mathf.RoundToInt(Util.Remap(ship.Tonnage(), 600f, 1500f, min, max, true));
+                case "tb": return Util.Remap(tng, 100f, 500f, min, max, true);
+                case "dd": return Util.Remap(tng, 600f, 1500f, min, max, true);
                 case "cl":
-                    int clYear = Database.GetYear(ship.hull.data);
-                    if(clYear < 1910)
-                        return Mathf.RoundToInt(Util.Remap(ship.Tonnage(), 1000f, 2800f, min, max, true));
-                    if (clYear < 1920)
-                        return Mathf.RoundToInt(Util.Remap(ship.Tonnage(), 2000f, 4000f, min, max, true));
-                    if (ship.Tonnage() > 8000f)
+                    if(year < 1910)
+                        return Util.Remap(tng, 1000f, 2800f, min, max, true);
+                    if (year < 1920)
+                        return Util.Remap(tng, 2500f, 4000f, min, max, true);
+
+                    if (tng > 8000f)
                         return max;
-                    return ModUtils.Range(min, max);
+                    else
+                        return -1f;
+
+                case "ca":
+                    if (year < 1915 && ship.player.data.name == "usa")
+                        return Util.Remap(tng, 8000f, 12000f, min, max, true);
+                    else
+                        return -1f;
+
+                case "bb":
+                case "bc":
+                    if (ship.shipType.name == "bc")
+                        tng *= 0.9f;
+                    if (year < 1905)
+                    {
+                        if (max >= 279 && min < 279)
+                            return Util.Remap(tng, 12000f, 14000f, min, max, true);
+                        else
+                            return -1f;
+                    }
+                    if (year < 1915)
+                    {
+                        if (max < 320)
+                            return Util.Remap(tng, 20000f, 23000f, min, max, true);
+                        if (min > 200)
+                            return Util.Remap(tng, 20000f, 28000f, min, max, true);
+                        
+                        return -1f;
+                    }
+                    if (min > 270)
+                    {
+                        return Util.Remap(tng, 25000f, 45000f + Math.Max(0f, (max - 406) * (1f / 25.4f)) * 5000f, min, max, true);
+                    }
+                    return -1f;
 
                 default:
-                    return ModUtils.Range(min, max);
+                    return -1f;
             }
         }
 

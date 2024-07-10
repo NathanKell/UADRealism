@@ -828,13 +828,46 @@ namespace UADRealism
             int agTert2 = _nation == "austria" ? 66 : 88;
             switch (_sType)
             {
-                case "tb": _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 88), new CalInfo(GunCal.Main, 30, 50, false) }; break;
+                case "tb":
+                    if (_hullYear > 1891)
+                    {
+                        switch (_nation)
+                        {
+                            case "britain":
+                            case "usa":
+                            case "spain":
+                            case "russia":
+                                int metrMain = _nation == "spain" || _nation == "russia" ? 75 : 76;
+                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, metrMain, metrMain), new CalInfo(GunCal.Main, 57, 57) };
+                                break;
+
+                            case "france":
+                            case "austria":
+                                int frMain = _nation == "france" ? 65 : 66;
+                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, frMain, frMain), new CalInfo(GunCal.Main, 47, 47) };
+                                break;
+
+                            case "germany":
+                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 50, 88), new CalInfo(GunCal.Main, 50, 55, false) };
+                                break;
+
+                            default:
+                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 88), new CalInfo(GunCal.Main, 30, 50, false) };
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 57), new CalInfo(GunCal.Main, 30, 47, false) };
+                    }
+                    break;
+
                 case "dd":_calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 75, 140), new CalInfo(GunCal.Sec, 37, 57) }; break;
 
                 case "ca":
                     if (_hullYear < 1905)
                     {
-                        // Traditional armored cruiser
+                        // Traditional armored cruiser or first-class protected cruiser
                         switch (_nation)
                         {
                             case "france":
@@ -852,6 +885,7 @@ namespace UADRealism
                                     new CalInfo(GunCal.Ter, 57, 77),
                                     new CalInfo(GunCal.Ter, 47, 57) };
                                 break;
+
                             case "japan":
                                 _calInfos = new List<CalInfo>() {
                                     new CalInfo(GunCal.Main, 8, 10),
