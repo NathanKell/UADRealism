@@ -19,7 +19,7 @@ namespace TweaksAndFixes
             {
                 foreach (var kvp in rp.paramx)
                 {
-                    switch(kvp.Key)
+                    switch (kvp.Key)
                     {
                         case "and":
                         case "or":

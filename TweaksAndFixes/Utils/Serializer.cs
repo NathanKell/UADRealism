@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections;
-using MelonLoader;
-using System.Reflection;
+﻿using System.Reflection;
 using UnityEngine;
 using System.Text;
 
@@ -11,16 +7,17 @@ using System.Text;
 #pragma warning disable CS8602
 #pragma warning disable CS8603
 #pragma warning disable CS8604
+#pragma warning disable CS8618
 #pragma warning disable CS8625
 
 namespace TweaksAndFixes
 {
     public static class Serializer
     {
-        private static readonly char[] _Buf = new char[1024];
-
         public class CSV
         {
+            private static readonly char[] _Buf = new char[1024];
+
             private static unsafe List<string> ParseLine(string input)
             {
                 var lst = new List<string>();
@@ -64,6 +61,9 @@ namespace TweaksAndFixes
                                     {
                                         lst.Add(new string(_Buf, 0, bufIdx));
                                         bufIdx = 0;
+                                        ++i; // skip the comma. If this is the end
+                                        // of the line this is still safe because the
+                                        // loop will terminate at len+1 instead of len.
                                     }
                                     continue;
 
@@ -88,7 +88,7 @@ namespace TweaksAndFixes
 
             public static bool Write<TColl, TItem>(TColl coll, List<string> output) where TColl : ICollection<TItem>
             {
-                var tc = GetOrCreate(coll.GetType());
+                var tc = GetOrCreate(typeof(TItem));
                 if (tc == null)
                     return false;
 
@@ -97,7 +97,7 @@ namespace TweaksAndFixes
                 bool allSucceeded = true;
                 foreach (var item in coll)
                 {
-                    bool ok = tc.Write(item, out var s);
+                    bool ok = tc.WriteType(item, out var s);
                     if (ok)
                         output.Add(s);
 
@@ -109,26 +109,34 @@ namespace TweaksAndFixes
 
             public static bool Read<TList, TItem>(string[] lines, TList output) where TList : IList<TItem>
             {
+                int lLen = lines.Length;
+                if (lLen < 2)
+                    return false;
+
+                bool create = output.Count == 0;
+                if (!create && output.Count != lLen - 1)
+                    return false;
+
                 var tc = GetOrCreate(typeof(TItem));
                 if (tc == null)
                     return false;
 
-                List<string> header = null;
+                List<string> header = ParseLine(lines[0]);
                 bool allSucceeded = true;
-                foreach (var l in lines)
+                for (int i = 1; i < lLen; ++i)
                 {
-                    if (header == null)
+                    var line = ParseLine(lines[i]);
+                    if (create)
                     {
-                        header = ParseLine(l);
+                        var item = (TItem)GetNewInstance(typeof(TItem));
+                        allSucceeded &= tc.ReadType(item, line, header);
+                        output.Add(item);
                     }
                     else
                     {
-                        var item = (TItem)GetNewInstance(typeof(TItem));
-                        bool ok = tc.Read(item, ParseLine(l), header);
-                        if (ok)
-                            output.Add(item);
-
-                        allSucceeded &= ok;
+                        var item = output[i - 1];
+                        allSucceeded &= tc.ReadType(item, line, header);
+                        output[i - 1] = item; // if valuetype, we need to do this
                     }
                 }
 
@@ -137,6 +145,10 @@ namespace TweaksAndFixes
 
             public static bool Read<TDict, TKey, TValue>(string[] lines, TDict output, string keyName) where TDict : IDictionary<TKey, TValue>
             {
+                int lLen = lines.Length;
+                if (lLen < 2)
+                    return false;
+
                 var tc = GetOrCreate(typeof(TValue));
                 if (tc == null)
                     return false;
@@ -144,25 +156,45 @@ namespace TweaksAndFixes
                 if (!tc._nameToField.TryGetValue(keyName, out var keyField))
                     return false;
 
-                List<string> header = null;
-                bool allSucceeded = true;
-                foreach (var l in lines)
-                {
-                    if (header == null)
-                    {
-                        header = ParseLine(l);
-                    }
-                    else
-                    {
-                        var item = (TValue)GetNewInstance(typeof(TValue));
-                        bool ok = tc.Read(item, ParseLine(l), header);
-                        var key = keyField._fieldInfo.GetValue(item);
-                        ok &= key != null;
-                        if (ok)
-                            output.Add((TKey)key, item);
+                bool create = output.Count == 0;
 
-                        allSucceeded &= ok;
+                List<string> header = ParseLine(lines[0]);
+                int keyIdx = header.IndexOf(keyName);
+                if (keyIdx < 0)
+                    return false;
+
+                bool allSucceeded = true;
+                for (int i = 1; i < lLen; ++i)
+                {
+                    var line = ParseLine(lines[i]);
+
+                    var keyObj = keyField.ReadValue(line[keyIdx]);
+                    if (keyObj == null)
+                    {
+                        // we can't insert with null key
+                        allSucceeded = false;
+                        continue;
                     }
+                    var key = (TKey)keyObj;
+
+                    if (!create && output.TryGetValue(key, out var existing))
+                    {
+                        allSucceeded &= tc.ReadType(existing, line, header);
+                        output[key] = existing; // if valuetype, we need to do this
+                        continue;
+                    }
+
+                    // in the not-create case, we know the key isn't found
+                    // so no need to test.
+                    if (create && output.ContainsKey(key))
+                    {
+                        Debug.LogError("[TweaksAndFixes] CSV: Tried to add object to dictionary with duplicate key " + key.ToString());
+                        continue;
+                    }
+
+                    var item = (TValue)GetNewInstance(typeof(TValue));
+                    allSucceeded &= tc.ReadType(item, ParseLine(lines[i]), header);
+                    output.Add(key, item);
                 }
 
                 return allSucceeded;
@@ -171,7 +203,7 @@ namespace TweaksAndFixes
             // It would be better to do these line by line. But
             // (a) this is faster, and (b) the alloc isn't too
             // bad given actual use cases.
-            public static bool Write<TColl, TItem>(string path, TColl coll) where TColl : ICollection<TItem>
+            public static bool Write<TColl, TItem>(TColl coll, string path) where TColl : ICollection<TItem>
             {
                 var lines = new List<string>();
                 bool ok = Write<TColl, TItem>(coll, lines);
@@ -180,13 +212,13 @@ namespace TweaksAndFixes
             }
 
 
-            public static bool Read<TList, TItem>(string path, TList output) where TList : IList<TItem>
+            public static bool Read<TList, TItem>(TList output, string path) where TList : IList<TItem>
             {
                 var lines = File.ReadAllLines(path);
                 return Read<TList, TItem>(lines, output);
             }
 
-            public static bool Read<TDict, TKey, TValue>(string path, TDict output, string keyName) where TDict : IDictionary<TKey, TValue>
+            public static bool Read<TDict, TKey, TValue>(TDict output, string keyName, string path) where TDict : IDictionary<TKey, TValue>
             {
                 var lines = File.ReadAllLines(path);
                 return Read<TDict, TKey, TValue>(lines, output, keyName);
@@ -228,10 +260,10 @@ namespace TweaksAndFixes
                 public string _fieldName = null;
                 public Type _fieldType = null;
                 public FieldInfo _fieldInfo = null;
-                public SerializeInfo _attrib = null;
+                public Field _attrib = null;
                 public DataType _dataType = DataType.INVALID;
 
-                public FieldData(MemberInfo memberInfo, SerializeInfo attrib)
+                public FieldData(MemberInfo memberInfo, Field attrib)
                 {
                     this._attrib = attrib;
 
@@ -249,11 +281,17 @@ namespace TweaksAndFixes
                     object val = ReadValue(value, _dataType, _fieldType);
 
                     if (val == null)
+                    {
+                        Debug.LogError($"[TweaksAndFixes] CSV: Failed to parse {value} to type {_dataType} on field type {_fieldType}");
                         return false;
+                    }
 
                     _fieldInfo.SetValue(host, val);
                     return true;
                 }
+
+                public object ReadValue(string value)
+                    => ReadValue(value, _dataType, _fieldType);
 
                 public static object ReadValue(string value, DataType dataType, Type fieldType)
                 {
@@ -322,7 +360,7 @@ namespace TweaksAndFixes
                             {
                                 string[] enumNames = fieldType.GetEnumNames();
                                 string defaultName = enumNames.Length > 0 ? enumNames[0] : string.Empty;
-                                Debug.LogWarning($"[KSPCF] Couldn't parse value '{value}' for enum '{fieldType.Name}', default value '{defaultName}' will be used.\nValid values are {string.Join(", ", enumNames)}");
+                                Debug.LogWarning($"[TweaksAndFixes] CSV: Couldn't parse value '{value}' for enum '{fieldType.Name}', default value '{defaultName}' will be used.\nValid values are {string.Join(", ", enumNames)}");
                                 return null;
                             }
                         case DataType.ValueVector2:
@@ -343,11 +381,75 @@ namespace TweaksAndFixes
                     return null;
                 }
 
-                public bool Write(object value, out string output)
+                public unsafe bool Write(object value, out string output)
                 {
                     output = WriteValue(value, _dataType);
                     if (output == null)
                         return false;
+
+                    if (_dataType != DataType.ValueString)
+                    {
+                        if (_dataType >= DataType.ValueVector2 && _dataType <= DataType.ValueColor32)
+                            output = "\"" + output + "\"";
+
+                        return true;
+                    }
+
+                    int count = 0;
+                    int len = output.Length;
+                    fixed (char *pszO = output)
+                    {
+                        for (int i = len; i-- > 0;)
+                        {
+                            char c = pszO[i];
+                            switch (c)
+                            {
+
+                                case '\a':
+                                case '\b':
+                                case '\f':
+                                case '\n':
+                                case '\r':
+                                case '\t':
+                                case '\v':
+                                case '"':
+                                    ++count;
+                                    break;
+                            }
+                        }
+                    }
+                    if (count == 0)
+                        return true;
+
+                    string oldStr = output;
+                    output = new string('x', count + len + 2);
+                    fixed (char* pszNew = output)
+                    {
+                        fixed (char* pszOld = oldStr)
+                        {
+                            int j = 0;
+                            pszNew[j++] = '"';
+                            for (int i = 0; i < len; ++i)
+                            {
+                                char c = pszOld[i];
+                                char c2 = c switch
+                                {
+                                    '\a' => 'a',
+                                    '\b' => 'b',
+                                    '\f' => 'f',
+                                    '\n' => 'n',
+                                    '\r' => 'r',
+                                    '\t' => 't',
+                                    '\v' => 'v',
+                                    _ => c
+                                };
+                                if(c2 != c || c == '"')
+                                    pszNew[j++] = '\\';
+                                pszNew[j++] = c2;
+                            }
+                            pszNew[j] = '"';
+                        }
+                    }
 
                     return true;
                 }
@@ -482,7 +584,7 @@ namespace TweaksAndFixes
                 MemberInfo[] members = t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                 for (int i = 0, iC = members.Length; i < iC; ++i)
                 {
-                    var attrib = (SerializeInfo)members[i].GetCustomAttribute(typeof(SerializeInfo), inherit: true);
+                    var attrib = (Field)members[i].GetCustomAttribute(typeof(Field), inherit: true);
                     if (attrib == null)
                         continue;
 
@@ -495,12 +597,15 @@ namespace TweaksAndFixes
                 }
             }
 
-            public bool Read(object host, List<string> line, List<string> header)
+            public bool ReadType(object host, List<string> line, List<string> header)
             {
                 bool allSucceeded = true;
                 int count = line.Count;
                 if (count != header.Count)
+                {
+                    Debug.LogError($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}");
                     return false;
+                }
 
                 for (int i = 0; i < count; ++i)
                 {
@@ -513,7 +618,7 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public bool Write(object obj, out string output)
+            public bool WriteType(object obj, out string output)
             {
                 int num = _fields.Count;
                 bool allSucceeded = true;
@@ -581,7 +686,7 @@ namespace TweaksAndFixes
                 var tc = new CSV(t);
                 if (tc._fields.Count == 0)
                 {
-                    Debug.LogError($"[TweaksAndFixes]: No Persistent fields on object of type {t.Name} that is referenced in persistent field, adding as null to TypeCache.");
+                    Debug.LogError($"[TweaksAndFixes] CSV: No serializing fields on object of type {t.Name} that is referenced in persistent field, adding as null to TypeCache.");
                     tc = null;
                 }
 
@@ -602,15 +707,102 @@ namespace TweaksAndFixes
                 //return cons.Invoke(null);
                 return Activator.CreateInstance(t, true);
             }
+
+            internal static string Test()
+            {
+                string basePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Tests");
+                if (!Directory.Exists(basePath))
+                    Directory.CreateDirectory(basePath);
+
+                string pathL = Path.Combine(basePath, "testL.csv");
+                string pathD = Path.Combine(basePath, "testD.csv");
+
+                List<CSVTest> list = new List<CSVTest>();
+                Dictionary<string, CSVTest> dict = new Dictionary<string, CSVTest>();
+                for (int i = 0; i < 500; ++i)
+                {
+                    var t = new CSVTest();
+                    t.name = "item" + i;
+                    t.x = 0.5f + i * 0.1f;
+                    t.y = 1000f + i * -0.5f;
+                    t.SetVec(new Vector2(i * 100f, i));
+                    t.SetGuid();
+                    t.untouched = i;
+                    t.test = false;
+                    list.Add(t);
+                    dict.Add(t.name, t);
+                }
+
+                Serializer.CSV.Write<List<CSVTest>, CSVTest>(list, pathL);
+                Serializer.CSV.Write<Dictionary<string, CSVTest>.ValueCollection, CSVTest>(dict.Values, pathD);
+
+                List<CSVTest> list2 = new List<CSVTest>();
+                Serializer.CSV.Read<List<CSVTest>, CSVTest>(list2, pathL);
+
+                Dictionary<string, CSVTest> dict2 = new Dictionary<string, CSVTest>();
+                Serializer.CSV.Read<Dictionary<string, CSVTest>, string, CSVTest>(dict2, "name", pathD);
+                if (list2.Count == 0 || dict2.Count == 0)
+                    return "Count zero";
+
+                for (int i = 0; i < 500; ++i)
+                {
+                    if (list[i].name != list2[i].name)
+                        return $"Name mismatch on list: {list[i].name} vs {list2[i].name}";
+                    if (!list2[i].test)
+                        return "Test is false";
+                    if (list[i].x != list2[i].x)
+                        return $"x mismatch: {list[i].x} vs {list2[i].x}";
+                    if (!dict2.TryGetValue("item" + i, out var itm))
+                        return "Failed to find item" + i;
+                    if (list[i].y != itm.y)
+                        return $"y mismatch: {list[i].y} vs {itm.y}";
+                    if (list2[i].untouched != 0)
+                        return "Untouched is nonzero: " + list2[i].untouched;
+
+                    list[i].x = 0;
+                    itm.y = 0;
+                }
+                Serializer.CSV.Read<List<CSVTest>, CSVTest>(list, pathL);
+                Serializer.CSV.Read<Dictionary<string, CSVTest>, string, CSVTest>(dict2, "name", pathL);
+                for (int i = 0; i < 500; ++i)
+                    if (list[i].x == 0 || dict2["item" + i].y == 0)
+                        return $"x is {list[i].x} or y is {dict2["item" + i].y}";
+
+                return "Yes";
+            }
+
+
+            private class CSVTest
+            {
+                [Serializer.Field]
+                public string name;
+                [Serializer.Field]
+                public float x;
+                [Serializer.Field]
+                public float y;
+                [Serializer.Field]
+                private Vector2 vec;
+                [Serializer.Field]
+                System.Guid guid;
+
+                public int untouched = 0;
+
+                [Serializer.Field(writeable = false)]
+                public bool test = true;
+
+
+                public void SetVec(Vector2 v) { vec = v; }
+                public void SetGuid() { guid = System.Guid.NewGuid(); }
+            }
         }
 
         [System.AttributeUsage(System.AttributeTargets.Field | System.AttributeTargets.Property, AllowMultiple = false)]
-        public class SerializeInfo : System.Attribute
+        public class Field : System.Attribute
         {
             public string name;
             public bool writeable;
 
-            public SerializeInfo()
+            public Field()
             {
                 name = string.Empty;
                 writeable = true;
