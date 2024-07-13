@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using UnityEngine;
 using System.Text;
+using Il2Cpp;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -223,6 +224,58 @@ namespace TweaksAndFixes
                 var lines = File.ReadAllLines(path);
                 return Read<TDict, TKey, TValue>(lines, output, keyName);
             }
+
+
+            private static readonly string _TempTextAssetName = "tafTempTA";
+
+            private static TextAsset __TempTextAsset = null;
+            private static TextAsset _TempTextAsset
+            {
+                get
+                {
+                    if (__TempTextAsset == null)
+                    {
+                        __TempTextAsset = new TextAsset(Il2CppInterop.Runtime.IL2CPP.il2cpp_object_new(Il2CppInterop.Runtime.Il2CppClassPointerStore<TextAsset>.NativeClassPtr));
+                        Util.resCache[_TempTextAssetName] = __TempTextAsset;
+                    }
+                    return __TempTextAsset;
+                }
+            }
+
+            private static GameData.LoadInfo __TempLoadInfo = null;
+            private static GameData.LoadInfo _TempLoadInfo
+            {
+                get
+                {
+                    if (__TempLoadInfo == null)
+                    {
+                        __TempLoadInfo = new GameData.LoadInfo();
+                        __TempLoadInfo.forceLocal = true;
+                        __TempLoadInfo.name = _TempTextAssetName;
+                    }
+                    return __TempLoadInfo;
+                }
+            }
+
+            public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(string text, bool fillCustom) where T : BaseData
+            {
+                TextAsset.Internal_CreateInstance(_TempTextAsset, text);
+                return G.GameData.ProcessCsv<T>(_TempLoadInfo, fillCustom);
+            }
+
+            public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(bool fillCustom, string path) where T : BaseData
+                => ProcessCSV<T>(File.ReadAllText(path), fillCustom);
+
+            public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(string text, bool fillCustom) where T : BaseData
+            {
+                TextAsset.Internal_CreateInstance(_TempTextAsset, text);
+                var list = new Il2CppSystem.Collections.Generic.List<T>();
+                G.GameData.ProcessCsv<T>(_TempLoadInfo, list, null, fillCustom);
+                return list;
+            }
+
+            public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(bool fillCustom, string path) where T : BaseData
+                => ProcessCSVToList<T>(File.ReadAllText(path), fillCustom);
 
             // This is an expanded version of System.TypeCode
             public enum DataType : uint

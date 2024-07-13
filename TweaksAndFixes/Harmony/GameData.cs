@@ -25,6 +25,7 @@ namespace TweaksAndFixes
                     case "delete_refit":
                     case "scheme":
                     case "tr_rand_mod":
+                    case "auto_refit":
                         return;
                 }
                 _FixKeys.Add(kvp.Key);
@@ -44,6 +45,7 @@ namespace TweaksAndFixes
             }
             _FixKeys.Clear();
         }
+
         [HarmonyPostfix]
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Postfix_PostProcessAll(GameData __instance)
