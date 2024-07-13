@@ -414,6 +414,108 @@ namespace TweaksAndFixes
                 }
             }
         }
+
+        private static List<string> HumanModToList(string input, out string key, HashSet<string> discard)
+        {
+            key = null;
+            input.Trim();
+            int parenA = input.IndexOf('(');
+            if (parenA < 0)
+            {
+                if (discard != null && discard.Contains(input))
+                    return null;
+
+                key = input;
+                return new List<string>();
+            }
+            
+
+            key = input.Substring(0, parenA);
+            if (discard != null && discard.Contains(key))
+                return null;
+
+            int parenB = input.LastIndexOf(')');
+            if (parenB < parenA)
+                parenB = input.Length;
+
+            ++parenA;
+            string val = input.Substring(parenA, parenB - parenA);
+            val.Trim();
+            var split = val.Split(';');
+            if (split == null || split.Length == 0)
+                return new List<string>();
+
+            var lst = new List<string>();
+            foreach (var s in split)
+                lst.Add(s.Trim());
+
+            return lst;
+        }
+
+        public static Dictionary<string, List<string>> HumanModToDictionary1D(string input, HashSet<string> discard = null)
+        {
+            var dict = new Dictionary<string, List<string>>();
+            var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var s in split)
+            {
+                var list = HumanModToList(s, out var key, discard);
+                if (list == null)
+                    continue;
+                dict[key] = list;
+            }
+            return dict;
+        }
+
+        public static Dictionary<string, List<List<string>>> HumanModToDictionary2D(string input, HashSet<string> discard = null)
+        {
+            var dict = new Dictionary<string, List<List<string>>>();
+            var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var s in split)
+            {
+                var list = HumanModToList(s, out var key, discard);
+                if (list == null)
+                    continue;
+
+                if (dict.TryGetValue(key, out var l))
+                {
+                    l.Add(list);
+                }
+                else
+                {
+                    l = new List<List<string>>();
+                    l.Add(list);
+                    dict[key] = l;
+                }
+            }
+            return dict;
+        }
+
+        public static List<T> ToManaged<T>(this Il2CppSystem.Collections.Generic.List<T> list)
+        {
+            var ret = new List<T>(list.Count);
+            foreach (var item in list)
+                ret.Add(item);
+
+            return ret;
+        }
+
+        public static HashSet<T> ToManaged<T>(this Il2CppSystem.Collections.Generic.HashSet<T> set)
+        {
+            var ret = new HashSet<T>(set.Count);
+            foreach (var item in set)
+                ret.Add(item);
+
+            return ret;
+        }
+
+        public static Dictionary<TKey, TValue> ToManaged<TKey, TValue>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue> dict) where TKey : notnull
+        {
+            var ret = new Dictionary<TKey, TValue>(dict.Count);
+            foreach (var kvp in dict)
+                ret.Add(kvp.Key, kvp.Value);
+
+            return ret;
+        }
     }
 
     [RegisterTypeInIl2Cpp]

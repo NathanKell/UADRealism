@@ -578,6 +578,7 @@ namespace TweaksAndFixes
 
             private List<FieldData> _fields = new List<FieldData>();
             private Dictionary<string, FieldData> _nameToField = new Dictionary<string, FieldData>();
+            bool _isPostProcess;
 
             public CSV(Type t)
             {
@@ -595,6 +596,8 @@ namespace TweaksAndFixes
                         _nameToField[data._fieldName] = data;
                     }
                 }
+
+                _isPostProcess = typeof(IPostProcess).IsAssignableFrom(t);
             }
 
             public bool ReadType(object host, List<string> line, List<string> header)
@@ -614,6 +617,9 @@ namespace TweaksAndFixes
 
                     allSucceeded &= fieldItem.Read(line[i], host);
                 }
+
+                if (_isPostProcess && host is IPostProcess ipp)
+                    ipp.PostProcess();
 
                 return allSucceeded;
             }
@@ -807,6 +813,11 @@ namespace TweaksAndFixes
                 name = string.Empty;
                 writeable = true;
             }
+        }
+
+        public interface IPostProcess
+        {
+            public void PostProcess();
         }
 
         public static Vector2 ParseVector2(string val)
