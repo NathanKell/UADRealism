@@ -829,6 +829,45 @@ namespace TweaksAndFixes
 
                 return "Yes";
             }
+            public static void TestNative()
+            {
+                var dictA = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Tests", "test1.csv"));
+                var dictB = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Tests", "test2.csv"));
+                foreach (var v in dictA.Values)
+                    Debug.Log($"{v.name}: {v.Id} / {v.order}");
+                foreach (var v in dictB.Values)
+                    Debug.Log($"{v.name}: {v.Id} / {v.order}");
+
+                int id = 0;
+                foreach (var v in G.GameData.parts.Values)
+                {
+                    id = v.Id;
+                }
+                ++id;
+
+                foreach (var v in dictB.Values)
+                {
+                    v.Id = id++;
+                    v.order = v.Id;
+                    G.GameData.parts.Add(v.name, v);
+                }
+            }
+
+            public static void TestNativePost()
+            {
+                foreach (var v in G.GameData.parts.Values)
+                {
+                    if (v.name.StartsWith("xbb"))
+                    {
+                        List<string> t = new List<string>();
+                        foreach (var kvp in v.paramx)
+                            t.Add(kvp.Key + "(" + Il2CppSystem.String.Join(";", kvp.Value.ToArray()) + ")");
+
+                        Debug.Log($"Found {v.name}: {v.Id}. Params {v.param}: {string.Join("/", t)}");
+                        break;
+                    }
+                }
+            }
 
 
             private class CSVTest

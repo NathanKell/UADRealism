@@ -4,12 +4,20 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using Il2CppInterop.Runtime;
 
 namespace TweaksAndFixes
 {
     [HarmonyPatch(typeof(GameData))]
     internal class Patch_GameData
     {
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(GameData.PostProcessAll))]
+        internal static void Prefix_PostProcessAll(GameData __instance)
+        {
+            //Serializer.CSV.TestNative();
+        }
+
         private static readonly List<string> _FixKeys = new List<string>();
         private static void FixRandPart(RandPart rp)
         {
@@ -67,6 +75,7 @@ namespace TweaksAndFixes
 
                 data.GetCaliberInch();
             }
+            //Serializer.CSV.TestNativePost();
 
             // Run after other things have a chance to update GameData
             MelonCoroutines.Start(FillDatabase());
