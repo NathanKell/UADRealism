@@ -75,7 +75,6 @@ namespace TweaksAndFixes
 
                 data.GetCaliberInch();
             }
-
             //Serializer.CSV.TestNativePost();
 
             // Run after other things have a chance to update GameData
@@ -86,72 +85,7 @@ namespace TweaksAndFixes
         {
             yield return new WaitForEndOfFrame();
             Database.FillDatabase();
-
-            HashSet<string> models = new HashSet<string>();
-            List<string> schemes = new List<string>();
-            foreach (var p in G.GameData.parts.Values)
-            {
-                if (p.isHull)
-                {
-                    if (models.Contains(p.model))
-                        continue;
-                    models.Add(p.model);
-                    var part = SpawnPart(p);
-
-                    foreach (var s in part.hullInfo.schemes)
-                        schemes.Add(s);
-                    GameObject.Destroy(part.gameObject);
-                    Part.CleanPartsStorage();
-
-                    Melon<TweaksAndFixes>.Logger.Msg($"Hull {p.model} has {(part.hullInfo.waterLevel != 0 ? $"waterlevel {part.hullInfo.waterLevel:F3}, " : string.Empty)}stabFwd {part.hullInfo.stabilityForward:F3}, schemes: {string.Join(", ", schemes)}");
-                    schemes.Clear();
-                }
-            }
-
             Melon<TweaksAndFixes>.Logger.Msg("Loaded database");
-        }
-
-        private static Part SpawnPart(PartData data)
-        {
-            var partGO = new GameObject(data.name);
-            var part = partGO.AddComponent<Part>();
-            part.data = data;
-            partGO.active = true;
-
-            // Do what we need from Ship.ChangeHull and Part.LoadModel
-            var model = Resources.Load<GameObject>(data.model);
-            var instModel = Util.AttachInst(partGO, model);
-            instModel.active = true;
-            instModel.transform.localScale = Vector3.one;
-            part.model = instModel.GetComponent<PartModel>();
-            part.isShown = true;
-
-            var visual = part.model.GetChild("Visual", false);
-            if (data.isHull)
-            {
-                var sections = visual.GetChild("Sections", false);
-                part.bow = sections.GetChild("Bow", false);
-                part.stern = sections.GetChild("Stern", false);
-                var middles = new List<GameObject>();
-                ModUtils.FindChildrenStartsWith(sections, "Middle", middles);
-                middles.Sort((a, b) => a.name.CompareTo(b.name));
-                part.middlesBase = new Il2CppSystem.Collections.Generic.List<GameObject>();
-                foreach (var m in middles)
-                {
-                    part.middlesBase.Add(m);
-                    m.active = false;
-                }
-
-                part.middles = new Il2CppSystem.Collections.Generic.List<GameObject>();
-                part.hullInfo = part.model.GetComponent<HullInfo>();
-                //part.RegrabDeckSizes(true);
-                //part.RecalcVisualSize();
-
-                foreach (var go in part.middlesBase)
-                    Util.SetActiveX(go, false);
-            }
-
-            return part;
         }
     }
 }
