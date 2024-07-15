@@ -331,6 +331,9 @@ namespace TweaksAndFixes
 
                 public bool Read(string value, object host)
                 {
+                    if (_dataType != DataType.ValueString && value.Length == 0)
+                        return true;
+
                     object val = ReadValue(value, _dataType, _fieldType);
 
                     if (val == null)

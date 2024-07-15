@@ -516,6 +516,18 @@ namespace TweaksAndFixes
 
             return ret;
         }
+
+        public static bool GetValueOrNew<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, out TValue value) where TValue : class, new()
+        {
+            if (!dict.TryGetValue(key, out value))
+            {
+                value = new TValue();
+                dict[key] = value;
+                return false;
+            }
+
+            return true;
+        }
     }
 
     [RegisterTypeInIl2Cpp]
