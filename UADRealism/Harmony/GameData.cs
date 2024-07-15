@@ -152,6 +152,11 @@ namespace UADRealism
                             part.paramx.Add("CA_Heavy_USA", new Il2CppSystem.Collections.Generic.List<string>());
                             break;
 
+                        // New York and Brooklyn had wing turrets
+                        // New York should use a flush-deck one
+                        // Brooklyn should use dante_hull_b
+                        // TODO: This will require duplicating the generic ca_1 and ca_1_small.
+
 
                         // CA was using Bismarck hull (!) and Cleveland
                         // was using Atlanta hull.

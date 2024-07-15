@@ -11,7 +11,7 @@ using Il2CppSystem.Net;
 
 namespace UADRealism.Data
 {
-    public class GunDatabase
+    public class GunDatabase : Serializer.IPostProcess
     {
         [Flags]
         public enum GunRemainInService
@@ -28,102 +28,119 @@ namespace UADRealism.Data
             UntilReplaceSameOrGreaterCal = Yes | RequireReplacement | CheckUp
         }
 
-        public class GunInfo
+        public class GunInfo : Serializer.IPostProcess
         {
-            public float _caliber;
-            public float _length;
-            public int _year;
+            [Serializer.Field] public float caliber;
+            [Serializer.Field] public float length;
+            [Serializer.Field] public int year;
             public int _calInch;
-            public GunRemainInService _remainInService;
-        }
+            [Serializer.Field] public GunRemainInService remainInService;
+            [Serializer.Field] public string nations = string.Empty;
+            [Serializer.Field] public int grade;
+            public HashSet<string> _nations = new HashSet<string>();
 
-        private static readonly Dictionary<string, List<GunInfo>[,]> _NationGunInfos = new Dictionary<string, List<GunInfo>[,]>();
-
-        private static GunInfo NewInfo(float cal, float calLen, int year, GunRemainInService remain = GunRemainInService.No)
-        {
-            var gi = new GunInfo()
+            public void PostProcess()
             {
-                _caliber = cal < 21 ? cal * 25.4f : cal,
-                _length = calLen,
-                _year = year,
-                _remainInService = remain
-            };
-            gi._calInch = Mathf.RoundToInt(gi._caliber * 10f / 25.4f) / 10;
-            if (gi._calInch < 2)
-                gi._calInch = 2;
-            else if (gi._calInch > 20)
-                gi._calInch = 20;
+                if (caliber < 21f)
+                    caliber *= 25.4f;
 
-            return gi;
-        }
+                _calInch = Mathf.Clamp(Mathf.RoundToInt(caliber * 10f / 25.4f) / 10, 2, 20);
 
-        private static void AddGun(string nation, GunInfo info, int grade = -1)
-        {
-            if (!_NationGunInfos.TryGetValue(nation, out var gunArr))
-            {
-                gunArr = new List<GunInfo>[21, 6];
-                _NationGunInfos[nation] = gunArr;
-            }
-            if (grade == -1)
-            {
-                for (int i = 1; grade < 5; ++i)
+                if (grade < 1)
                 {
-                    int newerYear = Database.GetGunYear(info._calInch, i + 1);
-                    if (newerYear < info._year)
-                        continue;
-                    int olderYear = Database.GetGunYear(info._calInch, i);
-                    if (info._year - olderYear < newerYear - info._year)
-                        grade = i;
-                    else
-                        grade = i + 1;
-                    break;
+                    for (int i = 1; grade < 5; ++i)
+                    {
+                        int newerYear = Database.GetGunYear(_calInch, i + 1);
+                        if (newerYear < year)
+                            continue;
+                        int olderYear = Database.GetGunYear(_calInch, i);
+                        if (year - olderYear < newerYear - year)
+                            grade = i;
+                        else
+                            grade = i + 1;
+                        break;
+                    }
+                }
+
+                foreach (var nation in nations.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    _nations.Add(nation);
+                    GunDatabase.Add(nation, this);
                 }
             }
-            if (gunArr[info._calInch, grade] == null)
-                gunArr[info._calInch, grade] = new List<GunInfo>();
+        }
 
-            foreach (var gi in gunArr[info._calInch, grade])
+        private static readonly Dictionary<string, GunDatabase> _Info = new Dictionary<string, GunDatabase>();
+
+        public string nation;
+        public List<GunInfo>[] byGrade = new List<GunInfo>[6];
+        public List<GunInfo>[,] byCalAndGrade = new List<GunInfo>[21, 6];
+
+        public GunDatabase(string nat)
+        {
+            nation = nat;
+            for (int i = 1; i < byGrade.Length; ++i)
+                byGrade[i] = new List<GunInfo>();
+
+            for (int i = 1; i < byGrade.Length; ++i)
+                for (int j = 2; j < 21; ++j)
+                    byCalAndGrade[j, i] = new List<GunInfo>();
+        }
+
+        public void Add(GunInfo info)
+        {
+            // If this nation already has an identical gun,
+            // then just update its year and early-out
+            foreach (var gi in byCalAndGrade[info._calInch, info.grade])
             {
-                if (gi._caliber == info._caliber && gi._length == info._length)
+                if (gi.caliber == info.caliber && gi.length == info.length)
                 {
-                    if (info._year < gi._year)
-                        gi._year = info._year;
+                    if (info.year < gi.year)
+                        gi.year = info.year;
                     return;
                 }
             }
-            gunArr[info._calInch, grade].Add(info);
+            byCalAndGrade[info._calInch, info.grade].Add(info);
+            byGrade[info.grade].Add(info);
         }
 
-        private static int GradeToExtendTo(GunInfo gi, List<GunInfo>[,] gunArr, int inch, int grade)
+        public static void Add(string nation, GunInfo info)
         {
-            if (gi._remainInService == GunRemainInService.No)
+            if (!_Info.TryGetValue(nation, out var data))
+            {
+                data = new GunDatabase(nation);
+                _Info[nation] = data;
+            }
+            data.Add(info);
+        }
+
+        private int GradeToExtendTo(GunInfo gi, int inch, int grade)
+        {
+            if (gi.remainInService == GunRemainInService.No)
                 return -1;
 
-            if ((gi._remainInService & GunRemainInService.RequireReplacement) == 0)
+            if ((gi.remainInService & GunRemainInService.RequireReplacement) == 0)
                 return 5;
 
             int gradeToStop = -1;
-            int iMin = (gi._remainInService & GunRemainInService.CheckDown) != 0 ? Math.Max(inch - 1, 2) : inch;
-            int iMax = (gi._remainInService & GunRemainInService.CheckUp) != 0 ? Math.Min(inch + 1, 20) : inch;
+            int iMin = (gi.remainInService & GunRemainInService.CheckDown) != 0 ? Math.Max(inch - 1, 2) : inch;
+            int iMax = (gi.remainInService & GunRemainInService.CheckUp) != 0 ? Math.Min(inch + 1, 20) : inch;
             ++iMax;
             for (int g = grade + 1; g < 6; ++g)
             {
                 bool foundNone = true;
                 for (int i = iMin; i < iMax && foundNone; ++i)
                 {
-                    if (gunArr[i, g] == null)
-                        continue;
-
-                    if ((gi._remainInService & GunRemainInService.MatchCaliber) == 0)
+                    if ((gi.remainInService & GunRemainInService.MatchCaliber) == 0)
                     {
-                        if (gunArr[i, g].Count > 0)
+                        if (byCalAndGrade[i, g].Count > 0)
                             foundNone = false;
                     }
                     else
                     {
-                        foreach (var gi2 in gunArr[i, g])
+                        foreach (var gi2 in byCalAndGrade[i, g])
                         {
-                            if (gi2._caliber == gi._caliber)
+                            if (gi2.caliber == gi.caliber)
                             {
                                 foundNone = false;
                                 break;
@@ -140,34 +157,32 @@ namespace UADRealism.Data
             return gradeToStop;
         }
 
-        private static void HandleRemainInService()
+        public void PostProcess()
         {
-            foreach (var kvp in _NationGunInfos)
+
+            for (int inch = 20; inch > 1; --inch)
             {
-                for (int inch = 20; inch > 1; --inch)
+                for (int grade = 4; grade > 0; --grade)
                 {
-                    for (int grade = 4; grade > 0; --grade)
+                    foreach (var gi in byCalAndGrade[inch, grade])
                     {
-                        if (kvp.Value[inch, grade] == null)
+                        int extendGrade = GradeToExtendTo(gi, inch, grade);
+                        if (extendGrade == -1)
                             continue;
-
-                        foreach (var gi in kvp.Value[inch, grade])
+                        ++extendGrade;
+                        for (int g = grade + 1; g < extendGrade; ++g)
                         {
-                            int extendGrade = GradeToExtendTo(gi, kvp.Value, inch, grade);
-                            if (extendGrade == -1)
-                                continue;
-                            ++extendGrade;
-                            for (int g = grade + 1; g < extendGrade; ++g)
-                            {
-                                if (kvp.Value[inch, g] == null)
-                                    kvp.Value[inch, g] = new List<GunInfo>();
-
-                                kvp.Value[inch, g].Add(gi);
-                            }
+                            byCalAndGrade[inch, g].Add(gi);
+                            byGrade[g].Add(gi);
                         }
                     }
                 }
             }
+
+            foreach (var list in byCalAndGrade)
+                list.Sort((a, b) => a.caliber.CompareTo(b.caliber));
+            foreach (var list in byGrade)
+                list.Sort((a, b) => a.caliber.CompareTo(b.caliber));
         }
 
         public static int TechGunGrade(Ship ship, int cal)
@@ -216,18 +231,23 @@ namespace UADRealism.Data
 
         public static bool HasGunOrGreaterThan(Ship ship, int cal, int[] gunGrades)
         {
-            if (!_NationGunInfos.TryGetValue(ship.player.data.name, out var gunArr))
+            if (!_Info.TryGetValue(ship.player.data.name, out var gunDB))
                 return false;
 
             for (int i = cal; i < 21; ++i)
             {
                 if (gunGrades[i] < 1)
                     continue;
-                if (gunArr[cal, gunGrades[i]] != null && gunArr[cal, gunGrades[i]].Count > 0)
+                if (gunDB.byCalAndGrade[cal, gunGrades[i]].Count > 0)
                     return true;
             }
 
             return false;
+        }
+
+        public static GunInfo GetGunForRPI(Ship ship, RandPartInfo rp, int[] gunGrades, Dictionary<GunDatabase.GunInfo, int> badGunTries)
+        {
+            return null;
         }
 
         private struct GradeInfo
@@ -254,10 +274,10 @@ namespace UADRealism.Data
                     maxGrade = ci._grade;
                     maxGradeInfo = ci;
                 }
-                if (ci._info._caliber < minCal)
-                    minCal = ci._info._caliber;
-                if (ci._info._caliber > maxCal)
-                    maxCal = ci._info._caliber;
+                if (ci._info.caliber < minCal)
+                    minCal = ci._info.caliber;
+                if (ci._info.caliber > maxCal)
+                    maxCal = ci._info.caliber;
                 if (ci._info._calInch < minInch)
                     minInch = ci._info._calInch;
                 if (ci._info._calInch > maxInch)
@@ -276,7 +296,7 @@ namespace UADRealism.Data
                 for (int i = 0; i < _TempGradeInfo.Count; ++i)
                 {
                     var ci = _TempGradeInfo[i];
-                    float delta = Mathf.Abs(ci._info._caliber - idealCal);
+                    float delta = Mathf.Abs(ci._info.caliber - idealCal);
                     if (delta < bestDelta)
                     {
                         bestDelta = delta;
@@ -297,14 +317,14 @@ namespace UADRealism.Data
                 int test = bestIdx + i;
                 if (test < _TempGradeInfo.Count)
                 {
-                    int gradeOffset = (int)(Mathf.Abs(_TempGradeInfo[test]._info._caliber - closest._info._caliber) * gradeMult) + 1;
+                    int gradeOffset = (int)(Mathf.Abs(_TempGradeInfo[test]._info.caliber - closest._info.caliber) * gradeMult) + 1;
                     if (closest._info._calInch != _TempGradeInfo[test]._info._calInch && _TempGradeInfo[test]._grade > closest._grade + gradeOffset)
                         return _TempGradeInfo[test]._info;
                 }
                 test = closest._info._calInch - i;
                 if (test >= 0)
                 {
-                    int gradeOffset = (int)(Mathf.Abs(_TempGradeInfo[test]._info._caliber - closest._info._caliber) * gradeMult) + 1;
+                    int gradeOffset = (int)(Mathf.Abs(_TempGradeInfo[test]._info.caliber - closest._info.caliber) * gradeMult) + 1;
                     if (closest._info._calInch != _TempGradeInfo[test]._info._calInch && _TempGradeInfo[test]._grade > closest._grade + gradeOffset)
                         return _TempGradeInfo[test]._info;
                 }
@@ -320,6 +340,7 @@ namespace UADRealism.Data
                 return 40f;
 
             float tng = ship.Tonnage();
+            tng *= 1f + ModUtils.DistributedRange(0.1f, 4);
 
             switch (ship.shipType.name)
             {
@@ -338,7 +359,7 @@ namespace UADRealism.Data
 
                 case "ca":
                     if (year < 1915 && ship.player.data.name == "usa")
-                        return Util.Remap(tng, 8000f, 12000f, min, max, true);
+                        return Util.Remap(tng, 8000f, 15000f, min, max, true);
                     else
                         return -1f;
 
@@ -376,7 +397,7 @@ namespace UADRealism.Data
         private static readonly List<GradeInfo> _TempGradeInfo = new List<GradeInfo>();
         private static readonly HashSet<GunInfo> _TempUsedInfos = new HashSet<GunInfo>();
         private static readonly HashSet<GunInfo> _TempUsedInfosLocal = new HashSet<GunInfo>();
-        public static bool GetGunInfoForShip(Ship ship, List<GenerateShip.CalInfo> info, int[] gunGrades, Il2CppSystem.Random rnd)
+        public static bool GetGunInfoForShip(Ship ship, List<RandPartInfo.Battery> info, int[] gunGrades, Il2CppSystem.Random rnd)
         {
             if (!_NationGunInfos.TryGetValue(ship.player.data.name, out var gunArr))
                 return false;
@@ -424,8 +445,8 @@ namespace UADRealism.Data
 
                     foreach (var gi in infos)
                     {
-                        if (gi._caliber > cInfo._max || gi._caliber < cInfo._min 
-                            || gi._caliber > lastCal // we always decrease in caliber through the set of guns
+                        if (gi.caliber > cInfo._max || gi.caliber < cInfo._min 
+                            || gi.caliber > lastCal // we always decrease in caliber through the set of guns
                             || _TempUsedInfosLocal.Contains(gi) || _TempUsedInfos.Contains(gi))
                             continue;
 
@@ -451,7 +472,7 @@ namespace UADRealism.Data
                     continue;
                 }
                 _TempUsedInfos.Add(cInfo._info);
-                lastCal = cInfo._info._caliber;
+                lastCal = cInfo._info.caliber;
             }
             return true;
         }

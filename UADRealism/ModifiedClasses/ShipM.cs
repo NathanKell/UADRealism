@@ -1293,14 +1293,14 @@ namespace UADRealism
         }
 
         private static readonly char[] _OpSplitChars = new char[] { '[', ']' };
-        private enum RPOperation
+        public enum RPOperation
         {
             Tag = 0,
             NotTag,
             Zero,
             NotZero,
         }
-        private static List<KeyValuePair<RPOperation, string>> CheckOperationsGetArgs(Il2CppSystem.Collections.Generic.List<string> args)
+        public static List<KeyValuePair<RPOperation, string>> CheckOperationsGetArgs(List<string> args)
         {
             List<KeyValuePair<RPOperation, string>> kvps = new List<KeyValuePair<RPOperation, string>>();
             if (args == null)
@@ -1324,11 +1324,14 @@ namespace UADRealism
             return kvps;
         }
 
-        private static bool CheckOperationsProcess(PartData hull, RPOperation op, string arg)
+        public static bool CheckOperationsProcess(PartData hull, RPOperation op, string arg, Ship ship = null)
         {
-            // ignore techvar for now
             switch (op)
             {
+                case RPOperation.Zero:
+                    return ship == null || ship.TechVar(arg) == 0f;
+                case RPOperation.NotZero:
+                    return ship == null || ship.TechVar(arg) != 0f;
                 case RPOperation.Tag:
                     return hull.paramx.ContainsKey(arg);
                 default:
@@ -1341,9 +1344,9 @@ namespace UADRealism
             var varsOr = string.Empty;
             var varsAnd = string.Empty;
             rp.paramx.TryGetValue("or", out var ors);
-            var orOps = CheckOperationsGetArgs(ors);
+            var orOps = CheckOperationsGetArgs(ors.ToManaged());
             rp.paramx.TryGetValue("and", out var ands);
-            var andOps = CheckOperationsGetArgs(ands);
+            var andOps = CheckOperationsGetArgs(ands.ToManaged());
 
             foreach (var op in orOps)
             {
