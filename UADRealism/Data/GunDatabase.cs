@@ -39,12 +39,31 @@ namespace UADRealism.Data
             [Serializer.Field] public int grade;
             public HashSet<string> _nations = new HashSet<string>();
 
+            private static float _CalStepHalf = -1f;
+
             public void PostProcess()
             {
                 if (caliber < 21f)
                     caliber *= 25.4f;
 
-                _calInch = Mathf.Clamp(Mathf.RoundToInt(caliber * 10f / 25.4f) / 10, 2, 20);
+                if (_CalStepHalf < 0f)
+                    _CalStepHalf = MonoBehaviourExt.Param("gun_diameter_step", 0.1f) * 0.5f;
+
+                if (caliber < (3f - _CalStepHalf) * 25.4f)
+                {
+                    _calInch = 2;
+                }
+                else if (caliber >= 20f * 25.4f)
+                {
+                    _calInch = 20;
+                }
+                else
+                {
+                    _calInch = (int)(caliber * 1f / 25.4f);
+                    if (caliber >= (Mathf.Ceil(caliber * 1f / 25.4f) - _CalStepHalf) * 25.4f)
+                        ++_calInch;
+
+                }
 
                 if (grade < 1)
                 {

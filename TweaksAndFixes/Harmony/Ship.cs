@@ -16,6 +16,33 @@ namespace TweaksAndFixes
         internal static Ship _ShipForGenerateRandom = null;
 
         // I'm sure more will get patched later.
+        //[HarmonyPatch(nameof(Ship.IsPartAvailable), new Type[] { typeof(PartData), typeof(Player), typeof(ShipType), typeof(Ship) })]
+        //[HarmonyPrefix]
+        //internal static bool Prefix_IsPartAvailable(Ship __instance, PartData part, ref bool __result)
+        //{
+        //    //if (__instance.shipType.name != "cl" && __instance.shipType.name != "ca")
+        //    //    return true;
+
+        //    var year = Database.GetYear(part);
+        //    if (year < 1860 || year > 1918)
+        //        return true;
+
+        //    var set = Database.GetHullNamesForPart(part);
+        //    if (set == null)
+        //        return true;
+
+        //    foreach (var s in set)
+        //    {
+        //        if (G.GameData.parts.TryGetValue(s, out var hull) && (hull.shipType.name == "cl" || hull.shipType.name == "ca"))
+        //        {
+        //            __result = true;
+        //            return false;
+        //        }
+        //    }
+
+        //    return true;
+        //}
+
     }
 
     // We can't target ref arguments in an attribute, so

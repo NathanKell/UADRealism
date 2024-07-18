@@ -4,8 +4,10 @@ using UnityEngine;
 using Il2Cpp;
 using TweaksAndFixes;
 using UADRealism.Data;
+using Il2CppMessagePack.Formatters;
 
 #pragma warning disable CS8600
+#pragma warning disable CS8601
 #pragma warning disable CS8602
 #pragma warning disable CS8603
 #pragma warning disable CS8604
@@ -46,13 +48,13 @@ namespace UADRealism
         // convert to stock's string-based style
         public enum RPType
         {
-            tower_main,
+            tower_main = 0,
             tower_sec,
             funnel,
+            special,
             gun,
             torpedo,
             barbette,
-            special,
         }
 
         public enum CalVary
@@ -64,17 +66,22 @@ namespace UADRealism
 
         public enum HullRP
         {
-            TowerMain,
+            TowerMain = 0,
             TowerSec,
-            Funnel
+            Funnel,
+            Special
         }
 
-        public enum TowerMountType
+        [Flags]
+        public enum MountType
         {
-            Casemate,
-            Regular,
-            Both,
-            None
+            None = 0,
+            Casemate = 1 << 0,
+            Center = 1 << 1,
+            Side = 1 << 2,
+            NonCasemate = Center | Side,
+            NonCenter = Casemate | Side,
+            All = Casemate | Center | Side,
         }
 
         private static bool _StaticsInit = false;
@@ -109,18 +116,22 @@ namespace UADRealism
         [Serializer.Field] public MountPref mountPref = MountPref.Any;
         [Serializer.Field] private string param;
         private Dictionary<string, List<string>> paramx;
-        public List<string> demandMounts = new List<string>();
-        public List<string> excludeMounts = new List<string>();
+        public Il2CppSystem.Collections.Generic.List<string> demandMounts = null;
+        public Il2CppSystem.Collections.Generic.List<string> excludeMounts = null;
         public List<KeyValuePair<ShipM.RPOperation, string>> orOps;
         public List<KeyValuePair<ShipM.RPOperation, string>> andOps;
         public bool deleteUnmounted = false;
         public bool deleteRefit = false;
         public bool tr_rand_mod = false;
+        public bool allSamePart = true;
 
         public void PostProcess()
         {
             if (order < 0)
                 order = _Next++;
+
+            if (chance < 100)
+                required = false;
 
             if (calMax < 21)
                 calMax *= 25.4f;
@@ -129,15 +140,17 @@ namespace UADRealism
 
             paramx = ModUtils.HumanModToDictionary1D(param);
             if (paramx.TryGetValue("mount", out var dM))
-                demandMounts = dM;
+                demandMounts = dM.ToNative();
             if (paramx.TryGetValue("!mount", out var xM))
-                excludeMounts = xM;
+                excludeMounts = xM.ToNative();
             if (paramx.ContainsKey("delete_unmounted"))
                 deleteUnmounted = true;
             if (paramx.ContainsKey("delete_refit"))
                 deleteRefit = true;
             if (paramx.ContainsKey("tr_rand_mod"))
                 tr_rand_mod = true;
+            if (groupPart == string.Empty && paramx.ContainsKey("allow_different"))
+                allSamePart = false;
 
             EnsureStatics();
 
@@ -176,11 +189,10 @@ namespace UADRealism
 
         private void Add(int key)
         {
-            _Lookup.GetValueOrNew(key, out var list);
-            list.Add(this);
+            _Lookup.ValueOrNew(key).Add(this);
         }
 
-        public bool Check(Ship ship)
+        public bool Check(Ship ship, string design)
         {
             if (paramx.TryGetValue("scheme", out var scheme))
             {
@@ -191,7 +203,7 @@ namespace UADRealism
             bool ok = orOps.Count == 0;
             foreach (var op in orOps)
             {
-                if (ShipM.CheckOperationsProcess(ship.hull.data, op.Key, op.Value, ship))
+                if (ShipM.CheckOperationsProcess(ship.hull.data, op.Key, op.Value, ship, design))
                 {
                     ok = true;
                     break;
@@ -202,7 +214,7 @@ namespace UADRealism
 
             foreach (var op in andOps)
             {
-                if (!ShipM.CheckOperationsProcess(ship.hull.data, op.Key, op.Value, ship))
+                if (!ShipM.CheckOperationsProcess(ship.hull.data, op.Key, op.Value, ship, design))
                 {
                     ok = false;
                     break;
@@ -211,11 +223,11 @@ namespace UADRealism
             return ok;
         }
 
-        public List<PartData> GetParts(Ship ship)
+        public List<PartData> GetParts(List<PartData> available)
         {
             _TempParts.Clear();
             string typeStr = type.ToString();
-            foreach (var data in G.GameData.parts.Values)
+            foreach (var data in available)
             {
                 if (data.type != typeStr)
                     continue;
@@ -230,7 +242,12 @@ namespace UADRealism
                         continue;
                 }
 
-                if (!ship.IsPartAvailable(data))
+                if (align == Alignment.Center)
+                {
+                    if (data.paramx.ContainsKey("side"))
+                        continue;
+                }
+                else if (align == Alignment.Side && data.paramx.ContainsKey("center"))
                     continue;
 
                 _TempParts.Add(data);
@@ -239,17 +256,18 @@ namespace UADRealism
             return _TempParts;
         }
 
-        public List<PartData> GetPartsForGunInfo(Ship ship, GunDatabase.GunInfo gi)
+        public MountType GetTowerMountTypes(Ship ship)
         {
-            _TempParts.Clear();
-            TowerMountType tmt = TowerMountType.None;
+            MountType tmt = MountType.None;
             foreach (var p in ship.parts)
             {
                 if (p.data.isTowerAny || p.data.isFunnel)
                 {
                     foreach (var m in p.mountsInside)
                     {
-                        if (m.employedPart != null)
+                        if (ship.mountsUsed.ContainsKey(m))
+                            continue;
+                        if (m.barbette || m.siBarbette)
                             continue;
                         if (m.caliberMin >= 0 && m.caliberMax > 0)
                         {
@@ -262,20 +280,63 @@ namespace UADRealism
                                 continue;
                         }
 
-                        if (m.casemate && tmt != TowerMountType.Casemate)
-                            tmt = tmt == TowerMountType.None ? TowerMountType.Casemate : TowerMountType.Both;
-                        if ((m.center || m.side) && tmt != TowerMountType.Regular)
-                            tmt = tmt == TowerMountType.None ? TowerMountType.Regular : TowerMountType.Both;
+                        if (m.casemate)
+                            tmt |= MountType.Casemate;
+                        if (m.center)
+                            tmt |= MountType.Center;
+                        if (m.side)
+                            tmt |= MountType.Side;
                     }
                 }
-                if (tmt == TowerMountType.Both)
+                if (tmt == MountType.All)
                     break;
             }
+            return tmt;
+        }
 
-            if (mountPref == MountPref.TowerOnly && tmt == TowerMountType.None)
+        public static MountType GetMountType(PartData data)
+        {
+            MountType mt = MountType.None;
+            foreach (var s in data.mounts)
+            {
+                switch (s)
+                {
+                    case "center": mt |= MountType.Center; break;
+                    case "side": mt |= MountType.Side; break;
+                    case "casemate": mt |= MountType.Casemate; break;
+                }
+            }
+            return mt;
+        }
+
+        public static bool HasCenterCasemate(Ship ship)
+        {
+            foreach (var m in ship.hull.mountsInside)
+            {
+                if (!m.casemate || ship.mountsUsed.ContainsKey(m))
+                    continue;
+
+                // We could probably just use localposition here but I'm not certain
+                // that there isn't a case where a mount is the child of some offset
+                // gameobject.
+                if (Math.Abs(ship.hull.transform.InverseTransformPoint(m.transform.position).x) < 0.01f)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public List<PartData> GetPartsForGunInfo(Ship ship, GunDatabase.GunInfo gi, List<PartData> available)
+            => GetPartsForGunInfo(gi, available, GetTowerMountTypes(ship), HasCenterCasemate(ship));
+
+        public List<PartData> GetPartsForGunInfo(GunDatabase.GunInfo gi, List<PartData> available, MountType towerMounts, bool centerCasemate)
+        {
+            _TempParts.Clear();
+
+            if (mountPref == MountPref.TowerOnly && towerMounts == MountType.None)
                 return _TempParts;
 
-            foreach (var data in G.GameData.parts.Values)
+            foreach (var data in available)
             {
                 if (data.type != "gun")
                     continue;
@@ -291,42 +352,166 @@ namespace UADRealism
                 if (gi._calInch != Mathf.RoundToInt(data.GetCaliberInch()))
                     continue;
 
+                var mt = GetMountType(data);
+
+                if (align == Alignment.Center)
+                {
+                    if ((mt & MountType.Center) == 0
+                        && (!centerCasemate || (mt & MountType.Casemate) == 0))
+                        continue;
+                    if (data.paramx.ContainsKey("side"))
+                        continue;
+                }
+                else if (align == Alignment.Side)
+                {
+                    if (((mt & MountType.Side) == 0
+                    && (mt & MountType.Casemate) == 0)
+                        || data.paramx.ContainsKey("center"))
+                        continue;
+                }
+
                 switch (mountPref)
                 {
                     case MountPref.TowerOnly:
-                        if (tmt == TowerMountType.Regular)
-                        {
-                            if (!Ship.IsNotPureCasemateGun(data, ship.shipType))
-                                continue;
-                        }
-                        else if (tmt == TowerMountType.Casemate && !Ship.IsCasemateGun(data))
-                        {
+                        if ((towerMounts & mt) == 0)
                             continue;
-                        }
                         break;
                     case MountPref.DeckOnly:
-                        if (!Ship.IsNotPureCasemateGun(data, ship.shipType))
+                        if ((mt & MountType.NonCasemate) == 0)
                             continue;
                         break;
                     case MountPref.TowerDeck:
-                        if ((tmt == TowerMountType.None || tmt == TowerMountType.Regular) && !Ship.IsNotPureCasemateGun(data, shipType))
+                        if ((towerMounts & mt) == 0 && (mt & MountType.NonCasemate) == 0)
                             continue;
                         break;
 
                     case MountPref.CasemateOnly:
-                        if (!Ship.IsCasemateGun(data))
+                        if ((mt & MountType.Casemate) == 0)
                             continue;
                         break;
                 }
-                                
-                if (!ship.IsPartAvailable(data))
-                    continue;
 
                 _TempParts.Add(data);
             }
 
             return _TempParts;
         }
+
+        public bool ExistsMount(Ship ship, PartData data)
+        {
+            foreach (var m in ship.mounts)
+                if (!ship.mountsUsed.ContainsKey(m) && m.Fits(data, demandMounts, excludeMounts))
+                    return true;
+
+            return false;
+        }
+
+        public bool IsAllowedMount(Mount m, PartData data, Ship ship)
+        {
+            switch (align)
+            {
+                case Alignment.Side:
+                    if (Mathf.Abs(m.transform.position.x) < 0.01f)
+                        return false;
+                    break;
+                case Alignment.Center:
+                    if (Mathf.Abs(m.transform.position.x) > 0.01f)
+                        return false;
+                    break;
+            }
+            if (!m.Fits(data, demandMounts, excludeMounts))
+                return false;
+            if (ship.mountsUsed.ContainsKey(m))
+                return false;
+
+            return true;
+        }
+
+        public bool IsAllowedMount(Mount m, Part part, Ship ship)
+        {
+            switch (align)
+            {
+                case Alignment.Side:
+                    if (Mathf.Abs(m.transform.position.x) < 0.01f)
+                        return false;
+                    break;
+                case Alignment.Center:
+                    if (Mathf.Abs(m.transform.position.x) > 0.01f)
+                        return false;
+                    break;
+            }
+            if (!m.Fits(part, demandMounts, excludeMounts))
+                return false;
+            if (ship.mountsUsed.TryGetValue(m, out var otherPart) && otherPart != part)
+                return false;
+            if (m.parentPart == part)
+                return false;
+
+            return true;
+        }
+
+        public void GetRangesForShip(Ship ship, out Vector2 xVec, out Vector2 zVec)
+        {
+            xVec = x;
+            zVec = z;
+            xVec += ship.allowedMountsOffset;
+            zVec += ship.allowedMountsOffset;
+            xVec *= ship.hullSize.extents.x + ship.hullSize.center.x;
+            zVec *= ship.hullSize.extents.z + ship.hullSize.center.z;
+        }
+
+        public float GetMountWeight(Mount m)
+        {
+            float weight = 1f;
+            switch (mountPref)
+            {
+                case RandPartInfo.MountPref.TowerOnly:
+                    if (m.barbette || m.parentPart == null || (!m.parentPart.data.isTowerAny && !m.parentPart.data.isFunnel))
+                        return 0f;
+                    break;
+                case RandPartInfo.MountPref.CasemateOnly:
+                    if (!m.casemate || (m.parentPart != null && !m.parentPart.data.isHull))
+                        return 0f;
+                    break;
+                case RandPartInfo.MountPref.DeckOnly:
+                    if (m.casemate || (!m.barbette && m.parentPart != null && !m.parentPart.data.isHull))
+                        return 0f;
+                    break;
+                case RandPartInfo.MountPref.TowerDeck:
+                    if (m.casemate && (m.parentPart == null || m.parentPart.data.isHull))
+                        return 0f;
+                    break;
+
+                case RandPartInfo.MountPref.TowerPref:
+                    if (m.barbette)
+                        weight = 0.001f;
+                    else if (m.parentPart != null && (m.parentPart.data.isTowerAny || !m.parentPart.data.isFunnel))
+                        weight = 1f;
+                    else if (m.parentPart != null && !m.parentPart.data.isHull)
+                        weight = 0.01f;
+                    else if (m.casemate)
+                        weight = 0.002f;
+                    else
+                        weight = 0.00001f;
+                    break;
+                case RandPartInfo.MountPref.DeckPref:
+                    // Two-tier. Deck is best, then tower, then casemate.
+                    if (!m.barbette && (m.parentPart != null && (m.parentPart.data.isTowerAny || m.parentPart.data.isFunnel)))
+                        weight = 0.01f;
+                    else if (m.casemate)
+                        weight = 0.001f;
+                    break;
+                case RandPartInfo.MountPref.CasematePref:
+                    if (!m.barbette && m.parentPart != null && (m.parentPart.data.isTowerAny || m.parentPart.data.isFunnel))
+                        weight = 0.01f;
+                    else if (!m.casemate)
+                        weight = 0.001f;
+                    break;
+            }
+
+            return weight;
+        }
+
 
         private static void EnsureStatics()
         {
@@ -375,6 +560,8 @@ namespace UADRealism
         static Dictionary<ComponentData, float> _CompWeights = new Dictionary<ComponentData, float>();
         static List<PartData> _Options = new List<PartData>();
         static Dictionary<PartData, float> _OptionWeights = new Dictionary<PartData, float>();
+        static Dictionary<Mount, float> _MountWeights = new Dictionary<Mount, float>();
+        static Dictionary<Vector3, float> _MountPositionWeights = new Dictionary<Vector3, float>();
 
         float _hullYear;
         float _designYear;
@@ -397,8 +584,7 @@ namespace UADRealism
         Part _firstPairCreated = null;
         float _offsetX;
         float _offsetZ;
-        Dictionary<string, PartData> _partDataForGroup = new Dictionary<string, PartData>();
-        Dictionary<string, GunDatabase.GunInfo> _gunDataForGroup = new Dictionary<string, GunDatabase.GunInfo>();
+        
         HashSet<int> _avoidBarrels = new HashSet<int>();
         Dictionary<Ship.A, float> _ArmorMultipliers = new Dictionary<Ship.A, float>();
         bool _partsInitOK = false;
@@ -418,14 +604,19 @@ namespace UADRealism
         float _maxPayloadWeight;
         float _payloadStopWeight;
 
+        Dictionary<string, PartData> _partDataForGroup = new Dictionary<string, PartData>();
+        Dictionary<string, GunDatabase.GunInfo> _gunDataForGroup = new Dictionary<string, GunDatabase.GunInfo>();
 
+        List<PartData> _availableParts = new List<PartData>();
         List<RandPartInfo> _randParts;
+        string _design;
 
         List<RandPartUsage> _rpAll = new List<RandPartUsage>();
-        List<RandPartUsage>[] _rpHull = new List<RandPartUsage>[(int)RandPartInfo.HullRP.Funnel + 1];
+        List<RandPartUsage>[] _rpHull = new List<RandPartUsage>[(int)RandPartInfo.HullRP.Special + 1];
         List<RandPartUsage>[] _rpByBattery = new List<RandPartUsage>[(int)RandPartInfo.Battery.Ter + 1];
         List<RandPartUsage> _rpTorps = new List<RandPartUsage>();
         Dictionary<Part, RandPartUsage> _partToRP = new Dictionary<Part, RandPartUsage>();
+        List<GunDatabase.GunInfo> _gunInfos = new List<GunDatabase.GunInfo>();
 
         int _lastFunnelIdxReq = -1;
         int _lastFunnelIdxOpt = -1;
@@ -433,32 +624,267 @@ namespace UADRealism
         int _lastHullIdxReq = -1;
         int _lastAnyIdxReq = -1;
 
+        const int _MaxGunTries = 10;
+        const int _MaxDataTries = 24;
+        const int _MaxMountTries = 10;
+
         Dictionary<GunDatabase.GunInfo, int> _badGunTries = new Dictionary<GunDatabase.GunInfo, int>();
-        Dictionary<PartData, int> _badPartTries = new Dictionary<PartData, int>();
+        Dictionary<PartData, int> _badDataTries = new Dictionary<PartData, int>();
         Dictionary<PartData, Dictionary<Mount, int>> _badMountTries = new Dictionary<PartData, Dictionary<Mount, int>>();
 
-        HashSet<PartData> _passBadParts = new HashSet<PartData>();
+        HashSet<GunDatabase.GunInfo> _passBadGuns = new HashSet<GunDatabase.GunInfo>();
+        HashSet<PartData> _passBadDatas = new HashSet<PartData>();
         Dictionary<PartData, HashSet<Mount>> _passBadMounts = new Dictionary<PartData, HashSet<Mount>>();
 
         private class RandPartUsage
         {
             public RandPartInfo _rp;
             public List<Part> _parts = new List<Part>();
-            public List<PartData> _datas;
-            public GunDatabase.GunInfo _gun;
+            public List<PartData> _datas = new List<PartData>();
+            public GunDatabase.GunInfo _gun = null;
             public int desired;
+            private GenerateShip _parent;
+            public Ship.TurretCaliber _tcDeck = null;
+            public Ship.TurretCaliber _tcCasemate = null;
+
+            const int _MaxGunTriesPer = 10;
+            const int _MaxDataTriesPer = 24;
+            const int _MaxMountTriesPer = 10;
 
             public Dictionary<GunDatabase.GunInfo, int> _badGunTries = new Dictionary<GunDatabase.GunInfo, int>();
-            public Dictionary<PartData, int> _badPartTries = new Dictionary<PartData, int>();
+            public Dictionary<PartData, int> _badDataTries = new Dictionary<PartData, int>();
             public Dictionary<PartData, Dictionary<Mount, int>> _badMountTries = new Dictionary<PartData, Dictionary<Mount, int>>();
 
-            public HashSet<PartData> _passBadParts = new HashSet<PartData>();
-            public Dictionary<PartData, HashSet<Mount>> _passBadMounts = new Dictionary<PartData, HashSet<Mount>>();
+            public HashSet<GunDatabase.GunInfo> _passBadGuns = new HashSet<GunDatabase.GunInfo>();
+            public HashSet<PartData> _passBadDatas = new HashSet<PartData>();
+
+            private static List<Mount> _TempMounts = new List<Mount>();
+
+            public RandPartUsage(GenerateShip gs) { _parent = gs; }
+
+            public void Succeed()
+            {
+                _parent._rpAll.Add(this);
+                if (_rp.type <= RandPartInfo.RPType.special)
+                {
+                    // Note: cast is redundant but done for clarity
+                    _parent._rpHull[(int)((RandPartInfo.HullRP)_rp.type)].Add(this);
+                }
+                else if (_rp.type == RandPartInfo.RPType.torpedo)
+                {
+                    _parent._rpTorps.Add(this);
+                }
+                else if (_rp.type == RandPartInfo.RPType.gun)
+                {
+                    _parent._rpByBattery[(int)_rp.battery].Add(this);
+                }
+
+                foreach (var part in _parts)
+                    _parent._partToRP[part] = this;
+
+                if (_gun != null)
+                {
+                    if (!_parent._gunInfos.Contains(_gun))
+                        _parent._gunInfos.Add(_gun);
+                    if (_rp.groupGun != string.Empty)
+                        _parent._gunDataForGroup[_rp.groupGun] = _gun;
+                }
+
+                // Assert: _datas.Count == 1
+                if (_rp.groupPart != string.Empty)
+                    _parent._partDataForGroup[_rp.groupPart] = _datas[0];
+
+                switch (_rp.type)
+                {
+                    case RandPartInfo.RPType.tower_main:
+                        _parent._mainPlaced = true;
+                        break;
+                    case RandPartInfo.RPType.tower_sec:
+                        _parent._secPlaced = true;
+                        break;
+                    case RandPartInfo.RPType.funnel:
+                        _parent._hasFunnel = true;
+                        break;
+                }
+
+                foreach (var part in _parts)
+                {
+                    if (ShipM.FindMatchingTurretArmor(_parent._ship, part.data) == null)
+                        _parent._ship.AddShipTurretArmor(part);
+                }
+            }
 
             public void Reset()
             {
-                _passBadParts.Clear();
-                _passBadMounts.Clear();
+                _passBadGuns.Clear();
+                _passBadDatas.Clear();
+
+                foreach (var data in _datas)
+                {
+                    if (_badDataTries.IncrementValueFor(data) > _MaxDataTriesPer)
+                        _parent._passBadDatas.Add(data);
+                    _parent._badDataTries.IncrementValueFor(data);
+                }
+
+                if (_gun != null)
+                {
+                    if (_badGunTries.IncrementValueFor(_gun) > _MaxGunTriesPer)
+                        _parent._passBadGuns.Add(_gun);
+                    _parent._badGunTries.IncrementValueFor(_gun);
+                    _parent._gunInfos.Remove(_gun);
+                }
+
+                foreach (var part in _parts)
+                {
+                    if (part.mount != null)
+                    {
+                        if (_badMountTries.ValueOrNew(part.data).IncrementValueFor(part.mount) > _MaxMountTriesPer)
+                            _parent._passBadMounts.ValueOrNew(part.data).Add(part.mount);
+                        _parent._badMountTries.ValueOrNew(part.data).IncrementValueFor(part.mount);
+                    }
+                    _parent._ship.RemovePart(part);
+                }
+
+                _parts.Clear();
+                _datas.Clear();
+                _gun = null;
+
+                _parent.CleanTCs();
+                _parent.CleanTAs();
+            }
+
+            public bool IsBadData(PartData data)
+            {
+                return _passBadDatas.Contains(data)
+                    || _parent._passBadDatas.Contains(data)
+                    || _parent._badDataTries.GetValueOrDefault(data) > _MaxDataTries;
+            }
+
+            public bool IsBadGun(GunDatabase.GunInfo gi)
+            {
+                return _passBadGuns.Contains(gi)
+                    || _parent._passBadGuns.Contains(gi)
+                    || _parent._badGunTries.GetValueOrDefault(gi) > _MaxGunTries;
+            }
+
+            public bool IsBadMount(PartData data, Mount mount)
+            {
+                return (_parent._passBadMounts.TryGetValue(data, out var mBads) && mBads.Contains(mount))
+                    || (_parent._badMountTries.TryGetValue(data, out var mTriesGS) && mTriesGS.GetValueOrDefault(mount) > _MaxMountTries);
+            }
+
+            public void MarkBadTry(Part part, PartData data, GunDatabase.GunInfo gi, bool forceData, bool forceGun, bool forceMount, bool addToPass = true)
+            {
+                if (data != null)
+                {
+                    if (addToPass)
+                        _passBadDatas.Add(data);
+                    if (_badDataTries.IncrementValueFor(data) > _MaxDataTriesPer || forceData)
+                        _parent._passBadDatas.Add(data);
+                    _parent._badDataTries.IncrementValueFor(data);
+                }
+
+                if (gi != null)
+                {
+                    if (addToPass)
+                        _passBadGuns.Add(gi);
+                    if (_badGunTries.IncrementValueFor(gi) > _MaxGunTriesPer || forceGun)
+                        _parent._passBadGuns.Add(gi);
+
+                    _parent._badGunTries.IncrementValueFor(gi);
+                }
+                
+                if (part != null)
+                {
+                    if (part.mount != null)
+                    {
+                        // VS complains about _this_ use of the extension method
+                        // (but _not_ the one for the _parent dict!!)
+                        if (!_badMountTries.TryGetValue(data, out var bmt))
+                        {
+                            bmt = new Dictionary<Mount, int>();
+                            _badMountTries[data] = bmt;
+                        }
+                        if (bmt.IncrementValueFor(part.mount) > _MaxMountTriesPer || forceMount)
+                            _parent._passBadMounts.ValueOrNew(data).Add(part.mount);
+                        _parent._badMountTries.ValueOrNew(data).IncrementValueFor(part.mount);
+                    }
+                    _parent._ship.RemovePart(part);
+                }
+                if (_parent._firstPairCreated)
+                {
+                    _parts.Remove(_parent._firstPairCreated);
+                    _parent._ship.RemovePart(_parent._firstPairCreated);
+                    _parent._firstPairCreated = null;
+                }
+            }
+
+            public bool IsAllowedMount(Mount m, Part part)
+             => !IsBadMount(part.data, m) && _rp.IsAllowedMount(m, part, _parent._ship);
+
+            public bool IsAllowedMount(Mount m, PartData data)
+             => !IsBadMount(data, m) && _rp.IsAllowedMount(m, data, _parent._ship);
+
+            public List<Mount> GetAllowedMounts(Part part)
+            {
+                _TempMounts.Clear();
+                foreach (var m in _parent._ship.mounts)
+                    if (IsAllowedMount(m, part))
+                        _TempMounts.Add(m);
+
+                return _TempMounts;
+            }
+
+            public List<Mount> GetAllowedMounts(PartData data)
+            {
+                _TempMounts.Clear();
+                foreach (var m in _parent._ship.mounts)
+                    if (IsAllowedMount(m, data))
+                        _TempMounts.Add(m);
+
+                return _TempMounts;
+            }
+
+            public List<List<Mount>> GetAllowedMountsInGroups(Part part)
+            {
+                var ret = new List<List<Mount>>();
+                bool checkPos = _rp.x.x > -1f || _rp.x.y < 1f
+                        || _rp.z.x > -1f || _rp.z.y < 1f;
+                _rp.GetRangesForShip(_parent._ship, out var x, out var z);
+                
+                _TempMounts.Clear();
+                foreach (var m in _parent._ship.mounts)
+                {
+                    if (!IsAllowedMount(m, part))
+                        continue;
+
+                    if (checkPos)
+                    {
+                        var pos = m.transform.position;
+                        if (pos.x < x.x || pos.x > x.y || pos.z < z.x || pos.z > z.y)
+                            continue;
+                    }
+                    _TempMounts.Add(m);
+                }
+                _TempMounts.Sort((a, b) => a.name.CompareTo(b.name));
+
+                Mount last = null;
+                List<Mount> curList = null;
+                foreach (var m in _TempMounts)
+                {
+                    if (last == null 
+                        || m.packNumber != last.packNumber
+                        || !Mathf.Approximately(m.transform.position.x, last.transform.position.x)
+                        || m.parentPart != last.parentPart)
+                    {
+                        curList = new List<Mount>();
+                        ret.Add(curList);
+                    }
+                    curList.Add(m);
+                    last = m;
+                }
+
+                return ret;
             }
         }
 
@@ -488,6 +914,98 @@ namespace UADRealism
             }
             _armRatio = ShipStats.GetArmamentRatio(_sType, _avgYear);
             _partsInitOK = InitParts();
+        }
+
+        private bool IsCalInchUsed(int calInch, RandPartInfo.MountPref mountPref)
+        {
+            foreach (var batt in _rpByBattery)
+            {
+                foreach (var rpu in batt)
+                {
+                    if (rpu._gun == null || rpu._gun._calInch != calInch)
+                        continue;
+
+                    foreach (var data in rpu._datas)
+                    {
+                        if (mountPref == RandPartInfo.MountPref.CasemateOnly)
+                        {
+                            if (Ship.IsCasemateGun(data))
+                                return true;
+                        }
+                        else if (mountPref == RandPartInfo.MountPref.DeckOnly)
+                        {
+                            if (!Ship.IsCasemateGun(data))
+                                return true;
+                        }
+                        else
+                        {
+                            // Technically we could check tower mounts
+                            // but it's fine to be conservative.
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void CleanTCs()
+        {
+            for (int i = _ship.shipGunCaliber.Count; i-- > 0;)
+            {
+                var tc = _ship.shipGunCaliber[i];
+                if (!IsTCUsed(tc))
+                    _ship.shipGunCaliber.RemoveAt(i);
+            }
+        }
+
+        private bool IsTCUsed(Ship.TurretCaliber tc)
+        {
+            // This is a slightly more expensive check than needed
+            // because we're multi-testing RPs with the same group
+            foreach (var rpu in _rpAll)
+            {
+                if (rpu._rp.type != RandPartInfo.RPType.gun)
+                    continue;
+
+                foreach (var data in rpu._datas)
+                {
+                    bool isCasemate = Ship.IsCasemateGun(data);
+                    if (tc.turretPartData.caliber == data.caliber && isCasemate == tc.isCasemateGun)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private void CleanTAs()
+        {
+            for (int i = _ship.shipTurretArmor.Count; i-- > 0;)
+            {
+                var ta = _ship.shipTurretArmor[i];
+                if (!IsTAUsed(ta))
+                    _ship.shipTurretArmor.RemoveAt(i);
+            }
+        }
+
+        private bool IsTAUsed(Ship.TurretArmor ta)
+        {
+            // This is a slightly more expensive check than needed
+            // because we're multi-testing RPs with the same group
+            foreach (var rpu in _rpAll)
+            {
+                if (rpu._rp.type != RandPartInfo.RPType.gun)
+                    continue;
+
+                foreach (var data in rpu._datas)
+                {
+                    bool isCasemate = Ship.IsCasemateGun(data);
+                    if (ta.turretPartData.caliber == data.caliber && isCasemate == ta.isCasemateGun)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         public void DesignShipInitial(Ship._GenerateRandomShip_d__566 coroutine)
@@ -955,6 +1473,42 @@ namespace UADRealism
                 }
             }
             _hasFunnel = false;
+            for (int i = 0; i < _randParts.Count; ++i)
+            {
+                var rp = _randParts[i];
+                if (!rp.required)
+                {
+                    if (rp.type == RandPartInfo.RPType.funnel)
+                        _lastFunnelIdxOpt = i;
+                }
+                else
+                {
+                    _lastAnyIdxReq = i;
+                    switch (rp.type)
+                    {
+                        case RandPartInfo.RPType.tower_sec:
+                            if (_needSec)
+                                _lastHullIdxReq = i;
+                            break;
+                        case RandPartInfo.RPType.funnel:
+                            _lastFunnelIdxReq = i;
+                            goto case RandPartInfo.RPType.tower_main;
+                        case RandPartInfo.RPType.tower_main:
+                        case RandPartInfo.RPType.special:
+                            _lastHullIdxReq = i;
+                            break;
+                        case RandPartInfo.RPType.torpedo:
+                        case RandPartInfo.RPType.gun:
+                        case RandPartInfo.RPType.barbette:
+                            _lastPayloadIdxReq = i;
+                            break;
+                    }
+                }
+            }
+
+            foreach (var data in G.GameData.parts.Values)
+                if (_ship.IsPartAvailable(data))
+                    _availableParts.Add(data);
 
             return true;
         }
@@ -978,468 +1532,480 @@ namespace UADRealism
             return true;
         }
 
-        private void SetupGunInfo()
+        //private void SetupGunInfo()
+        //{
+        //    GunDatabase.TechGunGrades(_ship, _gunGrades);
+        //    float agTert = _nation == "austria" ? 47 : 88;
+        //    int agTert2 = _nation == "austria" ? 66 : 88;
+        //    switch (_sType)
+        //    {
+        //        case "tb":
+        //            if (_hullYear > 1891)
+        //            {
+        //                switch (_nation)
+        //                {
+        //                    case "britain":
+        //                    case "usa":
+        //                    case "spain":
+        //                    case "russia":
+        //                        int metrMain = _nation == "spain" || _nation == "russia" ? 75 : 76;
+        //                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, metrMain, metrMain), new CalInfo(GunCal.Main, 57, 57) };
+        //                        break;
+
+        //                    case "france":
+        //                    case "austria":
+        //                        int frMain = _nation == "france" ? 65 : 66;
+        //                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, frMain, frMain), new CalInfo(GunCal.Main, 47, 47) };
+        //                        break;
+
+        //                    case "germany":
+        //                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 50, 88), new CalInfo(GunCal.Main, 50, 55, false) };
+        //                        break;
+
+        //                    default:
+        //                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 88), new CalInfo(GunCal.Main, 30, 50, false) };
+        //                        break;
+        //                }
+        //            }
+        //            else
+        //            {
+        //                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 57), new CalInfo(GunCal.Main, 30, 47, false) };
+        //            }
+        //            break;
+
+        //        case "dd":_calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 75, 140), new CalInfo(GunCal.Sec, 37, 57) }; break;
+
+        //        case "ca":
+        //            if (_hullYear < 1905)
+        //            {
+        //                // Traditional armored cruiser or first-class protected cruiser
+        //                switch (_nation)
+        //                {
+        //                    case "france":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 190, 195),
+        //                            new CalInfo(GunCal.Sec, 137, 165),
+        //                            new CalInfo(GunCal.Ter, 75, 75),
+        //                            new CalInfo(GunCal.Ter, 47, 57) };
+        //                        break;
+
+        //                    case "usa":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 8, 10),
+        //                            new CalInfo(GunCal.Sec, 4, 6),
+        //                            new CalInfo(GunCal.Ter, 57, 77),
+        //                            new CalInfo(GunCal.Ter, 47, 57) };
+        //                        break;
+
+        //                    case "japan":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 8, 10),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3),
+        //                            new CalInfo(GunCal.Ter, 47, 57) };
+        //                        break;
+
+        //                    case "russia":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 8, 8),
+        //                            new CalInfo(GunCal.Sec, 4, 6),
+        //                            new CalInfo(GunCal.Ter, 75, 75),
+        //                            new CalInfo(GunCal.Ter, 37, 47) };
+        //                        break;
+
+        //                    case "austria":
+        //                    case "germany":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 210, 240),
+        //                            new CalInfo(GunCal.Sec, 150, 150),
+        //                            new CalInfo(GunCal.Ter, agTert, agTert) };
+        //                        break;
+
+        //                    case "italy":
+        //                    case "spain":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 10, 11),
+        //                            new CalInfo(GunCal.Sec, 5, 7),
+        //                            new CalInfo(GunCal.Sec, 3, 3),
+        //                            new CalInfo(GunCal.Ter, 40, 65) };
+        //                        break;
+
+        //                    case "britain":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 9.2f, 9.2f),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3) };
+        //                        break;
+
+        //                    default:
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 8, 10),
+        //                            new CalInfo(GunCal.Sec, 5, 6),
+        //                            new CalInfo(GunCal.Ter, 47, 88) };
+        //                        break;
+        //                }
+        //            }
+        //            else if (_hullYear < 1917)
+        //            {
+        //                // Late armored cruiser.
+        //                // These will either have unified main armament
+        //                // (Blucher) or battleship-class main guns with
+        //                // heavy main-class "secondaries" (Ibuki)
+        //                switch (_nation)
+        //                {
+        //                    case "france":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 190, 195),
+        //                            new CalInfo(GunCal.Ter, 75, 75) };
+        //                        break;
+
+        //                    case "russia":
+        //                    case "usa":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 10, 11),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3),
+        //                            new CalInfo(GunCal.Ter, 47, 57) };
+        //                        break;
+
+        //                    case "japan":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 12),
+        //                            new CalInfo(GunCal.Main, 8, 8),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3) };
+        //                        break;
+
+        //                    case "austria":
+        //                    case "germany":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 200, 210),
+        //                            new CalInfo(GunCal.Sec, 150, 150),
+        //                            new CalInfo(GunCal.Ter, agTert, agTert) };
+        //                        break;
+
+        //                    case "italy":
+        //                    case "spain":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 10, 11),
+        //                            new CalInfo(GunCal.Sec, 6, 7),
+        //                            new CalInfo(GunCal.Sec, 3, 3) };
+        //                        break;
+
+        //                    default:
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 9.2f, 9.2f),
+        //                            new CalInfo(GunCal.Sec, 7.5f, 7.5f),
+        //                            new CalInfo(GunCal.Ter, 57, 57) };
+        //                        break;
+        //                }
+        //            }
+        //            else
+        //            {
+        //                // Treaty cruiser
+        //                _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 8, 8),
+        //                            new CalInfo(GunCal.Sec, 4, 5.5f),
+        //                            new CalInfo(GunCal.Ter, 40, 88) };
+        //            }
+        //            break;
+
+        //        case "cl":
+        //            if (_hullYear < 1916)
+        //            {
+        //                _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 95, 110),
+        //                            new CalInfo(GunCal.Ter, 37, 88) };
+        //            }
+        //            else if (_hullYear < 1919)
+        //            {
+        //                _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 5, 6),
+        //                            new CalInfo(GunCal.Sec, 3, 4) };
+        //            }
+        //            else
+        //            {
+        //                // Treaty light cruiser
+        //                _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 120, 160),
+        //                            new CalInfo(GunCal.Sec, 4, 5),
+        //                            new CalInfo(GunCal.Ter, 40, 3) };
+        //            }
+        //            break;
+
+        //        case "bc":
+        //        case "bb":
+        //            // predreads
+        //            if (_sType != "bc" && !_ship.hull.name.StartsWith("bb"))
+        //            {
+        //                switch (_nation)
+        //                {
+        //                    case "usa":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 13),
+        //                            new CalInfo(GunCal.Sec, 6, 8),
+        //                            new CalInfo(GunCal.Ter, 3, 3),
+        //                            new CalInfo(GunCal.Ter, 47, 57) };
+        //                        break;
+
+        //                    case "france":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 300, 13),
+        //                            new CalInfo(GunCal.Main, 270, 280, false),
+        //                            new CalInfo(GunCal.Sec, 137, 195),
+        //                            new CalInfo(GunCal.Ter, 65, 100),
+        //                            new CalInfo(GunCal.Ter, 47, 47) };
+        //                        break;
+
+        //                    case "austria":
+        //                    case "germany":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 240, 290),
+        //                            new CalInfo(GunCal.Sec, 150, 150),
+        //                            new CalInfo(GunCal.Ter, agTert, agTert) };
+        //                        break;
+
+        //                    case "russia":
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 10, 12),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Ter, 75, 75),
+        //                            new CalInfo(GunCal.Ter, 47, 47) };
+        //                        break;
+
+        //                    default:
+        //                        _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 11, 13.5f),
+        //                            new CalInfo(GunCal.Sec, _nation == "britain" ? 6 : 5, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3),
+        //                            new CalInfo(GunCal.Ter, 47, 57) };
+        //                        break;
+        //                }
+
+        //                // semi-dreads
+        //                if (_ship.TechVar("use_main_side_guns") != 0f)
+        //                {
+        //                    if (_nation == "russia")
+        //                    {
+        //                        _calInfos.RemoveAt(3);
+        //                        _calInfos.Insert(1, new CalInfo(GunCal.Sec, 8, 8));
+        //                    }
+        //                    else
+        //                    {
+        //                        if (_calInfos[1]._cal == GunCal.Main)
+        //                        {
+        //                            _calInfos.RemoveAt(1);
+        //                        }
+        //                        foreach (var ci in _calInfos)
+        //                        {
+        //                            if (ci._cal == GunCal.Sec && ci._max < 8 * 25.4f)
+        //                            {
+        //                                ci._cal = GunCal.Main;
+        //                                ci._min = 230f;
+        //                                ci._max = 270f;
+        //                                break;
+        //                            }
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //            // Dreadnoughts / Battlecruisers
+        //            else
+        //            {
+        //                if (_avgYear < 1919)
+        //                {
+        //                    switch (_nation)
+        //                    {
+        //                        case "france":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 16),
+        //                            new CalInfo(GunCal.Sec, 127, 140) };
+        //                            break;
+
+        //                        case "usa":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 16),
+        //                            new CalInfo(GunCal.Sec, 5, 5) }; // Technically South Carolina didn't use the 5/51.
+        //                            break;
+
+        //                        case "austria":
+        //                        case "germany":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 279, 310),
+        //                            new CalInfo(GunCal.Sec, 150, 150),
+        //                            new CalInfo(GunCal.Ter, agTert2, agTert2) };
+        //                            break;
+
+        //                        case "japan":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 16),
+        //                            new CalInfo(GunCal.Sec, 5, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3, false) };
+        //                            break;
+
+        //                        case "russia":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 16),
+        //                            new CalInfo(GunCal.Sec, 119, 131),
+        //                            new CalInfo(GunCal.Ter, 3, 3) };
+        //                            break;
+
+        //                        case "italy":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 15),
+        //                            new CalInfo(GunCal.Sec, 100, 125),
+        //                            new CalInfo(GunCal.Ter, 3, 3) };
+        //                            break;
+
+        //                        default:
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 12, 15),
+        //                            new CalInfo(GunCal.Ter, 4, 4) };
+        //                            break;
+        //                    }
+        //                    if (_hullYear >= 1910)
+        //                    {
+        //                        if (_nation == "britain")
+        //                        {
+        //                            _calInfos[1]._min = 3 * 25.4f;
+        //                            _calInfos[1]._max = 3 * 25.4f;
+        //                            _calInfos.Insert(1, new CalInfo(GunCal.Sec, 5, 6));
+        //                        }
+
+        //                        if (_calInfos[0]._max < 380 && GunDatabase.HasGunOrGreaterThan(_ship, 14, _gunGrades))
+        //                        {
+        //                            _calInfos[0]._max = 385;
+        //                        }
+        //                    }
+        //                }
+        //                else if (_hullYear < 1927)
+        //                {
+        //                    switch (_nation)
+        //                    {
+        //                        case "usa":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 14, 16),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Ter, 3, 3) };
+        //                            break;
+
+        //                        case "japan":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 14, 18),
+        //                            new CalInfo(GunCal.Sec, 140, 140),
+        //                            new CalInfo(GunCal.Ter, 120, 120, false) };
+        //                            break;
+
+        //                        case "austria":
+        //                        case "germany":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 335, 420),
+        //                            new CalInfo(GunCal.Sec, 150, 150),
+        //                            new CalInfo(GunCal.Ter, agTert2, agTert2) };
+        //                            break;
+
+        //                        case "russia":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 13, 16),
+        //                            new CalInfo(GunCal.Sec, 120, 140),
+        //                            new CalInfo(GunCal.Ter, 3, 3) };
+        //                            break;
+
+        //                        case "italy":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 15, 15),
+        //                            new CalInfo(GunCal.Sec, 120, 155),
+        //                            new CalInfo(GunCal.Ter, 75, 120)};
+        //                            break;
+
+        //                        case "britain":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 15, 18),
+        //                            new CalInfo(GunCal.Sec, 6, 6),
+        //                            new CalInfo(GunCal.Sec, 120, 120)};
+        //                            break;
+
+        //                        default:
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 14, 18),
+        //                            new CalInfo(GunCal.Sec, 120, 155),
+        //                            new CalInfo(GunCal.Sec, 65, 120)};
+        //                            break;
+        //                    }
+        //                }
+        //                else // Fast Battleship
+        //                {
+        //                    switch (_nation)
+        //                    {
+        //                        case "france":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 380, 20),
+        //                            new CalInfo(GunCal.Sec, 140, 160),
+        //                            new CalInfo(GunCal.Ter, 90, 120)};
+        //                            break;
+
+        //                        case "japan":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 16, 20),
+        //                            new CalInfo(GunCal.Sec, 140, 210),
+        //                            new CalInfo(GunCal.Sec, 120, 130)};
+        //                            break;
+
+        //                        case "austria":
+        //                        case "germany":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 380, 460),
+        //                            new CalInfo(GunCal.Sec, 150, 155),
+        //                            new CalInfo(GunCal.Ter, 100, 110)};
+        //                            break;
+
+        //                        case "italy":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 15, 18),
+        //                            new CalInfo(GunCal.Sec, 145, 155),
+        //                            new CalInfo(GunCal.Ter, 100, 125),
+        //                            new CalInfo(GunCal.Ter, 65, 90)};
+        //                            break;
+
+        //                        case "usa":
+        //                        case "britain":
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 14, 18),
+        //                            new CalInfo(GunCal.Sec, 120, 5.25f),
+        //                            new CalInfo(GunCal.Ter, 40, 80)};
+        //                            break;
+
+        //                        default:
+        //                            _calInfos = new List<CalInfo>() {
+        //                            new CalInfo(GunCal.Main, 14, 20),
+        //                            new CalInfo(GunCal.Sec, 120, 170),
+        //                            new CalInfo(GunCal.Ter, 65, 120)};
+        //                            break;
+        //                    }
+        //                }
+        //            }
+        //            break;
+        //    }
+        //}
+
+        private bool DecreasePayloadWeight()
         {
-            GunDatabase.TechGunGrades(_ship, _gunGrades);
-            float agTert = _nation == "austria" ? 47 : 88;
-            int agTert2 = _nation == "austria" ? 66 : 88;
-            switch (_sType)
-            {
-                case "tb":
-                    if (_hullYear > 1891)
-                    {
-                        switch (_nation)
-                        {
-                            case "britain":
-                            case "usa":
-                            case "spain":
-                            case "russia":
-                                int metrMain = _nation == "spain" || _nation == "russia" ? 75 : 76;
-                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, metrMain, metrMain), new CalInfo(GunCal.Main, 57, 57) };
-                                break;
-
-                            case "france":
-                            case "austria":
-                                int frMain = _nation == "france" ? 65 : 66;
-                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, frMain, frMain), new CalInfo(GunCal.Main, 47, 47) };
-                                break;
-
-                            case "germany":
-                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 50, 88), new CalInfo(GunCal.Main, 50, 55, false) };
-                                break;
-
-                            default:
-                                _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 88), new CalInfo(GunCal.Main, 30, 50, false) };
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 40, 57), new CalInfo(GunCal.Main, 30, 47, false) };
-                    }
-                    break;
-
-                case "dd":_calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, 75, 140), new CalInfo(GunCal.Sec, 37, 57) }; break;
-
-                case "ca":
-                    if (_hullYear < 1905)
-                    {
-                        // Traditional armored cruiser or first-class protected cruiser
-                        switch (_nation)
-                        {
-                            case "france":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 190, 195),
-                                    new CalInfo(GunCal.Sec, 137, 165),
-                                    new CalInfo(GunCal.Ter, 75, 75),
-                                    new CalInfo(GunCal.Ter, 47, 57) };
-                                break;
-
-                            case "usa":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 8, 10),
-                                    new CalInfo(GunCal.Sec, 4, 6),
-                                    new CalInfo(GunCal.Ter, 57, 77),
-                                    new CalInfo(GunCal.Ter, 47, 57) };
-                                break;
-
-                            case "japan":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 8, 10),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3),
-                                    new CalInfo(GunCal.Ter, 47, 57) };
-                                break;
-
-                            case "russia":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 8, 8),
-                                    new CalInfo(GunCal.Sec, 4, 6),
-                                    new CalInfo(GunCal.Ter, 75, 75),
-                                    new CalInfo(GunCal.Ter, 37, 47) };
-                                break;
-
-                            case "austria":
-                            case "germany":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 210, 240),
-                                    new CalInfo(GunCal.Sec, 150, 150),
-                                    new CalInfo(GunCal.Ter, agTert, agTert) };
-                                break;
-
-                            case "italy":
-                            case "spain":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 10, 11),
-                                    new CalInfo(GunCal.Sec, 5, 7),
-                                    new CalInfo(GunCal.Sec, 3, 3),
-                                    new CalInfo(GunCal.Ter, 40, 65) };
-                                break;
-
-                            case "britain":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 9.2f, 9.2f),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3) };
-                                break;
-
-                            default:
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 8, 10),
-                                    new CalInfo(GunCal.Sec, 5, 6),
-                                    new CalInfo(GunCal.Ter, 47, 88) };
-                                break;
-                        }
-                    }
-                    else if (_hullYear < 1917)
-                    {
-                        // Late armored cruiser.
-                        // These will either have unified main armament
-                        // (Blucher) or battleship-class main guns with
-                        // heavy main-class "secondaries" (Ibuki)
-                        switch (_nation)
-                        {
-                            case "france":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 190, 195),
-                                    new CalInfo(GunCal.Ter, 75, 75) };
-                                break;
-
-                            case "russia":
-                            case "usa":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 10, 11),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3),
-                                    new CalInfo(GunCal.Ter, 47, 57) };
-                                break;
-
-                            case "japan":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 12),
-                                    new CalInfo(GunCal.Main, 8, 8),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3) };
-                                break;
-
-                            case "austria":
-                            case "germany":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 200, 210),
-                                    new CalInfo(GunCal.Sec, 150, 150),
-                                    new CalInfo(GunCal.Ter, agTert, agTert) };
-                                break;
-
-                            case "italy":
-                            case "spain":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 10, 11),
-                                    new CalInfo(GunCal.Sec, 6, 7),
-                                    new CalInfo(GunCal.Sec, 3, 3) };
-                                break;
-
-                            default:
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 9.2f, 9.2f),
-                                    new CalInfo(GunCal.Sec, 7.5f, 7.5f),
-                                    new CalInfo(GunCal.Ter, 57, 57) };
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        // Treaty cruiser
-                        _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 8, 8),
-                                    new CalInfo(GunCal.Sec, 4, 5.5f),
-                                    new CalInfo(GunCal.Ter, 40, 88) };
-                    }
-                    break;
-
-                case "cl":
-                    if (_hullYear < 1916)
-                    {
-                        _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 95, 110),
-                                    new CalInfo(GunCal.Ter, 37, 88) };
-                    }
-                    else if (_hullYear < 1919)
-                    {
-                        _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 5, 6),
-                                    new CalInfo(GunCal.Sec, 3, 4) };
-                    }
-                    else
-                    {
-                        // Treaty light cruiser
-                        _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 120, 160),
-                                    new CalInfo(GunCal.Sec, 4, 5),
-                                    new CalInfo(GunCal.Ter, 40, 3) };
-                    }
-                    break;
-
-                case "bc":
-                case "bb":
-                    // predreads
-                    if (_sType != "bc" && !_ship.hull.name.StartsWith("bb"))
-                    {
-                        switch (_nation)
-                        {
-                            case "usa":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 13),
-                                    new CalInfo(GunCal.Sec, 6, 8),
-                                    new CalInfo(GunCal.Ter, 3, 3),
-                                    new CalInfo(GunCal.Ter, 47, 57) };
-                                break;
-
-                            case "france":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 300, 13),
-                                    new CalInfo(GunCal.Main, 270, 280, false),
-                                    new CalInfo(GunCal.Sec, 137, 195),
-                                    new CalInfo(GunCal.Ter, 65, 100),
-                                    new CalInfo(GunCal.Ter, 47, 47) };
-                                break;
-
-                            case "austria":
-                            case "germany":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 240, 290),
-                                    new CalInfo(GunCal.Sec, 150, 150),
-                                    new CalInfo(GunCal.Ter, agTert, agTert) };
-                                break;
-
-                            case "russia":
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 10, 12),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Ter, 75, 75),
-                                    new CalInfo(GunCal.Ter, 47, 47) };
-                                break;
-
-                            default:
-                                _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 11, 13.5f),
-                                    new CalInfo(GunCal.Sec, _nation == "britain" ? 6 : 5, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3),
-                                    new CalInfo(GunCal.Ter, 47, 57) };
-                                break;
-                        }
-
-                        // semi-dreads
-                        if (_ship.TechVar("use_main_side_guns") != 0f)
-                        {
-                            if (_nation == "russia")
-                            {
-                                _calInfos.RemoveAt(3);
-                                _calInfos.Insert(1, new CalInfo(GunCal.Sec, 8, 8));
-                            }
-                            else
-                            {
-                                if (_calInfos[1]._cal == GunCal.Main)
-                                {
-                                    _calInfos.RemoveAt(1);
-                                }
-                                foreach (var ci in _calInfos)
-                                {
-                                    if (ci._cal == GunCal.Sec && ci._max < 8 * 25.4f)
-                                    {
-                                        ci._cal = GunCal.Main;
-                                        ci._min = 230f;
-                                        ci._max = 270f;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Dreadnoughts / Battlecruisers
-                    else
-                    {
-                        if (_avgYear < 1919)
-                        {
-                            switch (_nation)
-                            {
-                                case "france":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 16),
-                                    new CalInfo(GunCal.Sec, 127, 140) };
-                                    break;
-
-                                case "usa":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 16),
-                                    new CalInfo(GunCal.Sec, 5, 5) }; // Technically South Carolina didn't use the 5/51.
-                                    break;
-
-                                case "austria":
-                                case "germany":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 279, 310),
-                                    new CalInfo(GunCal.Sec, 150, 150),
-                                    new CalInfo(GunCal.Ter, agTert2, agTert2) };
-                                    break;
-
-                                case "japan":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 16),
-                                    new CalInfo(GunCal.Sec, 5, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3, false) };
-                                    break;
-
-                                case "russia":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 16),
-                                    new CalInfo(GunCal.Sec, 119, 131),
-                                    new CalInfo(GunCal.Ter, 3, 3) };
-                                    break;
-
-                                case "italy":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 15),
-                                    new CalInfo(GunCal.Sec, 100, 125),
-                                    new CalInfo(GunCal.Ter, 3, 3) };
-                                    break;
-
-                                default:
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 12, 15),
-                                    new CalInfo(GunCal.Ter, 4, 4) };
-                                    break;
-                            }
-                            if (_hullYear >= 1910)
-                            {
-                                if (_nation == "britain")
-                                {
-                                    _calInfos[1]._min = 3 * 25.4f;
-                                    _calInfos[1]._max = 3 * 25.4f;
-                                    _calInfos.Insert(1, new CalInfo(GunCal.Sec, 5, 6));
-                                }
-
-                                if (_calInfos[0]._max < 380 && GunDatabase.HasGunOrGreaterThan(_ship, 14, _gunGrades))
-                                {
-                                    _calInfos[0]._max = 385;
-                                }
-                            }
-                        }
-                        else if (_hullYear < 1927)
-                        {
-                            switch (_nation)
-                            {
-                                case "usa":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 14, 16),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Ter, 3, 3) };
-                                    break;
-
-                                case "japan":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 14, 18),
-                                    new CalInfo(GunCal.Sec, 140, 140),
-                                    new CalInfo(GunCal.Ter, 120, 120, false) };
-                                    break;
-
-                                case "austria":
-                                case "germany":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 335, 420),
-                                    new CalInfo(GunCal.Sec, 150, 150),
-                                    new CalInfo(GunCal.Ter, agTert2, agTert2) };
-                                    break;
-
-                                case "russia":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 13, 16),
-                                    new CalInfo(GunCal.Sec, 120, 140),
-                                    new CalInfo(GunCal.Ter, 3, 3) };
-                                    break;
-
-                                case "italy":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 15, 15),
-                                    new CalInfo(GunCal.Sec, 120, 155),
-                                    new CalInfo(GunCal.Ter, 75, 120)};
-                                    break;
-
-                                case "britain":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 15, 18),
-                                    new CalInfo(GunCal.Sec, 6, 6),
-                                    new CalInfo(GunCal.Sec, 120, 120)};
-                                    break;
-
-                                default:
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 14, 18),
-                                    new CalInfo(GunCal.Sec, 120, 155),
-                                    new CalInfo(GunCal.Sec, 65, 120)};
-                                    break;
-                            }
-                        }
-                        else // Fast Battleship
-                        {
-                            switch (_nation)
-                            {
-                                case "france":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 380, 20),
-                                    new CalInfo(GunCal.Sec, 140, 160),
-                                    new CalInfo(GunCal.Ter, 90, 120)};
-                                    break;
-
-                                case "japan":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 16, 20),
-                                    new CalInfo(GunCal.Sec, 140, 210),
-                                    new CalInfo(GunCal.Sec, 120, 130)};
-                                    break;
-
-                                case "austria":
-                                case "germany":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 380, 460),
-                                    new CalInfo(GunCal.Sec, 150, 155),
-                                    new CalInfo(GunCal.Ter, 100, 110)};
-                                    break;
-
-                                case "italy":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 15, 18),
-                                    new CalInfo(GunCal.Sec, 145, 155),
-                                    new CalInfo(GunCal.Ter, 100, 125),
-                                    new CalInfo(GunCal.Ter, 65, 90)};
-                                    break;
-
-                                case "usa":
-                                case "britain":
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 14, 18),
-                                    new CalInfo(GunCal.Sec, 120, 5.25f),
-                                    new CalInfo(GunCal.Ter, 40, 80)};
-                                    break;
-
-                                default:
-                                    _calInfos = new List<CalInfo>() {
-                                    new CalInfo(GunCal.Main, 14, 20),
-                                    new CalInfo(GunCal.Sec, 120, 170),
-                                    new CalInfo(GunCal.Ter, 65, 120)};
-                                    break;
-                            }
-                        }
-                    }
-                    break;
-            }
+            return false;
         }
+
+        private bool ModifyPayloadWeight()
+        {
+            return false;
+        }
+
+        private static readonly Dictionary<string, float> _DesignWeights = new Dictionary<string, float>();
 
         public bool SelectParts()
         {
             if (_this.isSimpleRefit)
                 return true;
 
-            SetupGunInfo();
+            //SetupGunInfo();
 
             _ship.EnableLogging(false);
 
@@ -1452,6 +2018,20 @@ namespace UADRealism
             for (int pass = 0; pass < 50; ++pass)
             {
                 ResetPassState();
+                if (_ship.hull.data.paramx.TryGetValue("designs", out var possDesigns) && possDesigns.Count % 2 == 0)
+                {
+                    for (int i = 0; i < possDesigns.Count; i += 2)
+                        _DesignWeights.Add(possDesigns[i], float.Parse(possDesigns[i + 1]));
+
+                    _design = ModUtils.RandomByWeights(_DesignWeights, null, _this.__8__1.rnd);
+                    _DesignWeights.Clear();
+                }
+                else
+                {
+                    _design = string.Empty;
+                }
+
+                bool passSucecss = true;
 
                 // this will increase when towers/funnels are added
                 _hullPartsTonnage = 0;
@@ -1479,13 +2059,12 @@ namespace UADRealism
                     if (!CheckSetMaxPayloadWeight())
                         break;
 
-                    //if(payloadTotalWeight > maxPayloadWeight) DecreasePayloadWeight();
+                    if (payloadTotalWeight > _maxPayloadWeight && !DecreasePayloadWeight())
+                        break;
 
                     // Stop condition: payload is nearly at max.
                     if (r > _lastAnyIdxReq && payloadTotalWeight >= _payloadStopWeight)
                         break;
-
-                    float preWeight = _ship.Weight();
 
                     float chance = rp.chance;
                     if (rp.tr_rand_mod)
@@ -1498,13 +2077,9 @@ namespace UADRealism
                     if (!Util.Chance(chance, _this.__8__1.rnd))
                         continue;
 
-                    if (!rp.Check(_ship))
-                        continue;
-
-                    var rpu = new RandPartUsage();
+                    var rpu = new RandPartUsage(this);
                     rpu._rp = rp;
 
-                    bool abortRun = true;
                     for (int rpass = 0; rpass < 10; ++rpass)
                     {
                         rpu.Reset();
@@ -1524,154 +2099,168 @@ namespace UADRealism
                                 gi = GunDatabase.GetGunForRPI(_ship, rp, _gunGrades, _badGunTries);
                         }
 
-
-                        if (rp.groupGun != string.Empty)
-                            _gunDataForGroup[rp.groupGun] = gi;
-                        if (rp.groupPart != string.Empty)
-                            _partDataForGroup[rp.groupPart] = rpu._data;
-
-                        // Place part(s)
-                        for (int j = rpu.desired; j-- > 0;)
+                        while (rpu._parts.Count < rpu.desired)
                         {
+                            float preWeight = _ship.Weight();
 
-                            bool isCenter = rp.align == RandPartInfo.Alignment.Center || (rp.align == RandPartInfo.Alignment.Both && j == 0);
-                            int maxK = isCenter ? 1 : 2;
-                            for (int k = 0; k < maxK; ++k)
+                            PartData data = FindPartDataForRPU(rpu, gi);
+
+                            if (data == null)
+                                break;
+
+                            var allowed = _ship.PartAmountTotal(data);
+                            // TODO: check ahead if this will be paired
+                            if (allowed != -1 && _ship.PartAmountUsed(data) >= allowed)
                             {
-                                Part p = null;
-                                if (k == 0)
+                                rpu.MarkBadTry(null, data, gi, true, true, false);
+                                continue;
+                            }
+                            if (!rpu._rp.ExistsMount(_ship, data))
+                            {
+                                // We could be adding a barbette later
+                                // so we can't just force-add this
+                                rpu.MarkBadTry(null, data, null, false, false, false);
+                                continue;
+                            }
+
+                            if (data.isGun)
+                            {
+                                if (_ship.shipGunCaliber == null)
+                                    _ship.shipGunCaliber = new Il2CppSystem.Collections.Generic.List<Ship.TurretCaliber>();
+                                if (ShipM.FindMatchingTurretCaliber(_ship, data) == null)
                                 {
-                                    _firstPairCreated = null;
-                                    _offsetX = 0f;
-                                    _offsetZ = 0f;
+                                    var tempPart = Part.Create(data, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int, false);
+                                    AddTCForGun(tempPart, gi);
+                                    tempPart.Erase();
                                 }
+                            }
+
+                            // Check cost now; we have to do this _after_ making the TC.
+                            if (_isMissionMainShip && _ship.Cost() + _ship.CalcPartCost(data) > _ship.player.cash)
+                            {
+                                // This part will never be acceptable. So
+                                // add it as bad for all RPUs
+                                rpu.MarkBadTry(null, data, gi, true, true, false);
+                                if (rpu._parts.Count < rpu._rp.countMin)
+                                    continue;
                                 else
+                                    break;
+                            }
+
+                            var part = Part.Create(data, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int, false);
+                            if (data.isGun)
+                                part.UpdateCollidersSize(_ship);
+
+                            if (!PlacePartForRPU(part, rpu))
+                            {
+                                rpu.MarkBadTry(part, data, gi, false, false, false);
+                                if (rpu._parts.Count < rpu._rp.countMin)
+                                    continue;
+                                else
+                                    break;
+                            }
+
+                            bool onSide = Mathf.Abs(_ship.hull.transform.InverseTransformPoint(part.transform.position).x) > 0.01f;
+                            bool firstOfPair = onSide && _firstPairCreated == null;
+
+                            float delta = _ship.Weight() - preWeight;
+                            float testWeight = _ship.Weight();
+                            if (firstOfPair)
+                                testWeight += delta;
+                            if (testWeight > _tonnage)
+                            {
+                                rpu.MarkBadTry(part, data, gi, false, false, false);
+                                if (rpu._parts.Count < rpu._rp.countMin)
+                                    continue;
+                                else
+                                    break;
+                            }
+
+                            bool isHull = true;
+                            switch (rp.type)
+                            {
+                                case RandPartInfo.RPType.funnel:
+                                case RandPartInfo.RPType.tower_main:
+                                case RandPartInfo.RPType.tower_sec:
+                                case RandPartInfo.RPType.special:
+                                    _hullPartsTonnage += delta;
+                                    break;
+
+                                default:
+                                    isHull = false;
+                                    payloadTotalWeight += delta;
+                                    break;
+                            }
+                            if (isHull)
+                            {
+                                if (!CheckSetMaxPayloadWeight())
                                 {
-                                    _offsetX *= -1f;
+                                    // this can only happen from adding a hull part.
+                                    // So in this case we want to retry.
+                                    _hullPartsTonnage -= delta;
+                                    CheckSetMaxPayloadWeight();
+                                    rpu.MarkBadTry(part, data, gi, false, false, false);
+                                    continue;
                                 }
-                                rpu._parts.Add(p);
+                            }
+                            else if (payloadTotalWeight + (firstOfPair ? delta : 0) > _maxPayloadWeight)
+                            {
+                                payloadTotalWeight -= delta;
+                                rpu.MarkBadTry(part, data, gi, false, false, false);
+                                if (rpu._parts.Count < rpu._rp.countMin)
+                                    continue;
+                                else
+                                    break;
+                            }
+
+                            if (!rpu._datas.Contains(data))
+                                rpu._datas.Add(data);
+                            rpu._parts.Add(part);
+                            if (onSide)
+                            {
+                                if (firstOfPair)
+                                    _firstPairCreated = part;
+                                else
+                                    _firstPairCreated = null;
                             }
                         }
 
-                        _rpAll.Add(rpu);
-                        if (rp.type == RandPartInfo.RPType.gun)
-                            _rpByBattery[(int)rp.battery].Add(rpu);
-                        else if (rp.type == RandPartInfo.RPType.torpedo)
-                            _rpTorps.Add(rpu);
-
-                        abortRun = false;
-                        break;
-                    }
-
-                    if (abortRun)
-                    {
-                        if (rpu._gun != null)
+                        // We might not have made it to the desired number
+                        // but if we're at/above the minimum, we're stil ok
+                        if (_firstPairCreated == null && rpu._parts.Count >= rpu._rp.countMin)
                         {
-                            _badGunTries.TryGetValue(rpu._gun, out int bgt);
-                            _badGunTries[rpu._gun] = bgt + 1;
-                        }
-                        if (rpu._data != null)
-                        {
-                            _badPartTries.TryGetValue(rpu._data, out int bpt);
-                            _badPartTries[rpu._data] = bpt + 1;
-                        }
-
-                        bool cleanTC = rp.type == RandPartInfo.RPType.gun
-                            && rpu._parts.Count > 0
-                            && _ship.shipGunCaliber[_ship.shipGunCaliber.Count - 1] is var sgc
-                            && sgc.isCasemateGun == 
-                        if (_firstPairCreated != null)
-                        {
-                            _ship.RemovePart(_firstPairCreated);
-                            rpu._parts.Remove(_firstPairCreated);
-                            _firstPairCreated = null;
-                        }
-
-                        
-                        if (rp.required)
-                        {
-                            if (rpu._parts.Count < rp.countMin)
-                                continue;
-                        }
-                        else
-                        {
-                            for (int i = rpu._parts.Count; i-- > 0;)
-                                _ship.RemovePart(rpu._parts[i]);
-                            
+                            break;
                         }
                     }
 
-                    float delta = _ship.Weight() - preWeight;
-                    switch (rp.type)
+                    // Did we at least reach the minimum?
+                    if (_firstPairCreated == null && rpu._parts.Count >= rpu._rp.countMin)
                     {
-                        case RandPartInfo.RPType.funnel:
-                        case RandPartInfo.RPType.tower_main:
-                        case RandPartInfo.RPType.tower_sec:
-                        case RandPartInfo.RPType.special:
-                            _hullPartsTonnage += delta;
-                            break;
+                        rpu.Succeed();
+                    }
+                    else
+                    {
+                        // This will delete everything from this RPI
+                        rpu.Reset();
 
-                        default:
-                            payloadTotalWeight += delta;
+                        if (rpu._rp.required)
+                        {
+                            passSucecss = false;
                             break;
+                        }
                     }
                 }
 
                 // Verify base requirements
-                if (!_mainPlaced || (!_secPlaced && _needSec) || !_hasFunnel)
+                if (!passSucecss || !_mainPlaced || (!_secPlaced && _needSec) || !_hasFunnel)
                     continue;
                 if (r < _lastAnyIdxReq)
                     continue;
 
-                //if (payloadTotalWeight < _payloadStopWeight) IncreasePayloadWeight();
+                ModifyPayloadWeight();
 
-
-                bool partBadPlacement = false;
-                for (int i = _ship.parts.Count; i-- > 0;)
-                {
-                    var part = _ship.parts[i];
-                    var data = part.data;
-                    if (data.isGun ? _ship.IsMainCal(data) : data.isTorpedo)
-                    {
-                        if (!part.CanPlaceSoft(false) || !part.CanPlaceSoftLight())
-                        {
-                            partBadPlacement = true;
-                            break;
-                        }
-                    }
-                }
-                if (partBadPlacement)
-                    continue;
-
-                for (int i = _ship.shipGunCaliber.Count; i-- > 0;)
-                {
-                    bool remove = true;
-                    foreach (var p in _ship.parts)
-                    {
-                        if (p.data == _ship.shipGunCaliber[i].turretPartData)
-                        {
-                            remove = false;
-                            break;
-                        }
-                    }
-                    if (remove)
-                        _ship.shipGunCaliber.RemoveAt(i);
-                }
-
-                for (int i = _ship.shipTurretArmor.Count; i-- > 0;)
-                {
-                    bool remove = true;
-                    foreach (var p in _ship.parts)
-                    {
-                        if (p.data == _ship.shipTurretArmor[i].turretPartData)
-                        {
-                            remove = false;
-                            break;
-                        }
-                    }
-                    if (remove)
-                        _ship.shipGunCaliber.RemoveAt(i);
-                }
+                CleanTCs();
+                CleanTAs();
 
                 ShipM.ClearMatCache(_ship);
 
@@ -1690,7 +2279,7 @@ namespace UADRealism
         {
             _partDataForGroup.Clear();
             _gunDataForGroup.Clear();
-            _passBadParts.Clear();
+            _passBadDatas.Clear();
             _passBadMounts.Clear();
             _rpAll.Clear();
             foreach (var l in _rpByBattery)
@@ -1708,452 +2297,173 @@ namespace UADRealism
             _ship.shipTurretArmor.Clear();
         }
 
-        private PartData PartForGunInfo(GunDatabase.GunInfo gi)
+        private bool IsPlacementValid(Part part)
         {
-            return null;
-        }
-
-        private PartData FindPartDataForRPI(RandPartInfo rp)
-        {
-            if (rp.groupPart != string.Empty && _partDataForGroup.TryGetValue(rp.groupPart, out var gpart) && gpart != null)
-                return gpart;
-
-            if (rp.groupGun != string.Empty && _gunDataForGroup.TryGetValue(rp.groupGun, out var ggun) && ggun != null)
-                return PartForGunInfo(ggun);
-            
-
-            PartData ret = null;
-            foreach (var data in parts)
-            {
-                if (_ship.badData.Contains(data) || data.type != rp.type)
-                    continue;
-
-                _Options.Add(data);
-            }
-
-            if (_Options.Count == 0)
-                return null;
-
-            if (rp.type == "torpedo")
-            {
-                float bestVal = float.MinValue;
-                foreach (var opt in _Options)
-                {
-                    var val = TorpedoValue(opt);
-                    if (val > bestVal)
-                    {
-                        bestVal = val;
-                        ret = opt;
-                    }
-                }
-            }
-            else if (rp.type == "gun")
-            {
-                // Alter stock code such that we track all references
-                HashSet<PartData> refData;
-
-                if (refData != null)
-                {
-                    for (int i = _Options.Count; i-- > 0;)
-                    {
-                        var opt = _Options[i];
-
-                        bool remove = true;
-                        foreach (var r in refData)
-                        {
-                            if (r.GetCaliberInch() == opt.GetCaliberInch())
-                            {
-                                remove = false;
-                                break;
-                            }
-                        }
-                        if (remove)
-                            _Options.RemoveAt(i);
-                    }
-                }
-                // Game is weird here. If "sec_cal" is not there, it jumps to maincal.
-                // But if "sec_cal" _is_ there, it still goes to maincal unless "ter_cal"
-                // is _also_ specified.
-                if (rp.condition.Contains("ter_cal"))
-                {
-                    float bestVal = float.MinValue;
-                    foreach (var opt in _Options)
-                    {
-                        var val = TertiaryGunValue(opt);
-                        if (val > bestVal)
-                        {
-                            bestVal = val;
-                            ret = opt;
-                        }
-                    }
-                }
-                else
-                {
-                    float bestVal = float.MinValue;
-                    foreach (var opt in _Options)
-                    {
-                        var val = MainOrSecGunValue(opt);
-                        if (val > bestVal)
-                        {
-                            bestVal = val;
-                            ret = opt;
-                        }
-                    }
-                }
-            }
-            else if (_Options.Count > 0)
-            {
-                if (rp.type != "tower_main" && rp.type != "tower_sec")
-                {
-                    ret = _Options.Random(null, _this.__8__1.rnd);
-                }
-                else
-                {
-                    // try to do something smarter than random
-                    float maxCost = 0f;
-                    float minTon = float.MaxValue;
-                    float maxTon = float.MinValue;
-                    foreach (var o in _Options)
-                    {
-                        if (o.cost > maxCost)
-                            maxCost = o.cost;
-                        if (minTon > o.weight)
-                            minTon = o.weight;
-                        if (maxTon < o.weight)
-                            maxTon = o.weight;
-                    }
-                    float costMult = Mathf.Pow(10f, -Mathf.Floor(Mathf.Log10(maxCost)));
-                    float tonMult = 1f - minTon / maxTon;
-                    foreach (var o in _Options)
-                    {
-                        float cost = o.cost * costMult;
-                        float year = Database.GetYear(o);
-                        if (year > 0f)
-                            cost *= Mathf.Pow(2f, (year - 1890f) * 0.5f);
-
-                        // Try to weight based on where ship is within the tonnage range
-                        cost *= 1.2f - Mathf.Abs(Mathf.InverseLerp(minTon, maxTon, o.weight) - _tngRatio) * tonMult;
-
-                        _OptionWeights[o] = cost;
-                    }
-                    ret = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
-                    _OptionWeights.Clear();
-                }
-            }
-            _Options.Clear();
-            return ret;
-        }
-
-        public bool SelectPartsStock()
-        {
-            if (_this.isSimpleRefit)
-                return true;
-
-            _ship.EnableLogging(false);
-            var st = _ship.shipType;
-            if (st.randParts.Count == 0)
-            {
-                // Log error?
+            if (!part.CanPlace())
                 return false;
+
+            if (part.data.isGun || part.data.isTorpedo)
+            {
+                if (!part.CanPlaceSoft())
+                    return false;
+
+                if (!Ship.IsCasemateGun(part.data) && !part.CanPlaceSoftLight())
+                    return false;
             }
 
-            // Not sure why the game creates this but never adds it
-            // to the list of randparts...
-            // This is a no-op AFAIK, I don't think PostProcess
-            // actually adds it to anything.
-            RandPart props = new RandPart();
-            props.name = "(props)";
-            props.shipTypes = string.Empty;
-            props.chance = 100;
-            props.min = 20;
-            props.max = 40;
-            props.type = "special";
-            props.paired = true;
-            props.group = string.Empty;
-            props.effect = "prop";
-            props.center = false;
-            props.side = true;
-            props.rangeZFrom = -1f;
-            props.rangeZTo = 1f;
-            props.condition = string.Empty;
-            props.param = string.Empty;
-            props.PostProcess();
-
-            _mainPlaced = false;
-            _secPlaced = false;
-            _needSec = _sType != "tr";
-            if (_needSec)
+            foreach (var p in _ship.parts)
             {
-                PartCategoryData secPCD = null;
-                foreach (var kvp in G.GameData.partCategories)
-                {
-                    if (kvp.Key == "tower_sec")
-                    {
-                        secPCD = kvp.Value;
-                    }
-                }
-
-                _needSec = false;
-                foreach (var kvp in G.GameData.parts)
-                {
-                    if (_ship.BelongsToCategory(kvp.Value, secPCD) && _ship.IsPartAvailable(kvp.Value))
-                    {
-                        _needSec = true;
-                        break;
-                    }
-                }
-            }
-            _hasFunnel = false;
-
-            var randParts = _this._isRefitMode_5__2 ? st.randPartsRefit : st.randParts;
-            foreach (var rp in randParts)
-            {
-                var chance = rp.chance;
-                if (rp.paramx.TryGetValue("tr_rand_mod", out var trmod))
-                {
-                    var paramInit = MonoBehaviourExt.Param("initial_tr_transport_armed", 0.1f);
-                    var armed = _ship.TechA("armed_transports");
-                    chance *= paramInit * armed;
-                }
-
-                if (!Util.Chance(chance, _this.__8__1.rnd))
+                if (p == part)
                     continue;
 
-                if (!(_gen < 4 || _mainPlaced || rp.rangeZFrom < -0.3f || rp.rangeZTo >= 0.625f || (rp.type != "barbette" && rp.type != "funnel"))
-                    || !(_gen < 4 || _secPlaced || rp.rangeZFrom < -0.45f || rp.rangeZTo >= 0.25f || (rp.type != "gun" && rp.type != "barbette" && rp.type != "funnel"))
-                    || !(!_mainPlaced || rp.type != "tower_main")
-                    || !(!_secPlaced || rp.type != "tower_sec")
-                    // stock has rangeZFrom < -1f which is impossible.
-                    || !(rp.type != "funnel" || !_needSec || _secPlaced || rp.rangeZFrom < -1f || rp.rangeZTo >= -0.5))
-                    continue;
-
-                if (rp.paramx.TryGetValue("scheme", out var scheme))
+                if (p.data.isTorpedo || (p.data.isGun && !Ship.IsCasemateGun(p.data)))
                 {
-                    if (_ship.hull.hullInfo != null && !_ship.hull.hullInfo.schemes.Contains(scheme[0]))
-                        continue;
-                }
-                if (!_ship.CheckOperations(rp))
-                    continue;
-
-                if (rp.paramx.ContainsKey("delete_unmounted"))
-                {
-                    _ship.DeleteUnmounted(rp.type);
-                }
-                else if (_this._isRefitMode_5__2 && rp.paramx.ContainsKey("delete_refit"))
-                {
-                    _ship.RemoveDeleteRefitPartsNew(rp.type, _this.isSimpleRefit);
-                }
-                else
-                {
-                    int num = Util.FromTo(rp.min, rp.max, _this.__8__1.rnd);
-                    if (rp.paired)
-                    {
-                        num = 2 * Util.RoundToIntProb(num * 0.5f, _this.__8__1.rnd);
-                    }
-
-                    _ship.added.Clear();
-                    _ship.badData.Clear();
-                    _ship.badMounts.Clear();
-                    _ship.badTriesForData.Clear();
-                    _firstPairCreated = null;
-                    _offsetX = 0f;
-                    _offsetZ = 0f;
-                    TryAddPartsForRandPart(rp, num);
+                    if (!p.CanPlaceSoftLight())
+                        return false;
                 }
             }
-            
-
-            if (_ship.parts.Count > 0)
-            {
-                for (int i = _ship.parts.Count; i-- > 0;)
-                {
-                    var part = _ship.parts[i];
-                    var data = part.data;
-                    if (data.isGun ? _ship.IsMainCal(data) : data.isTorpedo)
-                    {
-                        if (!part.CanPlaceSoft(false) || !part.CanPlaceSoftLight())
-                        {
-                            _ship.RemovePart(part, true, true);
-                        }
-                    }
-                }
-                for (int i = _ship.shipGunCaliber.Count; i-- > 0;)
-                {
-                    bool remove = true;
-                    foreach (var p in _ship.parts)
-                    {
-                        if (p.data == _ship.shipGunCaliber[i].turretPartData)
-                        {
-                            remove = false;
-                            break;
-                        }
-                    }
-                    if (remove)
-                        _ship.shipGunCaliber.RemoveAt(i);
-                }
-
-                for (int i = _ship.shipTurretArmor.Count; i-- > 0;)
-                {
-                    bool remove = true;
-                    foreach (var p in _ship.parts)
-                    {
-                        if (p.data == _ship.shipTurretArmor[i].turretPartData)
-                        {
-                            remove = false;
-                            break;
-                        }
-                    }
-                    if (remove)
-                        _ship.shipGunCaliber.RemoveAt(i);
-                }
-
-                ShipM.ClearMatCache(_ship);
-            }
-
-            _ship.StartCoroutine(_ship.RefreshDecorDelay());
-
-            foreach (var part in _ship.parts)
-                part.OnPostAdd();
 
             return true;
         }
 
-        private bool TryAddPartsForRandPart(RandPart rp, int desiredAmount)
+        private PartData FindPartDataForRPU(RandPartUsage rpu, GunDatabase.GunInfo gi)
         {
-            var parts = _ship.GetParts(rp, _this.limitCaliber);
-            for (int loop = 0; loop < 250; ++loop)
+            PartData data = null;
+
+            if (_firstPairCreated != null)
             {
-                PartData data = null;
-                Part part = null;
-
-                data = FindPartDataForRP(rp, parts);
-                if (_ship.badData.Contains(data))
-                {
-                    // We could be adding main guns and gone over-limit
-                    // with the last one. Or other reasons why this part
-                    // might have started out good but ended up bad.
-                    break;
-                }
-
-                if (data == null)
-                    break;
-
-
-                if (data.isGun)
-                {
-                    if (_ship.shipGunCaliber == null)
-                        _ship.shipGunCaliber = new Il2CppSystem.Collections.Generic.List<Ship.TurretCaliber>();
-                    var tc = ShipM.FindMatchingTurretCaliber(_ship, data);
-                    if (tc == null)
-                        AddTCForGun(data);
-                }
-
-                if (!Part.CanPlaceGeneric(data, _ship, false, out var denyReason)
-                    || (_isMissionMainShip && _ship.Cost() + _ship.CalcPartCost(data) > _ship.player.cash))
-                {
-                    // This part will never be acceptable. So
-                    // add it to badData immediately.
-                    _ship.badData.Add(data);
-                    MarkBadTry(part, data);
-                    continue;
-                }
-
-                part = Part.Create(data, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int, false);
-                if (data.isGun)
-                    part.UpdateCollidersSize(_ship);
-
-                if (!PlacePart(part, rp))
-                {
-                    MarkBadTry(part, data);
-                    continue;
-                }
-
-                float weight = _ship.Weight(true);
-                if (weight > _tonnage * 1.4f && (data.isWeapon || data.isBarbette))
-                {
-                    // This part will never work, it takes us over limit.
-                    _ship.badData.Add(data);
-                    MarkBadTry(part, data);
-                    continue;
-                }
-
-                switch (rp.type)
-                {
-                    case "tower_main":
-                        _mainPlaced = true;
-                        break;
-                    case "tower_sec":
-                        _secPlaced = true;
-                        break;
-                    case "funnel":
-                        _hasFunnel = true;
-                        break;
-                }
-
-                _ship.added.Add(part);
-
-                if (rp.paired)
-                {
-                    if (_firstPairCreated)
-                        _firstPairCreated = null;
-                    else
-                        _firstPairCreated = part;
-                }
-
-                if (rp.group != string.Empty)
-                {
-                    _partDataForGroup[rp.group] = data;
-                }
-
-                if (data.isGun)
-                {
-                    _ship.AddShipTurretArmor(part);
-
-                    
-                }
-
-                if (_ship.added.Count >= desiredAmount)
-                    return true;
+                data = _firstPairCreated.data;
             }
-
-            return _ship.added.Count > 0;
-        }
-
-        private void MarkBadTry(Part part, PartData data)
-        {
-            _ship.badTriesForData.TryGetValue(data, out var tries);
-            if (tries > 24)
+            else if (rpu._rp.groupPart != string.Empty && _partDataForGroup.TryGetValue(rpu._rp.groupPart, out data))
             {
-                _ship.badData.Add(data);
             }
-            _ship.badTriesForData[data] = tries + 1;
-            if (part != null)
+            else if (rpu._datas.Count >= 0 && rpu._rp.allSamePart)
             {
-                if (part.mount != null)
+                data = rpu._datas[0];
+            }
+            if(data != null)
+                return rpu.IsBadData(data) ? null : data;
+
+            var tmt = RandPartInfo.MountType.None;
+            bool hasCenterCasemate = false;
+            List<PartData> parts;
+            if (rpu._rp.type == RandPartInfo.RPType.gun)
+            {
+                tmt = rpu._rp.GetTowerMountTypes(_ship);
+                hasCenterCasemate = RandPartInfo.HasCenterCasemate(_ship);
+                parts = rpu._rp.GetPartsForGunInfo(gi, _availableParts, tmt, hasCenterCasemate);
+            }
+            else
+            {
+                parts = rpu._rp.GetParts(_availableParts);
+            }
+            foreach (var p in parts)
+                if (!rpu.IsBadData(p))
+                    _Options.Add(p);
+
+            if (_Options.Count == 0)
+                return null;
+
+            if (rpu._rp.type == RandPartInfo.RPType.torpedo)
+            {
+                data = null;
+                float bestVal = float.MinValue;
+                foreach (var o in _Options)
                 {
-                    if (!_ship.badMounts.TryGetValue(part.data, out var set))
+                    var val = TorpedoValue(o);
+                    if (val > bestVal)
                     {
-                        set = new Il2CppSystem.Collections.Generic.HashSet<Mount>();
-                        _ship.badMounts[part.data] = set;
+                        bestVal = val;
+                        data = o;
                     }
-                    set.Add(part.mount);
                 }
-                _ship.RemovePart(part);
+                _Options.Clear();
+                return data;
             }
-            if (_firstPairCreated)
+
+            if (rpu._rp.type == RandPartInfo.RPType.gun)
             {
-                _ship.added.Remove(_firstPairCreated);
-                _ship.RemovePart(_firstPairCreated);
-                _firstPairCreated = null;
+                bool noCasemates = (rpu._rp.mountPref == RandPartInfo.MountPref.TowerOnly && (tmt & RandPartInfo.MountType.Casemate) == 0)
+                    || rpu._rp.mountPref == RandPartInfo.MountPref.DeckOnly || rpu._rp.mountPref == RandPartInfo.MountPref.TowerDeck;
+
+                RandPartInfo.MountType alignMask = RandPartInfo.MountType.None;
+                if (rpu._rp.align != RandPartInfo.Alignment.Center)
+                {
+                    alignMask |= RandPartInfo.MountType.Side;
+                    if (!noCasemates)
+                        alignMask |= RandPartInfo.MountType.Casemate;
+                }
+                if (rpu._rp.align != RandPartInfo.Alignment.Side)
+                {
+                    alignMask |= RandPartInfo.MountType.Center;
+                    if (!noCasemates && hasCenterCasemate)
+                        alignMask |= RandPartInfo.MountType.Casemate;
+                }
+
+                switch (rpu._rp.mountPref)
+                {
+                    case RandPartInfo.MountPref.TowerPref:
+                        foreach (var o in _Options)
+                            _OptionWeights.Add(o, (RandPartInfo.GetMountType(o) & tmt) == 0 ? 0.001f : 100f);
+                        break;
+                    case RandPartInfo.MountPref.DeckPref:
+                        foreach (var o in _Options)
+                            _OptionWeights.Add(o, ((RandPartInfo.GetMountType(o) & RandPartInfo.MountType.NonCasemate) & alignMask) == 0 ? 0.001f : 100f);
+                        break;
+                    case RandPartInfo.MountPref.CasematePref:
+                        foreach (var o in _Options)
+                            _OptionWeights.Add(o, ((RandPartInfo.GetMountType(o) & RandPartInfo.MountType.Casemate) & alignMask) == 0 ? 0.001f : 100f);
+                        break;
+                    default:
+                        data = _Options.Random(null, _this.__8__1.rnd);
+                        _Options.Clear();
+                        return data;
+                }
+                data = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
+                _Options.Clear();
+                _OptionWeights.Clear();
+                return data;
             }
+
+            // try to do something smarter than random
+            float maxCost = 0f;
+            float minTon = float.MaxValue;
+            float maxTon = float.MinValue;
+            foreach (var o in _Options)
+            {
+                if (o.cost > maxCost)
+                    maxCost = o.cost;
+                if (minTon > o.weight)
+                    minTon = o.weight;
+                if (maxTon < o.weight)
+                    maxTon = o.weight;
+            }
+            float costMult = Mathf.Pow(10f, -Mathf.Floor(Mathf.Log10(maxCost)));
+            float tonMult = 1f - minTon / maxTon;
+            foreach (var o in _Options)
+            {
+                float cost = o.cost * costMult;
+                float year = Database.GetYear(o);
+                if (year > 0)
+                    cost *= Mathf.Pow(2f, (year - 1890) * 0.5f);
+
+                // Try to weight based on where ship is within the tonnage range
+                cost *= 1.2f - Mathf.Abs(Mathf.InverseLerp(minTon, maxTon, o.weight) - _tngRatio) * tonMult;
+
+                _OptionWeights[o] = cost;
+            }
+            data = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
+            _OptionWeights.Clear();
+            _Options.Clear();
+            return data;
         }
 
-        private bool PlacePart(Part part, RandPart rp)
+        private bool PlacePartForRPU(Part part, RandPartUsage rpu)
         {
             var data = part.data;
 
             bool useNoMount = false;
-            if (rp.paired && _firstPairCreated != null)
+            if (_firstPairCreated != null)
             {
                 if (_firstPairCreated.mount == null)
                 {
@@ -2177,78 +2487,62 @@ namespace UADRealism
                 }
                 else
                 {
-                    _ship.allowedMountsInternal.Clear();
+                    _MountWeights.Clear();
                     foreach (var m in _ship.mounts)
                     {
-                        if (!IsAllowedMount(m, part, rp.demandMounts, rp.excludeMounts))
+                        if (!rpu.IsAllowedMount(m, part))
                             continue;
 
-                        if (_ship.badMounts.TryGetValue(data, out var set) && set.Contains(m))
+                        rpu._rp.GetRangesForShip(_ship, out var x, out var z);
+                        if (m.transform.position.x < x.x || m.transform.position.x > x.y)
+                            continue;
+                        if (m.transform.position.z < z.x || m.transform.position.z > z.y)
                             continue;
 
-                        if (rp.rangeX.HasValue)
-                        {
-                            Vector2 trueRangeX = new Vector2(rp.rangeX.Value.x + _ship.allowedMountsOffset.x, rp.rangeX.Value.y + _ship.allowedMountsOffset.y)
-                                * (_ship.deckBounds.size.x * 2.5f + _ship.deckBounds.center.x);
-                            if (m.transform.position.x < trueRangeX.x || m.transform.position.x > trueRangeX.y)
-                                continue;
-                        }
-                        if (rp.rangeZ.HasValue)
-                        {
-                            Vector2 trueRangeZ = new Vector2(rp.rangeZ.Value.x + _ship.allowedMountsOffset.x, rp.rangeZ.Value.y + _ship.allowedMountsOffset.y)
-                                * (_ship.deckBounds.size.z * 0.63f + _ship.deckBounds.center.z);
-                            if (m.transform.position.z < trueRangeZ.x || m.transform.position.z > trueRangeZ.y)
-                                continue;
-                        }
+                        float weight = rpu._rp.GetMountWeight(m);
+                        if (weight == 0f)
+                            continue;
 
-                        _ship.allowedMountsInternal.Add(m);
+                        _MountWeights.Add(m, weight);
                     }
-                    if (_ship.allowedMountsInternal.Count > 0)
+                    if (_MountWeights.Count > 0)
                     {
-                        part.Mount(_ship.allowedMountsInternal.Random(null, _this.__8__1.rnd), true);
+                        part.Mount(ModUtils.RandomByWeights(_MountWeights, null, _this.__8__1.rnd));
+                        _MountWeights.Clear();
                     }
                     else
                     {
-                        if (!data.needsMount && (rp.demandMounts == null || rp.demandMounts.Count == 0))
+                        if (!data.needsMount && rpu._rp.demandMounts == null || rpu._rp.demandMounts.Count == 0)
                         {
                             useNoMount = true;
                         }
                         else
                         {
-                            var mountGroups = _ship.GetAllowedMountsInGroups(rp, part);
+                            var mountGroups = rpu.GetAllowedMountsInGroups(part);
 
-                            List<Vector3> positions = new List<Vector3>();
                             var snap = MonoBehaviourExt.Param("snap_point_step", 0.5f);
                             foreach (var mg in mountGroups)
                             {
-                                // We want to sort the list of mounts. But
-                                // it's a native list, not a managed one.
-                                // So copy to managed (ugh).
-                                var mg2 = new List<Mount>();
-                                foreach (var m in mg)
-                                    mg2.Add(m);
-                                mg2.Sort((a, b) =>
-                                {
-                                    if (a.transform.position.z < b.transform.position.z)
-                                        return -1;
-                                    else if (a.transform.position.z > b.transform.position.z)
-                                        return 1;
-                                    return 0;
-                                });
+                                mg.Sort((a, b) => a.transform.position.z.CompareTo(b.transform.position.z));
 
                                 // Start from the bow (we sorted minZ first)
-                                for (int i = mg2.Count - 1; i > 0 && positions.Count == 0; --i)
+                                // Stock stops after the first mount point found??
+                                for (int i = mg.Count - 1; i > 0 /*&& _MountPositionWeights.Count == 0*/; --i)
                                 {
-                                    var curM = mg2[i];
-                                    var nextM = mg2[i - 1];
+                                    var curM = mg[i];
+                                    float weight = rpu._rp.GetMountWeight(curM);
+                                    if (weight == 0f)
+                                        continue;
+
+                                    var nextM = mg[i - 1];
                                     var curPos = curM.transform.position;
                                     var nextPos = nextM.transform.position;
                                     var distHalfZ = (nextPos.z - curPos.z) * 0.5f;
                                     part.transform.position = new Vector3(curPos.x, curPos.y, curPos.z + distHalfZ + snap + 16.75f);
-                                    if (!part.CanPlace())
+                                    if (!IsPlacementValid(part))
                                     {
                                         part.transform.position = new Vector3(curPos.x, curPos.y, curPos.z + distHalfZ + 16.75f);
-                                        if (!part.CanPlace())
+                                        if (!IsPlacementValid(part))
                                             continue;
                                     }
 
@@ -2261,9 +2555,9 @@ namespace UADRealism
                                             break;
 
                                         part.transform.position = new Vector3(curPos.x, curPos.y, midPos);
-                                        if (part.CanPlace())
+                                        if (IsPlacementValid(part))
                                         {
-                                            positions.Add(part.transform.position);
+                                            _MountPositionWeights.Add(part.transform.position, weight);
                                             lastOK = true;
                                         }
                                         else
@@ -2276,14 +2570,11 @@ namespace UADRealism
                                 }
                             }
 
-                            if (positions.Count == 0)
-                            {
-                                // This part doesn't fit anywhere on the ship now
-                                // so let's never try this data again.
-                                _ship.badData.Add(data);
+                            if (_MountPositionWeights.Count == 0)
                                 return false;
-                            }
-                            part.transform.position = positions.Random(null, _this.__8__1.rnd);
+
+                            part.transform.position = ModUtils.RandomByWeights(_MountPositionWeights, null, _this.__8__1.rnd);
+                            _MountPositionWeights.Clear();
                         }
                     }
                 }
@@ -2291,88 +2582,84 @@ namespace UADRealism
 
             if (useNoMount)
             {
-                if (rp.paired && _firstPairCreated != null)
+                if (_firstPairCreated != null)
                 {
                     _offsetX *= -1f;
+                    var desiredWorldPoint = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
+                    var deckAtPoint = _ship.FindDeckAtPoint(desiredWorldPoint);
+                    if (deckAtPoint == null)
+                        return false;
+                    var deckCenter = deckAtPoint.transform.TransformPoint(deckAtPoint.center);
+                    part.Place(new Vector3(desiredWorldPoint.x, deckCenter.y, desiredWorldPoint.z), true);
                 }
                 else
                 {
-                    _offsetX = (rp.rangeX.HasValue ?
-                        ModUtils.Range(rp.rangeX.Value.x, rp.rangeX.Value.y, null, _this.__8__1.rnd)
-                        : ModUtils.Range(-1f, 1f, null, _this.__8__1.rnd))
-                        * _ship.deckBounds.size.x * 0.5f;
-                    _offsetZ = (rp.rangeZ.HasValue ?
-                        ModUtils.Range(rp.rangeZ.Value.x, rp.rangeZ.Value.y, null, _this.__8__1.rnd)
-                        : ModUtils.Range(-1f, 1f, null, _this.__8__1.rnd))
-                        * _ship.deckBounds.size.z * 0.5f;
-
-                    if (_offsetX != 0f && !data.paramx.ContainsKey("center"))
+                    rpu._rp.GetRangesForShip(_ship, out var x, out var z);
+                    for (int i = 0; i < 30; ++i)
                     {
-                        Vector3 partWorldPos = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
-                        float maxXDist = _ship.deckBounds.size.x * 1.05f;
-                        float maxZDist = _ship.deckBounds.size.z * 0.95f;
-                        Part bestPart = null;
-                        float bestDistX = float.MaxValue;
-                        float bestDistZ = float.MaxValue;
-                        foreach (var p in _ship.parts)
+                        _offsetX = 0;
+                        if (rpu._rp.align == RandPartInfo.Alignment.Both && !data.paramx.ContainsKey("center"))
                         {
-                            if (p.data != data)
-                                continue;
-
-                            var fromPos = Util.AbsVector(p.transform.position - partWorldPos);
-                            if (fromPos.x > maxXDist || fromPos.z > maxZDist)
-                                continue;
-
-                            if (fromPos.x < bestDistX)
-                            {
-                                bestPart = p;
-                                bestDistX = fromPos.x;
-                            }
-                            // Game does an orderby/thenby so the Z check is true iff X
-                            // is equal
-                            else if (fromPos.x == bestDistX && fromPos.z < bestDistZ)
-                            {
-                                bestPart = p;
-                                bestDistZ = fromPos.z;
-                            }
+                            if (data.paramx.ContainsKey("side") || ModUtils.Range(0f, 1f, null, _this.__8__1.rnd) < 0.75f)
+                                _offsetX = ModUtils.Range(x.x, x.y, null, _this.__8__1.rnd);
                         }
-                        if (bestPart != null)
-                            _offsetX = bestPart.transform.localPosition.x; // should this be negative?? Stock doesn't make sense here.
+                        _offsetZ = ModUtils.Range(z.x, z.y, null, _this.__8__1.rnd);
+
+                        if (_offsetX != 0f)
+                        {
+                            Vector3 partWorldPos = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
+                            float maxXDist = _ship.deckBounds.size.x * 1.05f;
+                            float maxZDist = _ship.deckBounds.size.z * 0.95f;
+                            Part bestPart = null;
+                            float bestDistX = float.MaxValue;
+                            float bestDistZ = float.MaxValue;
+                            foreach (var p in _ship.parts)
+                            {
+                                if (p.data != data)
+                                    continue;
+                                if (p == part)
+                                    continue;
+
+                                var fromPos = Util.AbsVector(p.transform.position - partWorldPos);
+                                if (fromPos.x > maxXDist || fromPos.z > maxZDist)
+                                    continue;
+
+                                if (fromPos.x < bestDistX)
+                                {
+                                    bestPart = p;
+                                    bestDistX = fromPos.x;
+                                }
+                                // Game does an orderby/thenby so the Z check is true iff X
+                                // is equal
+                                else if (fromPos.x == bestDistX && fromPos.z < bestDistZ)
+                                {
+                                    bestPart = p;
+                                    bestDistZ = fromPos.z;
+                                }
+                            }
+                            if (bestPart != null)
+                                _offsetX = bestPart.transform.localPosition.x;
+                        }
+
+                        var desiredWorldPoint = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
+                        var deckAtPoint = _ship.FindDeckAtPoint(desiredWorldPoint);
+                        if (deckAtPoint == null)
+                            continue;
+
+                        var deckCenter = deckAtPoint.transform.TransformPoint(deckAtPoint.center);
+                        part.Place(new Vector3(desiredWorldPoint.x, deckCenter.y, desiredWorldPoint.z), true);
+                        if (!IsPlacementValid(part))
+                            continue;
                     }
                 }
-                var desiredWorldPoint = _ship.transform.TransformPoint(_ship.deckBounds.center + new Vector3(_offsetX, 0f, _offsetZ));
-                var deckAtPoint = _ship.FindDeckAtPoint(desiredWorldPoint);
-                if (deckAtPoint == null)
-                    return false;
-
-                var deckCenter = deckAtPoint.transform.TransformPoint(deckAtPoint.center);
-                part.Place(new Vector3(desiredWorldPoint.x, deckCenter.y, desiredWorldPoint.z), true);
             }
 
             // Found a position
             data.constructorShip = _ship;
-            if (!part.CanPlace())
+            if (!IsPlacementValid(part))
                 return false;
 
-            if (!Ship.IsCasemateGun(data) && !part.CanPlaceSoftLight())
-                return false;
-
-            bool isValidPlacement = true;
-            foreach (var p in _ship.parts)
-            {
-                if (p == part)
-                    continue;
-
-                if (p.data.isTorpedo || (p.data.isGun && !Ship.IsCasemateGun(p.data)))
-                {
-                    if (!p.CanPlaceSoftLight())
-                    {
-                        isValidPlacement = true;
-                        break;
-                    }
-                }
-            }
-            return isValidPlacement;
+            return true;
         }
 
         private bool IsAllowedMount(Mount m, Part part, Il2CppSystem.Collections.Generic.List<string> demandMounts, Il2CppSystem.Collections.Generic.List<string> excludeMounts)
@@ -2387,247 +2674,24 @@ namespace UADRealism
             return true;
         }
 
-        private Ship.TurretCaliber AddTCForGun(PartData data)
+        private Ship.TurretCaliber AddTCForGun(Part part, GunDatabase.GunInfo gi)
         {
             float diamOffset = 0f;
-            int lenOffset = 0;
-            if (_this.adjustDiameter)
-            {
-                var gdm = new GunDataM(data, _ship, true);
-                float diamStep = MonoBehaviourExt.Param("gun_diameter_step", 0.1f);
-                float maxDiam = MonoBehaviourExt.Param("max_gun_caliber_mod", 0.9f);
-                diamOffset = ModUtils.DistributedRangeWithStepSize(maxDiam, diamStep, 2, null, _this.__8__1.rnd);
-                if (data.GetCaliberInch() > 2f && diamOffset < 0f)
-                    diamOffset = -diamOffset;
+            float excess = (gi.caliber * 1f / 25.4f) - gi._calInch;
+            if (excess > 0f || gi._calInch == 2)
+                diamOffset = ModUtils.RoundToStep(excess, MonoBehaviourExt.Param("gun_diameter_step", 0.1f)) * 25.4f;
 
-                float lenStep = MonoBehaviourExt.Param("gun_length_step", 5f);
-                float lenVal = ModUtils.DistributedRange(1f, 5, null, _this.__8__1.rnd);
-                if (lenVal < 0f)
-                    lenVal *= -gdm.minLengthParam;
-                else
-                    lenVal *= gdm.maxLengthParam;
-                lenOffset = Mathf.RoundToInt(ModUtils.ClampWithStep(lenVal, lenStep, gdm.minLengthParam, gdm.maxLengthParam));
-            }
-            _ship.AddShipTurretCaliber(data, diamOffset, lenOffset);
-            return _ship.shipGunCaliber[_ship.shipGunCaliber.Count - 1]; // stupid that the previous method doesn't return the added TC
-        }
+            // We have to add a dummy one first so we can calc length on the model
+            _ship.AddShipTurretCaliber(part.data, diamOffset, 0);
+            var tc = _ship.shipGunCaliber[_ship.shipGunCaliber.Count - 1]; // stupid that the previous method doesn't return the added TC
+            Part.GunBarrelLength(part.data, _ship, true);
+            
+            // Now we can set length
+            var gdm = new GunDataM(part.data, _ship, true);
+            int len = Mathf.RoundToInt(Mathf.Clamp((gi.length / part.caliberLength - 1f) * 100f, gdm.minLengthParam, gdm.maxLengthParam));
+            tc.length = len;
 
-        private PartData FindPartDataForRP(RandPart rp, Il2CppSystem.Collections.Generic.List<PartData> parts)
-        {
-            if (rp.group != string.Empty && _partDataForGroup.TryGetValue(rp.group, out var gpart) && gpart != null)
-                return gpart;
-
-            if (rp.paired && _firstPairCreated != null)
-                return _firstPairCreated.data;
-
-            PartData ret = null;
-            foreach (var data in parts)
-            {
-                if (_ship.badData.Contains(data) || data.type != rp.type)
-                    continue;
-
-                _Options.Add(data);
-            }
-
-            if (_Options.Count == 0)
-                return null;
-
-            if (rp.type == "torpedo")
-            {
-                float bestVal = float.MinValue;
-                foreach (var opt in _Options)
-                {
-                    var val = TorpedoValue(opt);
-                    if (val > bestVal)
-                    {
-                        bestVal = val;
-                        ret = opt;
-                    }
-                }
-            }
-            else if (rp.type == "gun")
-            {
-                // Alter stock code such that we track all references
-                HashSet<PartData> refData;
-
-                if (refData != null)
-                {
-                    for (int i = _Options.Count; i-- > 0;)
-                    {
-                        var opt = _Options[i];
-
-                        bool remove = true;
-                        foreach (var r in refData)
-                        {
-                            if (r.GetCaliberInch() == opt.GetCaliberInch())
-                            {
-                                remove = false;
-                                break;
-                            }
-                        }
-                        if (remove)
-                            _Options.RemoveAt(i);
-                    }
-                }
-                // Game is weird here. If "sec_cal" is not there, it jumps to maincal.
-                // But if "sec_cal" _is_ there, it still goes to maincal unless "ter_cal"
-                // is _also_ specified.
-                if (rp.condition.Contains("ter_cal"))
-                {
-                    float bestVal = float.MinValue;
-                    foreach (var opt in _Options)
-                    {
-                        var val = TertiaryGunValue(opt);
-                        if (val > bestVal)
-                        {
-                            bestVal = val;
-                            ret = opt;
-                        }
-                    }
-                }
-                else
-                {
-                    float bestVal = float.MinValue;
-                    foreach (var opt in _Options)
-                    {
-                        var val = MainOrSecGunValue(opt);
-                        if (val > bestVal)
-                        {
-                            bestVal = val;
-                            ret = opt;
-                        }
-                    }
-                }
-            }
-            else if (_Options.Count > 0)
-            {
-                if (rp.type != "tower_main" && rp.type != "tower_sec")
-                {
-                    ret = _Options.Random(null, _this.__8__1.rnd);
-                }
-                else
-                {
-                    // try to do something smarter than random
-                    float maxCost = 0f;
-                    float minTon = float.MaxValue;
-                    float maxTon = float.MinValue;
-                    foreach (var o in _Options)
-                    {
-                        if (o.cost > maxCost)
-                            maxCost = o.cost;
-                        if (minTon > o.weight)
-                            minTon = o.weight;
-                        if (maxTon < o.weight)
-                            maxTon = o.weight;
-                    }
-                    float costMult = Mathf.Pow(10f, -Mathf.Floor(Mathf.Log10(maxCost)));
-                    float tonMult = 1f - minTon / maxTon;
-                    foreach (var o in _Options)
-                    {
-                        float cost = o.cost * costMult;
-                        float year = Database.GetYear(o);
-                        if (year > 0f)
-                            cost *= Mathf.Pow(2f, (year - 1890f) * 0.5f);
-
-                        // Try to weight based on where ship is within the tonnage range
-                        cost *= 1.2f - Mathf.Abs(Mathf.InverseLerp(minTon, maxTon, o.weight) - _tngRatio) * tonMult;
-
-                        _OptionWeights[o] = cost;
-                    }
-                    ret = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
-                    _OptionWeights.Clear();
-                }
-            }
-            _Options.Clear();
-            return ret;
-        }
-
-        public float TertiaryGunValue(PartData data)
-        {
-            var sizeAR = _ship.SizeAntiRatio();
-            sizeAR *= sizeAR;
-            var calInch = data.GetCaliberInch();
-            var smallMin = MonoBehaviourExt.Param("gun_gen_smallgunbarrels_min", 0f);
-            var smallMax = MonoBehaviourExt.Param("gun_gen_smallgunbarrels_max", 1f);
-            var calWeight = Util.Range(smallMin, smallMax, _this.__8__1.rnd);
-            var partBarrels = Mathf.Pow(data.barrels, -5f);
-            var calValue = calInch * sizeAR * calWeight;
-            var yearMap = Util.Remap(_designYear, 1890f, 1940f, calInch <= 8f ? -1f : 2f, calInch <= 8f ? -10f : 0.4f, true);
-            var barMin = MonoBehaviourExt.Param("gun_gen_barrels_sec_min", -2f);
-            var barMax = MonoBehaviourExt.Param("gun_gen_barrels_sec_max", -1f);
-            float yearWeight = Util.Range(barMin, barMax, _this.__8__1.rnd);
-            var yearValue = yearMap * yearWeight;
-            var adjustedCalValue = partBarrels * calValue;
-            return Util.Range(0f, MonoBehaviourExt.Param("gun_gen_randomness", 5f) + 1f, _this.__8__1.rnd) + adjustedCalValue * yearValue;
-        }
-
-        public float MainOrSecGunValue(PartData data)
-        {
-            float barrelValue;
-            if (_avoidBarrels.Contains(data.barrels))
-                barrelValue = -25f;
-            else
-                barrelValue = 2f;
-
-            var sizeR = _ship.SizeRatio();
-            float sizeRsqrt = Mathf.Sqrt(sizeR);
-            var calInch = data.GetCaliberInch();
-            var calMin = MonoBehaviourExt.Param("gun_gen_caliber_min", 0f);
-            var calMax = MonoBehaviourExt.Param("gun_gen_caliber_max", 1f);
-            var calWeight = Util.Range(calMin, calMax, _this.__8__1.rnd);
-            var calValue = calInch * sizeRsqrt * calWeight;
-            float yearMult;
-            float yearWeight;
-            if (calInch <= 8f)
-            {
-                var smallMin = MonoBehaviourExt.Param("gun_gen_smallgunbarrels_min", 0f);
-                var smallMax = MonoBehaviourExt.Param("gun_gen_smallgunbarrels_max", 1f);
-                yearWeight = Util.Range(smallMin, smallMax, _this.__8__1.rnd);
-                yearMult = Util.Remap(_designYear, 1890f, 1940f, -2f, -0.8f, true);
-            }
-            else
-            {
-                var largeMin = MonoBehaviourExt.Param("gun_gen_barrels_min", 0f);
-                var largeMax = MonoBehaviourExt.Param("gun_gen_barrels_max", 1f);
-                yearWeight = Util.Range(largeMin, largeMax, _this.__8__1.rnd);
-                yearMult = Util.Remap(_designYear, 1890f, 1940f, -1f, -0.15f, true) * sizeR;
-            }
-            float yearValue = yearMult * yearWeight;
-            return Util.Range(0f, MonoBehaviourExt.Param("gun_gen_randomness", 5f) + 1f, _this.__8__1.rnd) + data.barrels * yearValue + calValue + barrelValue;
-        }
-
-        public float MainGunValue_Unused(PartData data)
-        {
-            float barrelValue;
-            if (_avoidBarrels.Contains(data.barrels))
-                barrelValue = -25f;
-            else
-                barrelValue = 2f;
-
-            var sizeR = _ship.SizeRatio();
-            var calInch = data.GetCaliberInch();
-            var calMin = MonoBehaviourExt.Param("gun_gen_caliber_min", 0f);
-            var calMax = MonoBehaviourExt.Param("gun_gen_caliber_max", 1f);
-            var calWeight = Util.Range(calMin, calMax, _this.__8__1.rnd);
-            var calValue = calInch * sizeR * calWeight;
-            float yearMult;
-            float yearWeight;
-            if (calInch <= 8f)
-            {
-                var smallMin = MonoBehaviourExt.Param("gun_gen_smallgunbarrels_min", 0f);
-                var smallMax = MonoBehaviourExt.Param("gun_gen_smallgunbarrels_max", 1f);
-                yearWeight = Util.Range(smallMin, smallMax, _this.__8__1.rnd);
-                yearMult = Util.Remap(_designYear, 1890f, 1940f, -2f, -0.8f, true);
-            }
-            else
-            {
-                var largeMin = MonoBehaviourExt.Param("gun_gen_barrels_min", 0f);
-                var largeMax = MonoBehaviourExt.Param("gun_gen_barrels_max", 1f);
-                yearWeight = Util.Range(largeMin, largeMax, _this.__8__1.rnd);
-                yearMult = Util.Remap(_designYear, 1890f, 1940f, -2f, -0.125f, true) * sizeR;
-            }
-            float yearValue = yearMult * yearWeight;
-            return Util.Range(0f, MonoBehaviourExt.Param("gun_gen_randomness", 5f) + 1f, _this.__8__1.rnd) + data.barrels * yearValue + calValue + barrelValue;
+            return tc;
         }
 
         public float TorpedoValue(PartData data)

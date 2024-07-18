@@ -1299,6 +1299,7 @@ namespace UADRealism
             NotTag,
             Zero,
             NotZero,
+            Design,
         }
         public static List<KeyValuePair<RPOperation, string>> CheckOperationsGetArgs(List<string> args)
         {
@@ -1312,19 +1313,22 @@ namespace UADRealism
                 if (split.Length != 2)
                     continue;
                 var key = split[0];
-                RPOperation op = split[0] switch
+                RPOperation op;
+                switch(split[0])
                 {
-                    "tag" => RPOperation.Tag,
-                    "!tag" => RPOperation.NotTag,
-                    "zero" => RPOperation.Zero,
-                    _ => RPOperation.NotZero
-                };
+                    case "tag": op = RPOperation.Tag; break;
+                    case "!tag": op = RPOperation.NotTag; break;
+                    case "zero": op = RPOperation.Zero; break;
+                    case "!zero": op = RPOperation.NotZero; break;
+                    case "design": op = RPOperation.Design; break;
+                    default: continue;
+                }
                 kvps.Add(new KeyValuePair<RPOperation, string>(op, split[1]));
             }
             return kvps;
         }
 
-        public static bool CheckOperationsProcess(PartData hull, RPOperation op, string arg, Ship ship = null)
+        public static bool CheckOperationsProcess(PartData hull, RPOperation op, string arg, Ship ship = null, string design = null)
         {
             switch (op)
             {
@@ -1334,8 +1338,12 @@ namespace UADRealism
                     return ship == null || ship.TechVar(arg) != 0f;
                 case RPOperation.Tag:
                     return hull.paramx.ContainsKey(arg);
-                default:
+                case RPOperation.NotTag:
                     return !hull.paramx.ContainsKey(arg);
+                case RPOperation.Design:
+                    return arg == design;
+                default:
+                    return true;
             }
         }
 
@@ -1395,6 +1403,15 @@ namespace UADRealism
                 }
             }
             return ok;
+        }
+
+        public static bool ExistsMount(Ship ship, PartData part, Il2CppSystem.Collections.Generic.List<string> demandMounts = null, Il2CppSystem.Collections.Generic.List<string> excludeMounts = null, bool allowUsed = true)
+        {
+            foreach (var m in ship.mounts)
+                if ((allowUsed || m.employedPart == null) && m.Fits(part, demandMounts, excludeMounts))
+                    return true;
+
+            return false;
         }
     }
 }

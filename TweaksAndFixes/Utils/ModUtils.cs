@@ -4,10 +4,13 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using System.Runtime.CompilerServices;
 
+#pragma warning disable CS8601
 #pragma warning disable CS8603
 #pragma warning disable CS8604
 #pragma warning disable CS8625
+#pragma warning disable CS8714
 
 namespace TweaksAndFixes
 {
@@ -499,9 +502,28 @@ namespace TweaksAndFixes
             return ret;
         }
 
+        public static Il2CppSystem.Collections.Generic.List<T> ToNative<T>(this List<T> list)
+        {
+            var ret = new Il2CppSystem.Collections.Generic.List<T>(list.Count);
+            foreach (var item in list)
+                ret.Add(item);
+
+            return ret;
+        }
+
         public static HashSet<T> ToManaged<T>(this Il2CppSystem.Collections.Generic.HashSet<T> set)
         {
             var ret = new HashSet<T>(set.Count);
+            foreach (var item in set)
+                ret.Add(item);
+
+            return ret;
+        }
+
+        public static Il2CppSystem.Collections.Generic.HashSet<T> ToNative<T>(this HashSet<T> set)
+        {
+            var ret = new Il2CppSystem.Collections.Generic.HashSet<T>();
+            ret.SetCapacity(set.Count);
             foreach (var item in set)
                 ret.Add(item);
 
@@ -517,16 +539,57 @@ namespace TweaksAndFixes
             return ret;
         }
 
-        public static bool GetValueOrNew<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, out TValue value) where TValue : class, new()
+        public static Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue> ToNative<TKey, TValue>(this Dictionary<TKey, TValue> dict)
         {
-            if (!dict.TryGetValue(key, out value))
+            var ret = new Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue>(dict.Count);
+            foreach (var kvp in dict)
+                ret.Add(kvp.Key, kvp.Value);
+
+            return ret;
+        }
+
+        public static TValue ValueOrNew<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key)
+        {
+            if (!dict.TryGetValue(key, out var value))
             {
-                value = new TValue();
+                value = System.Activator.CreateInstance<TValue>();
                 dict[key] = value;
-                return false;
             }
 
-            return true;
+            return value;
+        }
+
+        public static TValue ValueOrNew<TKey, TValue>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue> dict, TKey key)
+        {
+            if (!dict.TryGetValue(key, out var value))
+            {
+                value = System.Activator.CreateInstance<TValue>();
+                dict[key] = value;
+            }
+
+            return value;
+        }
+
+        public static int IncrementValueFor<TKey>(this Dictionary<TKey, int> dict, TKey key)
+            => ChangeValueFor(dict, key, 1);
+
+        public static int ChangeValueFor<TKey>(this Dictionary<TKey, int> dict, TKey key, int delta)
+        {
+            int val = dict.GetValueOrDefault(key);
+            val += delta;
+            dict[key] = val;
+            return val;
+        }
+
+        public static int IncrementValueFor<TKey>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, int> dict, TKey key)
+            => ChangeValueFor(dict, key, 1);
+
+        public static int ChangeValueFor<TKey>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, int> dict, TKey key, int delta)
+        {
+            dict.TryGetValue(key, out int val);
+            val += delta;
+            dict[key] = val;
+            return val;
         }
     }
 
