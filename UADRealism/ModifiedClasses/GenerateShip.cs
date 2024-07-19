@@ -5,6 +5,7 @@ using Il2Cpp;
 using TweaksAndFixes;
 using UADRealism.Data;
 using Il2CppMessagePack.Formatters;
+using Unity.Collections.LowLevel.Unsafe;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -61,6 +62,7 @@ namespace UADRealism
         {
             Random,
             Local,
+            LocalMax,
             Absolute,
         }
 
@@ -326,10 +328,10 @@ namespace UADRealism
             return false;
         }
 
-        public List<PartData> GetPartsForGunInfo(Ship ship, GunDatabase.GunInfo gi, List<PartData> available)
+        public List<PartData> GetPartsForGunInfo(Ship ship, GunInfo gi, List<PartData> available)
             => GetPartsForGunInfo(gi, available, GetTowerMountTypes(ship), HasCenterCasemate(ship));
 
-        public List<PartData> GetPartsForGunInfo(GunDatabase.GunInfo gi, List<PartData> available, MountType towerMounts, bool centerCasemate)
+        public List<PartData> GetPartsForGunInfo(GunInfo gi, List<PartData> available, MountType towerMounts, bool centerCasemate)
         {
             _TempParts.Clear();
 
@@ -573,6 +575,7 @@ namespace UADRealism
         bool _isLight;
         float _desiredSpeed;
         Ship._GenerateRandomShip_d__566 _this;
+        Il2CppSystem.Random _rnd;
         Ship _ship;
         bool _isMissionMainShip;
         int _gen;
@@ -605,7 +608,7 @@ namespace UADRealism
         float _payloadStopWeight;
 
         Dictionary<string, PartData> _partDataForGroup = new Dictionary<string, PartData>();
-        Dictionary<string, GunDatabase.GunInfo> _gunDataForGroup = new Dictionary<string, GunDatabase.GunInfo>();
+        Dictionary<string, GunInfo> _gunDataForGroup = new Dictionary<string, GunInfo>();
 
         List<PartData> _availableParts = new List<PartData>();
         List<RandPartInfo> _randParts;
@@ -616,7 +619,7 @@ namespace UADRealism
         List<RandPartUsage>[] _rpByBattery = new List<RandPartUsage>[(int)RandPartInfo.Battery.Ter + 1];
         List<RandPartUsage> _rpTorps = new List<RandPartUsage>();
         Dictionary<Part, RandPartUsage> _partToRP = new Dictionary<Part, RandPartUsage>();
-        List<GunDatabase.GunInfo> _gunInfos = new List<GunDatabase.GunInfo>();
+        List<GunInfo> _gunInfos = new List<GunInfo>();
 
         int _lastFunnelIdxReq = -1;
         int _lastFunnelIdxOpt = -1;
@@ -628,11 +631,11 @@ namespace UADRealism
         const int _MaxDataTries = 24;
         const int _MaxMountTries = 10;
 
-        Dictionary<GunDatabase.GunInfo, int> _badGunTries = new Dictionary<GunDatabase.GunInfo, int>();
+        Dictionary<GunInfo, int> _badGunTries = new Dictionary<GunInfo, int>();
         Dictionary<PartData, int> _badDataTries = new Dictionary<PartData, int>();
         Dictionary<PartData, Dictionary<Mount, int>> _badMountTries = new Dictionary<PartData, Dictionary<Mount, int>>();
 
-        HashSet<GunDatabase.GunInfo> _passBadGuns = new HashSet<GunDatabase.GunInfo>();
+        HashSet<GunInfo> _passBadGuns = new HashSet<GunInfo>();
         HashSet<PartData> _passBadDatas = new HashSet<PartData>();
         Dictionary<PartData, HashSet<Mount>> _passBadMounts = new Dictionary<PartData, HashSet<Mount>>();
 
@@ -641,7 +644,7 @@ namespace UADRealism
             public RandPartInfo _rp;
             public List<Part> _parts = new List<Part>();
             public List<PartData> _datas = new List<PartData>();
-            public GunDatabase.GunInfo _gun = null;
+            public GunInfo _gun = null;
             public int desired;
             private GenerateShip _parent;
             public Ship.TurretCaliber _tcDeck = null;
@@ -651,11 +654,11 @@ namespace UADRealism
             const int _MaxDataTriesPer = 24;
             const int _MaxMountTriesPer = 10;
 
-            public Dictionary<GunDatabase.GunInfo, int> _badGunTries = new Dictionary<GunDatabase.GunInfo, int>();
+            public Dictionary<GunInfo, int> _badGunTries = new Dictionary<GunInfo, int>();
             public Dictionary<PartData, int> _badDataTries = new Dictionary<PartData, int>();
             public Dictionary<PartData, Dictionary<Mount, int>> _badMountTries = new Dictionary<PartData, Dictionary<Mount, int>>();
 
-            public HashSet<GunDatabase.GunInfo> _passBadGuns = new HashSet<GunDatabase.GunInfo>();
+            public HashSet<GunInfo> _passBadGuns = new HashSet<GunInfo>();
             public HashSet<PartData> _passBadDatas = new HashSet<PartData>();
 
             private static List<Mount> _TempMounts = new List<Mount>();
@@ -760,7 +763,7 @@ namespace UADRealism
                     || _parent._badDataTries.GetValueOrDefault(data) > _MaxDataTries;
             }
 
-            public bool IsBadGun(GunDatabase.GunInfo gi)
+            public bool IsBadGun(GunInfo gi)
             {
                 return _passBadGuns.Contains(gi)
                     || _parent._passBadGuns.Contains(gi)
@@ -773,7 +776,7 @@ namespace UADRealism
                     || (_parent._badMountTries.TryGetValue(data, out var mTriesGS) && mTriesGS.GetValueOrDefault(mount) > _MaxMountTries);
             }
 
-            public void MarkBadTry(Part part, PartData data, GunDatabase.GunInfo gi, bool forceData, bool forceGun, bool forceMount, bool addToPass = true)
+            public void MarkBadTry(Part part, PartData data, GunInfo gi, bool forceData, bool forceGun, bool forceMount, bool addToPass = true)
             {
                 if (data != null)
                 {
@@ -885,6 +888,345 @@ namespace UADRealism
                 }
 
                 return ret;
+            }
+
+            public PartData FindPartData(GunInfo gi)
+            {
+                PartData data = null;
+
+                if (_parent._firstPairCreated != null)
+                {
+                    data = _parent._firstPairCreated.data;
+                }
+                else if (_rp.groupPart != string.Empty && _parent._partDataForGroup.TryGetValue(_rp.groupPart, out data))
+                {
+                }
+                else if (_datas.Count >= 0 && _rp.allSamePart)
+                {
+                    data = _datas[0];
+                }
+                if (data != null)
+                    return IsBadData(data) ? null : data;
+
+                var tmt = RandPartInfo.MountType.None;
+                bool hasCenterCasemate = false;
+                List<PartData> parts;
+                if (_rp.type == RandPartInfo.RPType.gun)
+                {
+                    if (gi == null)
+                        return null;
+
+                    tmt = _rp.GetTowerMountTypes(_parent._ship);
+                    hasCenterCasemate = RandPartInfo.HasCenterCasemate(_parent._ship);
+                    parts = _rp.GetPartsForGunInfo(gi, _parent._availableParts, tmt, hasCenterCasemate);
+                }
+                else
+                {
+                    parts = _rp.GetParts(_parent._availableParts);
+                }
+                foreach (var p in parts)
+                    if (!IsBadData(p))
+                        _Options.Add(p);
+
+                if (_Options.Count == 0)
+                    return null;
+
+                if (_rp.type == RandPartInfo.RPType.torpedo)
+                {
+                    data = null;
+                    float bestVal = float.MinValue;
+                    foreach (var o in _Options)
+                    {
+                        var val = Util.Range(0f, MonoBehaviourExt.Param("torpedo_gen_randomness", 1.2f)) + o.barrels;
+                        if (val > bestVal)
+                        {
+                            bestVal = val;
+                            data = o;
+                        }
+                    }
+                    _Options.Clear();
+                    return data;
+                }
+
+                if (_rp.type == RandPartInfo.RPType.gun)
+                {
+                    bool noCasemates = ((_rp.mountPref == RandPartInfo.MountPref.TowerOnly || _rp.mountPref == RandPartInfo.MountPref.TowerDeck ) && (tmt & RandPartInfo.MountType.Casemate) == 0)
+                        || _rp.mountPref == RandPartInfo.MountPref.DeckOnly;
+
+                    RandPartInfo.MountType alignMask = RandPartInfo.MountType.None;
+                    if (_rp.align != RandPartInfo.Alignment.Center)
+                    {
+                        alignMask |= RandPartInfo.MountType.Side;
+                        if (!noCasemates)
+                            alignMask |= RandPartInfo.MountType.Casemate;
+                    }
+                    if (_rp.align != RandPartInfo.Alignment.Side)
+                    {
+                        alignMask |= RandPartInfo.MountType.Center;
+                        if (!noCasemates && hasCenterCasemate)
+                            alignMask |= RandPartInfo.MountType.Casemate;
+                    }
+
+                    switch (_rp.mountPref)
+                    {
+                        case RandPartInfo.MountPref.TowerPref:
+                            foreach (var o in _Options)
+                                _OptionWeights.Add(o, (RandPartInfo.GetMountType(o) & tmt) == 0 ? 0.001f : 100f);
+                            break;
+                        case RandPartInfo.MountPref.DeckPref:
+                            foreach (var o in _Options)
+                                _OptionWeights.Add(o, ((RandPartInfo.GetMountType(o) & RandPartInfo.MountType.NonCasemate) & alignMask) == 0 ? 0.001f : 100f);
+                            break;
+                        case RandPartInfo.MountPref.CasematePref:
+                            foreach (var o in _Options)
+                                _OptionWeights.Add(o, ((RandPartInfo.GetMountType(o) & RandPartInfo.MountType.Casemate) & alignMask) == 0 ? 0.001f : 100f);
+                            break;
+                        default:
+                            data = _Options.Random(null, _parent._rnd);
+                            _Options.Clear();
+                            return data;
+                    }
+                    data = ModUtils.RandomByWeights(_OptionWeights, null, _parent._rnd);
+                    _Options.Clear();
+                    _OptionWeights.Clear();
+                    return data;
+                }
+
+                // try to do something smarter than random
+                float maxCost = 0f;
+                float minTon = float.MaxValue;
+                float maxTon = float.MinValue;
+                foreach (var o in _Options)
+                {
+                    if (o.cost > maxCost)
+                        maxCost = o.cost;
+                    if (minTon > o.weight)
+                        minTon = o.weight;
+                    if (maxTon < o.weight)
+                        maxTon = o.weight;
+                }
+                float costMult = Mathf.Pow(10f, -Mathf.Floor(Mathf.Log10(maxCost)));
+                float tonMult = 1f - minTon / maxTon;
+                foreach (var o in _Options)
+                {
+                    float cost = o.cost * costMult;
+                    float year = Database.GetYear(o);
+                    if (year > 0)
+                        cost *= Mathf.Pow(2f, (year - 1890) * 0.5f);
+
+                    // Try to weight based on where ship is within the tonnage range
+                    cost *= 1.2f - Mathf.Abs(Mathf.InverseLerp(minTon, maxTon, o.weight) - _parent._tngRatio) * tonMult;
+
+                    _OptionWeights[o] = cost;
+                }
+                data = ModUtils.RandomByWeights(_OptionWeights, null, _parent._rnd);
+                _OptionWeights.Clear();
+                _Options.Clear();
+                return data;
+            }
+
+            private float IdealCalForTonnage()
+            {
+                // Everybody loves their Bofors
+                // FIXME don't hardcode this?
+                if (_rp.calMax < 60 && _rp.calMax >= 40 && _parent._hullYear > 1920)
+                    return 40f;
+
+                float tng = _parent._tonnage;
+                tng *= 1f + ModUtils.DistributedRange(0.1f, 4);
+
+                switch (_parent._sType)
+                {
+                    case "tb": return Util.Remap(tng, 100f, 500f, _rp.calMin, _rp.calMax, true);
+                    case "dd": return Util.Remap(tng, 600f, 1500f, _rp.calMin, _rp.calMax, true);
+                    case "cl":
+                        if (_parent._hullYear < 1910)
+                            return Util.Remap(tng, 1000f, 2800f, _rp.calMin, _rp.calMax, true);
+                        if (_parent._hullYear < 1920)
+                            return Util.Remap(tng, 2500f, 4000f, _rp.calMin, _rp.calMax, true);
+
+                        if (tng > 8000f)
+                            return _rp.calMax;
+                        else
+                            return -1f;
+
+                    case "ca":
+                        if (_parent._hullYear < 1915 && _parent._nation == "usa")
+                            return Util.Remap(tng, 8000f, 15000f, _rp.calMin, _rp.calMax, true);
+                        else
+                            return -1f;
+
+                    case "bb":
+                    case "bc":
+                        if (_parent._sType == "bc")
+                            tng *= 0.9f;
+                        if (_parent._hullYear < 1905)
+                        {
+                            if (_rp.calMax >= 279 && _rp.calMin < 279)
+                                return Util.Remap(tng, 12000f, 14000f, _rp.calMin, _rp.calMax, true);
+                            else
+                                return -1f;
+                        }
+                        if (_parent._hullYear < 1915)
+                        {
+                            if (_rp.calMax < 320)
+                                return Util.Remap(tng, 20000f, 23000f, _rp.calMin, _rp.calMax, true);
+                            if (_rp.calMin > 200)
+                                return Util.Remap(tng, 20000f, 28000f, _rp.calMin, _rp.calMax, true);
+
+                            return -1f;
+                        }
+                        if (_rp.calMin > 270)
+                            return Util.Remap(tng, 25000f, 45000f + Math.Max(0f, (_rp.calMax - 406) * (1f / 25.4f)) * 5000f, _rp.calMin, _rp.calMax, true);
+
+                        return -1f;
+
+                    default:
+                        return -1f;
+                }
+            }
+
+            class GradeInfo
+            {
+                public GunInfo _info;
+                public int _grade;
+            }
+            static readonly List<GradeInfo> _TempGradeInfo = new List<GradeInfo>();
+            static readonly Dictionary<GradeInfo, float> _TempGradeInfoWeights = new Dictionary<GradeInfo, float>();
+
+            public GunInfo FindGunInfo()
+            {
+                var gunDB = GunDatabase.GetGunDB(_parent._nation);
+                if (gunDB == null)
+                    return null;
+
+                _TempGradeInfo.Clear();
+                int inchFloor = (int)_rp.calMin;
+                int inchLimit = Mathf.RoundToInt(_rp.calMax) + 1;
+                int maxGrade = -1;
+                GunInfo maxGradeGun = null;
+                for (int cal = inchFloor; cal < inchLimit; ++cal)
+                {
+                    int grade = _parent._gunGrades[cal];
+                    foreach (var gi in gunDB.byCalAndGrade[cal, grade])
+                    {
+                        if (gi.caliber < _rp.calMin || gi.caliber > _rp.calMax)
+                            continue;
+                        if (IsBadGun(gi) || _parent._gunInfos.Contains(gi))
+                            continue;
+
+                        // FIXME should we enforce always decreasing caliber?
+                        // if so, need to check caliber vs _gunInfos[_gunInfos.Count - 1]
+
+                        _TempGradeInfo.Add(new GradeInfo() { _info = gi, _grade = grade });
+                        if (maxGrade <= grade)
+                        {
+                            maxGrade = grade;
+                            maxGradeGun = gi;
+                        }
+                    }
+                }
+                if (_TempGradeInfo.Count == 0)
+                    return null;
+                if (_TempGradeInfo.Count == 1)
+                {
+                    var ret = _TempGradeInfo[0]._info;
+                    _TempGradeInfo.Clear();
+                    return ret;
+                }
+
+                // We know by definition (because the DB is sorted)
+                // that gi 0 is the min-caliber gi and the last one
+                // is the max-caliber one.
+
+                int bestIdx = -1;
+                float idealCal = -1f;
+                if (_rp.calVariance == RandPartInfo.CalVary.Random || (idealCal = IdealCalForTonnage()) < 0f)
+                {
+                    // FIXME use weights?
+                    bestIdx = ModUtils.Range(0, _TempGradeInfo.Count - 1);
+                }
+                else
+                {
+                    if (_rp.calVariance != RandPartInfo.CalVary.Absolute)
+                        idealCal = Util.Remap(idealCal, _rp.calMin, _rp.calMax, _rp.calVariance == RandPartInfo.CalVary.LocalMax ? _rp.calMin : _TempGradeInfo[0]._info.caliber, _TempGradeInfo[_TempGradeInfo.Count - 1]._info.caliber, true);
+
+                    float bestDelta = float.MaxValue;
+                    for (int i = 0; i < _TempGradeInfo.Count; ++i)
+                    {
+                        var ci = _TempGradeInfo[i];
+                        float delta = Mathf.Abs(ci._info.caliber - idealCal);
+                        if (delta < bestDelta)
+                        {
+                            bestDelta = delta;
+                            bestIdx = i;
+                        }
+                    }
+                }
+
+                var closest = _TempGradeInfo[bestIdx];
+                if (closest._grade == maxGrade)
+                {
+                    // FIXME check length for same-cal/dif-length?
+                    _TempGradeInfo.Clear();
+                    return closest._info;
+                }
+
+                // See if we can find a gun with a better grade
+                //int maxDiff = Math.Max(bestIdx, _TempGradeInfo.Count - bestIdx) + 1;
+                //float gradeMult = 1f / (closest._info._calInch * 0.1f);
+                //for (int i = 1; i < maxDiff; ++i)
+                //{
+                //    int test = bestIdx + i;
+                //    if (test < _TempGradeInfo.Count)
+                //    {
+                //        int gradeOffset = (int)(Mathf.Abs(_TempGradeInfo[test]._info.caliber - closest._info.caliber) * gradeMult) + 1;
+                //        if (closest._info._calInch != _TempGradeInfo[test]._info._calInch && _TempGradeInfo[test]._grade > closest._grade + gradeOffset)
+                //            return _TempGradeInfo[test]._info;
+                //    }
+                //    test = closest._info._calInch - i;
+                //    if (test >= 0)
+                //    {
+                //        int gradeOffset = (int)(Mathf.Abs(_TempGradeInfo[test]._info.caliber - closest._info.caliber) * gradeMult) + 1;
+                //        if (closest._info._calInch != _TempGradeInfo[test]._info._calInch && _TempGradeInfo[test]._grade > closest._grade + gradeOffset)
+                //            return _TempGradeInfo[test]._info;
+                //    }
+                //}
+
+                if (idealCal < 0f)
+                    idealCal = closest._info.caliber;
+                float calOffset = Mathf.Clamp(idealCal * 0.2f, 25.4f * 0.5f, 25.4f * 2f);
+                int bestGrade = -1;
+                for (int i = _TempGradeInfo.Count; i-- > 0;)
+                {
+                    var gri = _TempGradeInfo[i];
+                    if (gri != closest && (Mathf.Abs(gri._info.caliber - idealCal) > calOffset || gri._grade <= closest._grade))
+                        _TempGradeInfo.RemoveAt(i);
+                    if (gri._grade > bestGrade)
+                        bestGrade = gri._grade;
+                }
+                if (_TempGradeInfo.Count == 1)
+                {
+                    var ret = _TempGradeInfo[0]._info;
+                    _TempGradeInfo.Clear();
+                    return ret;
+                }
+
+                float gDelta = bestGrade - closest._grade;
+                float gDeltaRecip = 1f / gDelta;
+                float maxWeight = _TempGradeInfo.Count * gDelta - 1f;
+                foreach (var gri in _TempGradeInfo)
+                {
+                    float weight = maxWeight * (gri._grade - closest._grade) * gDeltaRecip + 1f;
+                    float diff = Mathf.Abs(gri._info.caliber - idealCal);
+                    float decay = Util.Remap(diff, calOffset * 0.25f, calOffset, 1f, 0.25f, true);
+                    _TempGradeInfoWeights.Add(gri, weight * weight * decay);
+                }
+
+                closest = ModUtils.RandomByWeights(_TempGradeInfoWeights, null, _parent._rnd);
+                _TempGradeInfo.Clear();
+                _TempGradeInfoWeights.Clear();
+                return closest._info;
             }
         }
 
@@ -1012,9 +1354,7 @@ namespace UADRealism
         {
             var smd = _ship.ModData();
             _this = coroutine;
-            var subCoroutine = _this.__8__1;
-            subCoroutine.rnd = new Il2CppSystem.Random(Util.FromTo(1, 1000000, null)); // yes, this is how stock inits it.
-            var rnd = subCoroutine.rnd;
+            _this.__8__1.rnd = _rnd = new Il2CppSystem.Random(Util.FromTo(1, 1000000, null)); // yes, this is how stock inits it.
 
 
             if (_this._isRefitMode_5__2 && !_this.isSimpleRefit)
@@ -1065,17 +1405,17 @@ namespace UADRealism
                         float tngFloor;
                         if (_ship.shipType.paramx.ContainsKey("random_tonnage"))
                         {
-                            tngFloor = Util.Range(tMin, tMax, rnd);
+                            tngFloor = Util.Range(tMin, tMax, _rnd);
                         }
                         else if (_ship.shipType.paramx.ContainsKey("random_tonnage_low"))
                         {
-                            tngFloor = Util.Range(tMin, Util.Chance(80f) ? Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f)) : tMax, rnd);
+                            tngFloor = Util.Range(tMin, Util.Chance(80f) ? Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f)) : tMax, _rnd);
                         }
                         else
                         {
-                            tngFloor = Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f) * Util.Range(0.01f, 1.5f, rnd));
+                            tngFloor = Mathf.Lerp(tMin, tMax, MonoBehaviourExt.Param("tonnage_not_maximal_ratio", 0.5f) * Util.Range(0.01f, 1.5f, _rnd));
                         }
-                        newTng = Util.Range(tngFloor, tMax, rnd);
+                        newTng = Util.Range(tngFloor, tMax, _rnd);
                     }
 
                     float roundedTng = Ship.RoundTonnageToStep(newTng);
@@ -1108,7 +1448,7 @@ namespace UADRealism
             float CpMin, CpMax;
             // These will only be used in non-refit, but are declared
             // so the switch can set them.
-            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.3f, rnd);
+            float desiredBdivT = ShipStats.DefaultBdivT + ModUtils.DistributedRange(0.3f, _rnd);
             float extraCpOffset = 0f;
             switch (_sType)
             {
@@ -1164,13 +1504,13 @@ namespace UADRealism
                     break;
             }
             float speedBias = Mathf.Cos(Mathf.PI * Mathf.InverseLerp(CpMin, CpMax, CpAvg)) * 0.5f;
-            float speedKts = Mathf.Lerp(speedKtsMin, speedKtsMax, (0.5f + ModUtils.DistributedRange(0.5f, rnd)) + speedBias) + ModUtils.DistributedRange(0.2f, rnd);
+            float speedKts = Mathf.Lerp(speedKtsMin, speedKtsMax, (0.5f + ModUtils.DistributedRange(0.5f, _rnd)) + speedBias) + ModUtils.DistributedRange(0.2f, _rnd);
             speedKts = Mathf.Clamp(_ship.hull.data.shipType.speedMin, _ship.hull.data.shipType.speedMax, speedKts);
             // if this is a refit, we'll use this as our goal speed but maybe not hit it.
 
             if (_this._isRefitMode_5__2)
             {
-                if (ModUtils.Range(0f, 1f, null, rnd) > 0.75f)
+                if (ModUtils.Range(0f, 1f, null, _rnd) > 0.75f)
                 {
                     float speedMS = Mathf.Clamp(speedKts * ShipStats.KnotsToMS, _ship.speedMax - 2f, _ship.speedMax + 2f);
                     _ship.SetSpeedMax(speedMS);
@@ -1182,13 +1522,13 @@ namespace UADRealism
 
                 // First, set L/B from B/T
                 float desiredLdivB = ShipStats.GetDesiredLdivB(_ship.tonnage * ShipStats.TonnesToCubicMetersWater, CbAvg, desiredBdivT, _ship.speedMax, _sType, _hullYear);
-                desiredLdivB *= 1f + ModUtils.DistributedRange(0.05f, rnd);
+                desiredLdivB *= 1f + ModUtils.DistributedRange(0.05f, _rnd);
 
                 // Next figure out which hull (i.e. what fineness)
                 int bestSec = ShipStats.GetDesiredSections(_hData, _ship.hull.data.sectionsMin, _ship.hull.data.sectionsMax, _ship.tonnage, _ship.speedMax,
-                    desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, ModUtils.DistributedRange(0.01f, 3, null, rnd) + extraCpOffset);
+                    desiredLdivB, desiredBdivT, out var finalBmPct, out var finalDrPct, out _, ModUtils.DistributedRange(0.01f, 3, null, _rnd) + extraCpOffset);
                 // Center freeboard on 0.
-                float freeboard = ModUtils.DistributedRange(0.5f, 3, null, rnd);
+                float freeboard = ModUtils.DistributedRange(0.5f, 3, null, _rnd);
                 if (freeboard < 0f)
                     freeboard = Mathf.Lerp(0f, ShipData._MinFreeboard, -freeboard);
                 else
@@ -1218,11 +1558,11 @@ namespace UADRealism
             }
             else
             {
-                _ship.CurrentCrewQuarters = (Ship.CrewQuarters)ModUtils.RangeToInt(ModUtils.BiasRange(ModUtils.DistributedRange(1f, 2, null, rnd), _isLight ? -0.33f : 0f), 3);
+                _ship.CurrentCrewQuarters = (Ship.CrewQuarters)ModUtils.RangeToInt(ModUtils.BiasRange(ModUtils.DistributedRange(1f, 2, null, _rnd), _isLight ? -0.33f : 0f), 3);
 
                 _ship.SetOpRange(_this.customRange.HasValue ? _this.customRange.Value :
                     (VesselEntity.OpRange)ModUtils.Clamp(
-                        (int)ShipStats.GetDesiredOpRange(_sType, _hullYear) + ModUtils.RangeToInt(ModUtils.DistributedRange(1f, 4, null, rnd), 3) - 1,
+                        (int)ShipStats.GetDesiredOpRange(_sType, _hullYear) + ModUtils.RangeToInt(ModUtils.DistributedRange(1f, 4, null, _rnd), 3) - 1,
                         (int)VesselEntity.OpRange.VeryLow,
                         (int)VesselEntity.OpRange.VeryHigh), true);
 
@@ -1234,7 +1574,7 @@ namespace UADRealism
                 {
                     int offset = _isLight ? -1 : 0;
                     _ship.survivability = (Ship.Survivability)ModUtils.Clamp(
-                        (int)ModUtils.RangeToInt(ModUtils.BiasRange(ModUtils.DistributedRange(1f, 4, null, rnd), _isLight ? 0f : 0.7f), 3) + 2,
+                        (int)ModUtils.RangeToInt(ModUtils.BiasRange(ModUtils.DistributedRange(1f, 4, null, _rnd), _isLight ? 0f : 0.7f), 3) + 2,
                         (int)Ship.Survivability.High + offset,
                         (int)Ship.Survivability.VeryHigh);
                 }
@@ -1250,7 +1590,7 @@ namespace UADRealism
             }
 
             if (!GameManager.IsCampaign)
-                _ship.CrewTrainingAmount = ModUtils.Range(17f, 100f, null, rnd);
+                _ship.CrewTrainingAmount = ModUtils.Range(17f, 100f, null, _rnd);
 
             _ship.Weight();
             _ship.RefreshHullStats();
@@ -1430,7 +1770,7 @@ namespace UADRealism
             }
             if (_CompWeights.Count == 0)
                 return;
-            var newComp = ModUtils.RandomByWeights(_CompWeights, null, _this.__8__1.rnd);
+            var newComp = ModUtils.RandomByWeights(_CompWeights, null, _rnd);
             if (newComp != null)
                 _ship.InstallComponent(newComp, true);
             _CompWeights.Clear();
@@ -2023,7 +2363,7 @@ namespace UADRealism
                     for (int i = 0; i < possDesigns.Count; i += 2)
                         _DesignWeights.Add(possDesigns[i], float.Parse(possDesigns[i + 1]));
 
-                    _design = ModUtils.RandomByWeights(_DesignWeights, null, _this.__8__1.rnd);
+                    _design = ModUtils.RandomByWeights(_DesignWeights, null, _rnd);
                     _DesignWeights.Clear();
                 }
                 else
@@ -2074,7 +2414,7 @@ namespace UADRealism
                         chance *= paramInit * armed;
                     }
 
-                    if (!Util.Chance(chance, _this.__8__1.rnd))
+                    if (!Util.Chance(chance, _rnd))
                         continue;
 
                     var rpu = new RandPartUsage(this);
@@ -2084,26 +2424,29 @@ namespace UADRealism
                     {
                         rpu.Reset();
 
-                        rpu.desired = Util.FromTo(rp.countMin, rp.countMax, _this.__8__1.rnd);
+                        rpu.desired = Util.FromTo(rp.countMin, rp.countMax, _rnd);
                         if (rp.align == RandPartInfo.Alignment.Side)
                         {
-                            rpu.desired = 2 * Util.RoundToIntProb(rpu.desired * 0.5f, _this.__8__1.rnd);
+                            rpu.desired = 2 * Util.RoundToIntProb(rpu.desired * 0.5f, _rnd);
                         }
                         // TODO: track number used and try other numbers each pass?
 
                         // Select part type
-                        GunDatabase.GunInfo gi = null;
+                        GunInfo gi = null;
                         if (rp.type == RandPartInfo.RPType.gun)
                         {
                             if (rp.groupGun == string.Empty || !_gunDataForGroup.TryGetValue(rp.groupGun, out gi))
-                                gi = GunDatabase.GetGunForRPI(_ship, rp, _gunGrades, _badGunTries);
+                                gi = rpu.FindGunInfo();
+
+                            if (gi == null)
+                                break;
                         }
 
                         while (rpu._parts.Count < rpu.desired)
                         {
                             float preWeight = _ship.Weight();
 
-                            PartData data = FindPartDataForRPU(rpu, gi);
+                            PartData data = rpu.FindPartData(gi);
 
                             if (data == null)
                                 break;
@@ -2266,8 +2609,20 @@ namespace UADRealism
 
                 _ship.StartCoroutine(_ship.RefreshDecorDelay());
 
+                if (_ship.shipTurretArmor == null)
+                    _ship.shipTurretArmor = new Il2CppSystem.Collections.Generic.List<Ship.TurretArmor>();
+
+                foreach (var rpu in _rpAll)
+                    foreach (var data in rpu._datas)
+                        if (data.isGun && ShipM.FindMatchingTurretArmor(_ship, data) == null)
+                            _ship.shipTurretArmor.Add(new Ship.TurretArmor(data, _ship));
+
+                foreach (var ta in _ship.shipTurretArmor)
+                    ta.topTurretArmor = ta.sideTurretArmor = ta.barbetteArmor = 0f;
+
                 foreach (var part in _ship.parts)
                     part.OnPostAdd();
+                
 
                 return true;
             }
@@ -2326,138 +2681,6 @@ namespace UADRealism
             return true;
         }
 
-        private PartData FindPartDataForRPU(RandPartUsage rpu, GunDatabase.GunInfo gi)
-        {
-            PartData data = null;
-
-            if (_firstPairCreated != null)
-            {
-                data = _firstPairCreated.data;
-            }
-            else if (rpu._rp.groupPart != string.Empty && _partDataForGroup.TryGetValue(rpu._rp.groupPart, out data))
-            {
-            }
-            else if (rpu._datas.Count >= 0 && rpu._rp.allSamePart)
-            {
-                data = rpu._datas[0];
-            }
-            if(data != null)
-                return rpu.IsBadData(data) ? null : data;
-
-            var tmt = RandPartInfo.MountType.None;
-            bool hasCenterCasemate = false;
-            List<PartData> parts;
-            if (rpu._rp.type == RandPartInfo.RPType.gun)
-            {
-                tmt = rpu._rp.GetTowerMountTypes(_ship);
-                hasCenterCasemate = RandPartInfo.HasCenterCasemate(_ship);
-                parts = rpu._rp.GetPartsForGunInfo(gi, _availableParts, tmt, hasCenterCasemate);
-            }
-            else
-            {
-                parts = rpu._rp.GetParts(_availableParts);
-            }
-            foreach (var p in parts)
-                if (!rpu.IsBadData(p))
-                    _Options.Add(p);
-
-            if (_Options.Count == 0)
-                return null;
-
-            if (rpu._rp.type == RandPartInfo.RPType.torpedo)
-            {
-                data = null;
-                float bestVal = float.MinValue;
-                foreach (var o in _Options)
-                {
-                    var val = TorpedoValue(o);
-                    if (val > bestVal)
-                    {
-                        bestVal = val;
-                        data = o;
-                    }
-                }
-                _Options.Clear();
-                return data;
-            }
-
-            if (rpu._rp.type == RandPartInfo.RPType.gun)
-            {
-                bool noCasemates = (rpu._rp.mountPref == RandPartInfo.MountPref.TowerOnly && (tmt & RandPartInfo.MountType.Casemate) == 0)
-                    || rpu._rp.mountPref == RandPartInfo.MountPref.DeckOnly || rpu._rp.mountPref == RandPartInfo.MountPref.TowerDeck;
-
-                RandPartInfo.MountType alignMask = RandPartInfo.MountType.None;
-                if (rpu._rp.align != RandPartInfo.Alignment.Center)
-                {
-                    alignMask |= RandPartInfo.MountType.Side;
-                    if (!noCasemates)
-                        alignMask |= RandPartInfo.MountType.Casemate;
-                }
-                if (rpu._rp.align != RandPartInfo.Alignment.Side)
-                {
-                    alignMask |= RandPartInfo.MountType.Center;
-                    if (!noCasemates && hasCenterCasemate)
-                        alignMask |= RandPartInfo.MountType.Casemate;
-                }
-
-                switch (rpu._rp.mountPref)
-                {
-                    case RandPartInfo.MountPref.TowerPref:
-                        foreach (var o in _Options)
-                            _OptionWeights.Add(o, (RandPartInfo.GetMountType(o) & tmt) == 0 ? 0.001f : 100f);
-                        break;
-                    case RandPartInfo.MountPref.DeckPref:
-                        foreach (var o in _Options)
-                            _OptionWeights.Add(o, ((RandPartInfo.GetMountType(o) & RandPartInfo.MountType.NonCasemate) & alignMask) == 0 ? 0.001f : 100f);
-                        break;
-                    case RandPartInfo.MountPref.CasematePref:
-                        foreach (var o in _Options)
-                            _OptionWeights.Add(o, ((RandPartInfo.GetMountType(o) & RandPartInfo.MountType.Casemate) & alignMask) == 0 ? 0.001f : 100f);
-                        break;
-                    default:
-                        data = _Options.Random(null, _this.__8__1.rnd);
-                        _Options.Clear();
-                        return data;
-                }
-                data = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
-                _Options.Clear();
-                _OptionWeights.Clear();
-                return data;
-            }
-
-            // try to do something smarter than random
-            float maxCost = 0f;
-            float minTon = float.MaxValue;
-            float maxTon = float.MinValue;
-            foreach (var o in _Options)
-            {
-                if (o.cost > maxCost)
-                    maxCost = o.cost;
-                if (minTon > o.weight)
-                    minTon = o.weight;
-                if (maxTon < o.weight)
-                    maxTon = o.weight;
-            }
-            float costMult = Mathf.Pow(10f, -Mathf.Floor(Mathf.Log10(maxCost)));
-            float tonMult = 1f - minTon / maxTon;
-            foreach (var o in _Options)
-            {
-                float cost = o.cost * costMult;
-                float year = Database.GetYear(o);
-                if (year > 0)
-                    cost *= Mathf.Pow(2f, (year - 1890) * 0.5f);
-
-                // Try to weight based on where ship is within the tonnage range
-                cost *= 1.2f - Mathf.Abs(Mathf.InverseLerp(minTon, maxTon, o.weight) - _tngRatio) * tonMult;
-
-                _OptionWeights[o] = cost;
-            }
-            data = ModUtils.RandomByWeights(_OptionWeights, null, _this.__8__1.rnd);
-            _OptionWeights.Clear();
-            _Options.Clear();
-            return data;
-        }
-
         private bool PlacePartForRPU(Part part, RandPartUsage rpu)
         {
             var data = part.data;
@@ -2507,7 +2730,7 @@ namespace UADRealism
                     }
                     if (_MountWeights.Count > 0)
                     {
-                        part.Mount(ModUtils.RandomByWeights(_MountWeights, null, _this.__8__1.rnd));
+                        part.Mount(ModUtils.RandomByWeights(_MountWeights, null, _rnd));
                         _MountWeights.Clear();
                     }
                     else
@@ -2573,7 +2796,7 @@ namespace UADRealism
                             if (_MountPositionWeights.Count == 0)
                                 return false;
 
-                            part.transform.position = ModUtils.RandomByWeights(_MountPositionWeights, null, _this.__8__1.rnd);
+                            part.transform.position = ModUtils.RandomByWeights(_MountPositionWeights, null, _rnd);
                             _MountPositionWeights.Clear();
                         }
                     }
@@ -2600,10 +2823,10 @@ namespace UADRealism
                         _offsetX = 0;
                         if (rpu._rp.align == RandPartInfo.Alignment.Both && !data.paramx.ContainsKey("center"))
                         {
-                            if (data.paramx.ContainsKey("side") || ModUtils.Range(0f, 1f, null, _this.__8__1.rnd) < 0.75f)
-                                _offsetX = ModUtils.Range(x.x, x.y, null, _this.__8__1.rnd);
+                            if (data.paramx.ContainsKey("side") || ModUtils.Range(0f, 1f, null, _rnd) < 0.75f)
+                                _offsetX = ModUtils.Range(x.x, x.y, null, _rnd);
                         }
-                        _offsetZ = ModUtils.Range(z.x, z.y, null, _this.__8__1.rnd);
+                        _offsetZ = ModUtils.Range(z.x, z.y, null, _rnd);
 
                         if (_offsetX != 0f)
                         {
@@ -2674,7 +2897,7 @@ namespace UADRealism
             return true;
         }
 
-        private Ship.TurretCaliber AddTCForGun(Part part, GunDatabase.GunInfo gi)
+        private Ship.TurretCaliber AddTCForGun(Part part, GunInfo gi)
         {
             float diamOffset = 0f;
             float excess = (gi.caliber * 1f / 25.4f) - gi._calInch;
@@ -2694,11 +2917,6 @@ namespace UADRealism
             return tc;
         }
 
-        public float TorpedoValue(PartData data)
-        {
-            return Util.Range(0f, MonoBehaviourExt.Param("torpedo_gen_randomness", 1.2f)) + data.barrels;
-        }
-
         public void AddArmorToLimit(float maxWeight = -1f)
         {
             if (maxWeight < 0f)
@@ -2708,16 +2926,16 @@ namespace UADRealism
                 return;
 
             float deckPortion = Util.Remap(_hullYear, 1890f, 1930f, 0.15f, 0.67f, true);
-            deckPortion *= 1f + ModUtils.DistributedRange(0.1f, 4, null, _this.__8__1.rnd);
+            deckPortion *= 1f + ModUtils.DistributedRange(0.1f, 4, null, _rnd);
             _ArmorMultipliers[Ship.A.Deck] = deckPortion;
-            _ArmorMultipliers[Ship.A.DeckBow] = _ArmorMultipliers[Ship.A.DeckStern] = deckPortion * (0.5f + ModUtils.DistributedRange(0.1f, 2, null, _this.__8__1.rnd));
+            _ArmorMultipliers[Ship.A.DeckBow] = _ArmorMultipliers[Ship.A.DeckStern] = deckPortion * (0.5f + ModUtils.DistributedRange(0.1f, 2, null, _rnd));
             _ArmorMultipliers[Ship.A.Belt] = 1f;
-            _ArmorMultipliers[Ship.A.BeltBow] = _ArmorMultipliers[Ship.A.BeltStern] = 0.5f + ModUtils.DistributedRange(0.1f, 2, null, _this.__8__1.rnd);
-            _ArmorMultipliers[Ship.A.Barbette] = 1f + ModUtils.DistributedRange(0.2f, 4, null, _this.__8__1.rnd);
-            _ArmorMultipliers[Ship.A.TurretSide] = 1f + Mathf.Abs(ModUtils.DistributedRange(0.5f, 2, null, _this.__8__1.rnd));
-            _ArmorMultipliers[Ship.A.TurretTop] = _ArmorMultipliers[Ship.A.TurretSide] * deckPortion * (0.8f + ModUtils.DistributedRange(0.125f, 2, null, _this.__8__1.rnd));
-            _ArmorMultipliers[Ship.A.ConningTower] = 1f + ModUtils.DistributedRange(0.2f, 3, null, _this.__8__1.rnd);
-            _ArmorMultipliers[Ship.A.Superstructure] = Math.Max(_ArmorMultipliers[Ship.A.Belt], _ArmorMultipliers[Ship.A.ConningTower]) * (0.375f + ModUtils.DistributedRange(0.125f, 2, null, _this.__8__1.rnd));
+            _ArmorMultipliers[Ship.A.BeltBow] = _ArmorMultipliers[Ship.A.BeltStern] = 0.5f + ModUtils.DistributedRange(0.1f, 2, null, _rnd);
+            _ArmorMultipliers[Ship.A.Barbette] = 1f + ModUtils.DistributedRange(0.2f, 4, null, _rnd);
+            _ArmorMultipliers[Ship.A.TurretSide] = 1f + Mathf.Abs(ModUtils.DistributedRange(0.5f, 2, null, _rnd));
+            _ArmorMultipliers[Ship.A.TurretTop] = _ArmorMultipliers[Ship.A.TurretSide] * deckPortion * (0.8f + ModUtils.DistributedRange(0.125f, 2, null, _rnd));
+            _ArmorMultipliers[Ship.A.ConningTower] = 1f + ModUtils.DistributedRange(0.2f, 3, null, _rnd);
+            _ArmorMultipliers[Ship.A.Superstructure] = Math.Max(_ArmorMultipliers[Ship.A.Belt], _ArmorMultipliers[Ship.A.ConningTower]) * (0.375f + ModUtils.DistributedRange(0.125f, 2, null, _rnd));
             float maxMult = 0f;
             foreach (var m in _ArmorMultipliers.Values)
                 if (maxMult < m)

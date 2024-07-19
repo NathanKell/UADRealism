@@ -4,6 +4,7 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using UADRealism.Data;
 
 namespace UADRealism
 {
@@ -12,6 +13,7 @@ namespace UADRealism
         public override void OnInitializeMelon()
         {
             base.OnInitializeMelon();
+            TweaksAndFixes.Config.MaxGunGrade = GunDatabase.MaxGunGrade;
         }
 
         public override void OnDeinitializeMelon()
