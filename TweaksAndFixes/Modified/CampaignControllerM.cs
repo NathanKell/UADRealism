@@ -185,7 +185,7 @@ namespace TweaksAndFixes
             {
                 int calIn = Mathf.RoundToInt(tc.turretPartData.caliber * (1f / 25.4f));
                 int grade = ship.TechGunGrade(tc.turretPartData);
-                for (int g = 1; g < 6; ++g)
+                for (int g = 1; g < Config.MaxGunGrade + 1; ++g)
                 {
                     var gTech = Database.GetGunTech(calIn, g);
                     if (gTech == tech.name)

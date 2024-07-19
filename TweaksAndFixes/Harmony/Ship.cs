@@ -105,7 +105,7 @@ namespace TweaksAndFixes
     {
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
         [HarmonyPrefix]
-        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, out int __state, ref bool __result)
+        internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, out int __state, ref bool __result)
         {
             Patch_Ship._IsGenerating = true;
             Patch_Ship._ShipForGenerateRandom = __instance.__4__this;
@@ -113,7 +113,6 @@ namespace TweaksAndFixes
 
             // So we know what state we started in.
             __state = __instance.__1__state;
-            return true;
         }
 
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]

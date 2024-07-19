@@ -8,13 +8,14 @@ using Il2Cpp;
 #pragma warning disable CS8600
 #pragma warning disable CS8601
 #pragma warning disable CS8603
+#pragma warning disable CS8618
 
 namespace TweaksAndFixes
 {
     public static class Database
     {
-        private static readonly string[,] _GunGradeTechs = new string[21,6];
-        private static readonly int[,] _GunGradeYears = new int[21, 6];
+        private static string[,] _GunGradeTechs;
+        private static int[,] _GunGradeYears;
         private static readonly Dictionary<string, int> _PartYears = new Dictionary<string, int>();
         private static readonly Dictionary<string, string> _PartTechs = new Dictionary<string, string>();
         private static readonly Dictionary<string, List<string>> _TechParts = new Dictionary<string, List<string>>();
@@ -26,6 +27,8 @@ namespace TweaksAndFixes
 
         public static void FillDatabase()
         {
+            _GunGradeTechs = new string[21, Config.MaxGunGrade + 1];
+            _GunGradeYears = new int[21, Config.MaxGunGrade + 1];
             _PartYears.Clear();
             _PartTechs.Clear();
             _TechParts.Clear();
