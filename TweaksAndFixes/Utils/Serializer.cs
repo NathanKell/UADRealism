@@ -257,24 +257,57 @@ namespace TweaksAndFixes
                 }
             }
 
-            public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(string text, bool fillCustom) where T : BaseData
+            // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
+            public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(string text, bool fillCustom, Il2CppSystem.Collections.Generic.Dictionary<string, T> existing = null) where T : BaseData
             {
                 TextAsset.Internal_CreateInstance(_TempTextAsset, text);
-                return G.GameData.ProcessCsv<T>(_TempLoadInfo, fillCustom);
+                var newDict = G.GameData.ProcessCsv<T>(_TempLoadInfo, fillCustom);
+                if (existing == null)
+                    return newDict;
+                foreach (var kvp in newDict)
+                {
+                    if (existing.TryGetValue(kvp.Key, out var oldData))
+                    {
+                        kvp.Value.order = oldData.order;
+                        kvp.Value.Id = oldData.Id;
+                    }
+                    existing[kvp.Key] = kvp.Value;
+                }
+                return existing;
             }
 
-            public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(bool fillCustom, string path) where T : BaseData
-                => ProcessCSV<T>(File.ReadAllText(path), fillCustom);
+            // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
+            public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(bool fillCustom, string path, Il2CppSystem.Collections.Generic.Dictionary<string, T> existing = null) where T : BaseData
+                => ProcessCSV<T>(File.ReadAllText(path), fillCustom, existing);
 
-            public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(string text, bool fillCustom) where T : BaseData
+            // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
+            public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(string text, bool fillCustom, Il2CppSystem.Collections.Generic.List<T> existing = null) where T : BaseData
             {
                 TextAsset.Internal_CreateInstance(_TempTextAsset, text);
                 var list = new Il2CppSystem.Collections.Generic.List<T>();
                 G.GameData.ProcessCsv<T>(_TempLoadInfo, list, null, fillCustom);
-                return list;
+                if (existing == null)
+                    return list;
+
+                // this is expensive because this is a list.
+                // But probably better to do this rather than create a dict just for this?
+                foreach (var item in list)
+                {
+                    for(int i = existing.Count; i-- > 0;)
+                    {
+                        var old = existing[i];
+                        if (old.name != item.name)
+                            continue;
+                        item.order = old.order;
+                        item.Id = old.Id;
+                        existing[i] = item;
+                    }
+                }
+                return existing;
             }
 
-            public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(bool fillCustom, string path) where T : BaseData
+            // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
+            public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(bool fillCustom, string path, Il2CppSystem.Collections.Generic.List<T> existing = null) where T : BaseData
                 => ProcessCSVToList<T>(File.ReadAllText(path), fillCustom);
 
             // This is an expanded version of System.TypeCode
