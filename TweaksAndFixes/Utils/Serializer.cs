@@ -2,6 +2,7 @@
 using UnityEngine;
 using System.Text;
 using Il2Cpp;
+using System.Collections;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -108,7 +109,32 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Read<TList, TItem>(string[] lines, TList output) where TList : IList<TItem>
+            public static bool Write<TKey, TItem>(IDictionary<TKey, TItem> coll, List<string> output, bool markKey = true)
+            {
+                var tc = GetOrCreate(typeof(TItem));
+                if (tc == null)
+                    return false;
+
+                FieldData key = null;
+                if (markKey)
+                    key = tc.GetKey(coll as System.Collections.IDictionary);
+
+                var header = tc.WriteHeader(key);
+                output.Add(header);
+                bool allSucceeded = true;
+                foreach (var item in coll)
+                {
+                    bool ok = tc.WriteType(item, out var s);
+                    if (ok)
+                        output.Add(s);
+
+                    allSucceeded &= ok;
+                }
+
+                return allSucceeded;
+            }
+
+            public static bool Read<TList, TItem>(string[] lines, TList output, bool useComments = true) where TList : IList<TItem>
             {
                 int lLen = lines.Length;
                 if (lLen < 2)
@@ -126,6 +152,9 @@ namespace TweaksAndFixes
                 bool allSucceeded = true;
                 for (int i = 1; i < lLen; ++i)
                 {
+                    if (useComments && lines[i].StartsWith('#'))
+                        continue;
+
                     var line = ParseLine(lines[i]);
                     if (create)
                     {
@@ -144,7 +173,7 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Read<TDict, TKey, TValue>(string[] lines, TDict output, string keyName) where TDict : IDictionary<TKey, TValue>
+            public static bool Read<TDict, TKey, TValue>(string[] lines, TDict output, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
             {
                 int lLen = lines.Length;
                 if (lLen < 2)
@@ -160,13 +189,33 @@ namespace TweaksAndFixes
                 bool create = output.Count == 0;
 
                 List<string> header = ParseLine(lines[0]);
-                int keyIdx = header.IndexOf(keyName);
+                int keyIdx;
+                if (keyName != null)
+                {
+                    keyIdx = header.IndexOf(keyName);
+                }
+                else
+                {
+                    keyIdx = -1;
+                    for (int i = 0; i < header.Count; ++i)
+                    {
+                        if (header[i].StartsWith('@'))
+                        {
+                            keyIdx = i;
+                            header[i] = header[i].Substring(1);
+                            break;
+                        }
+                    }
+                }
                 if (keyIdx < 0)
                     return false;
 
                 bool allSucceeded = true;
                 for (int i = 1; i < lLen; ++i)
                 {
+                    if (useComments && lines[i].StartsWith('#'))
+                        continue;
+
                     var line = ParseLine(lines[i]);
 
                     var keyObj = keyField.ReadValue(line[keyIdx]);
@@ -212,17 +261,25 @@ namespace TweaksAndFixes
                 return ok;
             }
 
-
-            public static bool Read<TList, TItem>(TList output, string path) where TList : IList<TItem>
+            public static bool Write<TKey, TItem>(IDictionary<TKey, TItem> dict, string path, bool markKey = true)
             {
-                var lines = File.ReadAllLines(path);
-                return Read<TList, TItem>(lines, output);
+                var lines = new List<string>();
+                bool ok = Write<TKey, TItem>(dict, lines, markKey);
+                File.WriteAllLines(path, lines);
+                return ok;
             }
 
-            public static bool Read<TDict, TKey, TValue>(TDict output, string keyName, string path) where TDict : IDictionary<TKey, TValue>
+
+            public static bool Read<TList, TItem>(TList output, string path, bool useComments = true) where TList : IList<TItem>
             {
                 var lines = File.ReadAllLines(path);
-                return Read<TDict, TKey, TValue>(lines, output, keyName);
+                return Read<TList, TItem>(lines, output, useComments);
+            }
+
+            public static bool Read<TDict, TKey, TValue>(TDict output, string path, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
+            {
+                var lines = File.ReadAllLines(path);
+                return Read<TDict, TKey, TValue>(lines, output, keyName, useComments);
             }
 
 
@@ -752,9 +809,8 @@ namespace TweaksAndFixes
                 bool allSucceeded = true;
                 bool isNotFirst = false;
 
-                for (int i = 0; i < num; i++)
+                foreach (var fieldData in _fields)
                 {
-                    var fieldData = _fields[i];
                     if (!fieldData._attrib.writeable)
                         continue;
 
@@ -778,14 +834,61 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public string WriteHeader()
+            public FieldData GetKey(IDictionary dict)
+            {
+                if (dict == null)
+                    return null;
+
+                HashSet<FieldData> confirmedCandidates = null;
+                HashSet<FieldData> candidates = new HashSet<FieldData>();
+                int checks = 0;
+                foreach (var keyObj in dict.Keys)
+                {
+                    if (checks++ > 10)
+                        break;
+
+                    object key = keyObj;
+                    object obj = dict[key];
+                    
+                    string keyStr = key.ToString(); // it might already be a string, but eh.
+                    foreach (var fieldData in _fields)
+                    {
+                        object value = fieldData._fieldInfo.GetValue(obj);
+                        if (value == null || !fieldData.Write(value, out string val))
+                            continue;
+
+                        if (val == keyStr)
+                            candidates.Add(fieldData);
+                    }
+                    foreach (var fd in candidates)
+                        if (fd._fieldName.ToLower() == "name")
+                            return fd;
+
+                    foreach (var fd in candidates)
+                        if (fd._fieldName.ToLower() == "_name")
+                            return fd;
+
+                    if (confirmedCandidates == null)
+                        confirmedCandidates = new HashSet<FieldData>(candidates);
+                    else
+                        confirmedCandidates.IntersectWith(candidates);
+
+                    if (confirmedCandidates.Count == 0)
+                        return null;
+                    if (confirmedCandidates.Count == 1)
+                        return candidates.First();
+                }
+
+                return null;
+            }
+
+            public string WriteHeader(FieldData key = null)
             {
                 int num = _fields.Count;
                 bool isNotFirst = false;
 
-                for (int i = 0; i < num; i++)
+                foreach(var fieldData in _fields)
                 {
-                    var fieldData = _fields[i];
                     if (!fieldData._attrib.writeable)
                         continue;
 
@@ -793,6 +896,9 @@ namespace TweaksAndFixes
                         _StringBuilder.Append(',');
                     else
                         isNotFirst = true;
+
+                    if (key == fieldData)
+                        _StringBuilder.Append('@');
 
                     _StringBuilder.Append(fieldData._fieldName);
                 }
@@ -868,7 +974,7 @@ namespace TweaksAndFixes
                 Serializer.CSV.Read<List<CSVTest>, CSVTest>(list2, pathL);
 
                 Dictionary<string, CSVTest> dict2 = new Dictionary<string, CSVTest>();
-                Serializer.CSV.Read<Dictionary<string, CSVTest>, string, CSVTest>(dict2, "name", pathD);
+                Serializer.CSV.Read<Dictionary<string, CSVTest>, string, CSVTest>(dict2, pathD, "name");
                 if (list2.Count == 0 || dict2.Count == 0)
                     return "Count zero";
 
@@ -891,7 +997,7 @@ namespace TweaksAndFixes
                     itm.y = 0;
                 }
                 Serializer.CSV.Read<List<CSVTest>, CSVTest>(list, pathL);
-                Serializer.CSV.Read<Dictionary<string, CSVTest>, string, CSVTest>(dict2, "name", pathL);
+                Serializer.CSV.Read<Dictionary<string, CSVTest>, string, CSVTest>(dict2, pathL, "name");
                 for (int i = 0; i < 500; ++i)
                     if (list[i].x == 0 || dict2["item" + i].y == 0)
                         return $"x is {list[i].x} or y is {dict2["item" + i].y}";

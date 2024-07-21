@@ -493,6 +493,20 @@ namespace TweaksAndFixes
             return dict;
         }
 
+        static readonly char[] _SplitChars = new char[] { ' ', ',', '\t', ';' };
+
+        public static List<string> HumanListToList(string input)
+        {
+            var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
+            return arr.ToList();
+        }
+
+        public static HashSet<string> HumanListToSet(string input)
+        {
+            var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
+            return arr.ToHashSet();
+        }
+
         public static List<T> ToManaged<T>(this Il2CppSystem.Collections.Generic.List<T> list)
         {
             var ret = new List<T>(list.Count);
