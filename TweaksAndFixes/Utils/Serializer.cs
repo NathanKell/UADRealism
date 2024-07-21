@@ -264,12 +264,28 @@ namespace TweaksAndFixes
                 var newDict = G.GameData.ProcessCsv<T>(_TempLoadInfo, fillCustom);
                 if (existing == null)
                     return newDict;
+
+                int lastID = 0;
+                float lastOrder = 0f;
+                foreach (var item in existing.Values)
+                {
+                    if (item.Id > lastID)
+                        lastID = item.Id;
+                    if (item.order > lastOrder)
+                        lastOrder = item.order;
+                }
+
                 foreach (var kvp in newDict)
                 {
                     if (existing.TryGetValue(kvp.Key, out var oldData))
                     {
                         kvp.Value.order = oldData.order;
                         kvp.Value.Id = oldData.Id;
+                    }
+                    else
+                    {
+                        kvp.Value.order = ++lastOrder;
+                        kvp.value.Id = ++lastID;
                     }
                     existing[kvp.Key] = kvp.Value;
                 }
@@ -280,6 +296,7 @@ namespace TweaksAndFixes
             public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(bool fillCustom, string path, Il2CppSystem.Collections.Generic.Dictionary<string, T> existing = null) where T : BaseData
                 => ProcessCSV<T>(File.ReadAllText(path), fillCustom, existing);
 
+            static readonly Dictionary<string, int> _IndexCache = new Dictionary<string, int>();
             // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
             public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(string text, bool fillCustom, Il2CppSystem.Collections.Generic.List<T> existing = null) where T : BaseData
             {
@@ -289,20 +306,36 @@ namespace TweaksAndFixes
                 if (existing == null)
                     return list;
 
-                // this is expensive because this is a list.
-                // But probably better to do this rather than create a dict just for this?
+                // Find last ID and cache indices
+                int lastID = 0;
+                float lastOrder = 0f;
+                for (int i = existing.Count; i-- > 0;)
+                {
+                    var item = existing[i];
+                    _IndexCache[item.name] = i;
+                    if (item.Id > lastID)
+                        lastID = item.Id;
+                    if (item.order > lastOrder)
+                        lastOrder = item.order;
+                }
+
                 foreach (var item in list)
                 {
-                    for(int i = existing.Count; i-- > 0;)
+                    if (_IndexCache.TryGetValue(item.name, out var i))
                     {
-                        var old = existing[i];
-                        if (old.name != item.name)
-                            continue;
-                        item.order = old.order;
-                        item.Id = old.Id;
+                        var oldData = existing[i];
+                        item.order = oldData.order;
+                        item.Id = oldData.Id;
                         existing[i] = item;
                     }
+                    else
+                    {
+                        item.order = ++lastOrder;
+                        item.Id = ++lastID;
+                        existing.Add(item);
+                    }
                 }
+                _IndexCache.Clear();
                 return existing;
             }
 
