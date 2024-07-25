@@ -14,31 +14,63 @@ namespace TweaksAndFixes
     {
         internal static bool _IsGenerating = false;
         internal static Ship _ShipForGenerateRandom = null;
+        public static string GetHullModelKey(PartData data)
+        {
+            string key = data.model;
+            if (data.shipType.name == "dd" || data.shipType.name == "tb")
+                key += "%";
+            if (data.paramx.TryGetValue("var", out var desiredVars))
+            {
+                key += "$";
+                for (int i = 0; i < desiredVars.Count - 1; ++i)
+                    key += desiredVars[i] + ";";
+                key += desiredVars[desiredVars.Count - 1];
+            }
+
+            return key;
+        }
 
         // I'm sure more will get patched later.
         //[HarmonyPatch(nameof(Ship.IsPartAvailable), new Type[] { typeof(PartData), typeof(Player), typeof(ShipType), typeof(Ship) })]
         //[HarmonyPrefix]
-        //internal static bool Prefix_IsPartAvailable(Ship __instance, PartData part, ref bool __result)
+        //internal static bool Prefix_IsPartAvailable(PartData part, ref bool __result)
         //{
-        //    //if (__instance.shipType.name != "cl" && __instance.shipType.name != "ca")
-        //    //    return true;
-
         //    var year = Database.GetYear(part);
-        //    if (year < 1860 || year > 1918)
+        //    if (year < 1860 || year > 1920)
         //        return true;
 
-        //    var set = Database.GetHullNamesForPart(part);
-        //    if (set == null)
-        //        return true;
-
-        //    foreach (var s in set)
+        //    if (part.isHull)
         //    {
-        //        if (G.GameData.parts.TryGetValue(s, out var hull) && (hull.shipType.name == "cl" || hull.shipType.name == "ca"))
+        //        string hmk = GetHullModelKey(part);
+        //        foreach (var p in G.GameData.parts.Values)
         //        {
-        //            __result = true;
-        //            return false;
+        //            if (!p.isHull || Database.GetYear(p) > 1920)
+        //                continue;
+        //            if (p == part)
+        //            {
+        //                __result = true;
+        //                return false;
+        //            }
+        //            if (hmk == GetHullModelKey(p))
+        //            {
+        //                __result = false;
+        //                return false;
+        //            }
         //        }
         //    }
+
+        //    //var set = Database.GetHullNamesForPart(part);
+        //    //if (set == null)
+        //    //    return true;
+
+        //    //foreach (var s in set)
+        //    //{
+        //    //    if (G.GameData.parts.TryGetValue(s, out var hull) && (hull.shipType.name == "cl" || hull.shipType.name == "ca"))
+        //    //    {
+        //    //        __result = true;
+        //    //        return false;
+        //    //    }
+        //    //}
 
         //    return true;
         //}

@@ -3,6 +3,8 @@ using UnityEngine;
 using System.Text;
 using Il2Cpp;
 using System.Collections;
+using Il2CppDigitalRuby.PyroParticles;
+using System.Runtime.Intrinsics.Arm;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -314,6 +316,32 @@ namespace TweaksAndFixes
                 }
             }
 
+            private static List<FieldInfo> GetCopyFields(Type type, string firstLine)
+            {
+                List<string> header = ParseLine(firstLine);
+                HashSet<string> okNames = new HashSet<string>();
+                foreach (var s in header)
+                {
+                    var s2 = s.Trim();
+                    if (s2.Length == 0)
+                        continue;
+                    if (s2.StartsWith('@'))
+                        okNames.Add(s2.Substring(1));
+                    else if (!s2.StartsWith('#'))
+                        okNames.Add(s2);
+                }
+
+                var ret = new List<FieldInfo>();
+                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                foreach (var fi in fields)
+                {
+                    if (okNames.Contains(fi.Name))
+                        ret.Add(fi);
+                }
+
+                return ret;
+            }
+
             // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
             public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(string text, bool fillCustom, Il2CppSystem.Collections.Generic.Dictionary<string, T> existing = null) where T : BaseData
             {
@@ -321,6 +349,10 @@ namespace TweaksAndFixes
                 var newDict = G.GameData.ProcessCsv<T>(_TempLoadInfo, fillCustom);
                 if (existing == null)
                     return newDict;
+
+                // Lazy-fill this, because if we don't need to update
+                // existing records, no point in doing this.
+                List<FieldInfo> fieldsToCopy = null;
 
                 int lastID = 0;
                 float lastOrder = 0f;
@@ -336,15 +368,20 @@ namespace TweaksAndFixes
                 {
                     if (existing.TryGetValue(kvp.Key, out var oldData))
                     {
-                        kvp.Value.order = oldData.order;
-                        kvp.Value.Id = oldData.Id;
+                        if (fieldsToCopy == null)
+                            fieldsToCopy = GetCopyFields(typeof(T), text.Substring(0, text.IndexOf('\n')));
+                        foreach (var fi in fieldsToCopy)
+                            fi.SetValue(oldData, fi.GetValue(kvp.Value));
+
+                        // Reprocess this since input has changed
+                        oldData.PostProcess();
                     }
                     else
                     {
                         kvp.Value.order = ++lastOrder;
                         kvp.value.Id = ++lastID;
+                        existing[kvp.Key] = kvp.Value;
                     }
-                    existing[kvp.Key] = kvp.Value;
                 }
                 return existing;
             }
@@ -362,6 +399,10 @@ namespace TweaksAndFixes
                 G.GameData.ProcessCsv<T>(_TempLoadInfo, list, null, fillCustom);
                 if (existing == null)
                     return list;
+
+                // Lazy-fill this, because if we don't need to update
+                // existing records, no point in doing this.
+                List<FieldInfo> fieldsToCopy = null;
 
                 // Find last ID and cache indices
                 int lastID = 0;
@@ -381,9 +422,13 @@ namespace TweaksAndFixes
                     if (_IndexCache.TryGetValue(item.name, out var i))
                     {
                         var oldData = existing[i];
-                        item.order = oldData.order;
-                        item.Id = oldData.Id;
-                        existing[i] = item;
+                        if (fieldsToCopy == null)
+                            fieldsToCopy = GetCopyFields(typeof(T), text.Substring(0, text.IndexOf('\n')));
+                        foreach (var fi in fieldsToCopy)
+                            fi.SetValue(oldData, fi.GetValue(item));
+
+                        // Reprocess this since input has changed
+                        oldData.PostProcess();
                     }
                     else
                     {
