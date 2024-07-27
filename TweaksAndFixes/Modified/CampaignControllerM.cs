@@ -4,12 +4,37 @@ using UnityEngine;
 using Il2Cpp;
 using System.Collections.Generic;
 
+#pragma warning disable CS8600
 #pragma warning disable CS8603
 
 namespace TweaksAndFixes
 {
     public class CampaignControllerM
     {
+        public List<CampaignController.TaskForce> GetTaskForceInsideRadius(CampaignController _this, Vector3 coord, float radiusKm, CampaignController.TaskForce except, Func<CampaignController.TaskForce, bool> predicate)
+        {
+            List<CampaignController.TaskForce> ret = null;
+            foreach (var tf in _this.CampaignData.TaskForces)
+            {
+                if (predicate != null && !predicate(tf))
+                    continue;
+                if (tf == except)
+                    continue;
+
+                float zone = tf.GetZoneRadius(false);
+                float distSqr = (zone + radiusKm) * 0.005f;
+                distSqr *= distSqr;
+                if ((coord - tf.WorldPos).sqrMagnitude > distSqr)
+                    continue;
+
+                if (ret == null)
+                    ret = new List<CampaignController.TaskForce>();
+                ret.Add(tf);
+            }
+
+            return ret;
+        }
+
         public static Ship GetSharedDesign(CampaignController _this, Player player, ShipType shipType, int year, bool checkTech = true, bool isEarlySavedShip = false)
         {
             Melon<TweaksAndFixes>.Logger.Msg($"Getting shared design for {shipType.name} of {player.data.name}");
