@@ -14,20 +14,58 @@ namespace TweaksAndFixes
     {
         internal static bool _IsGenerating = false;
         internal static Ship _ShipForGenerateRandom = null;
-        public static string GetHullModelKey(PartData data)
-        {
-            string key = data.model;
-            if (data.shipType.name == "dd" || data.shipType.name == "tb")
-                key += "%";
-            if (data.paramx.TryGetValue("var", out var desiredVars))
-            {
-                key += "$";
-                for (int i = 0; i < desiredVars.Count - 1; ++i)
-                    key += desiredVars[i] + ";";
-                key += desiredVars[desiredVars.Count - 1];
-            }
+        internal static bool _IsLoading = false;
+        internal static Ship _ShipForLoading = null;
+        internal static Ship.Store _StoreForLoading = null;
 
-            return key;
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.ToStore))]
+        internal static void Postfix_ToStore(Ship __instance, ref Ship.Store __result)
+        {
+            __instance.TAFData().ToStore(__result, false);
+        }
+
+        // We can't patch FromStore because it has a nullable argument.
+        // It has multiple early-outs. We're skipping:
+        // * shipType can't be found in GameData
+        // * tech not in GameData.
+        // * part hull not in GameData
+        // But we will patch the regular case and the "can't find design" case
+        // (see Patch_LoadSaveFromStore below)
+        internal static void Postfix_FromStore(Ship __instance)
+        {
+            if (__instance != null && _StoreForLoading != null)
+                __instance.TAFData().ToStore(_StoreForLoading, true);
+
+            _IsLoading = false;
+            _ShipForLoading = null;
+            _StoreForLoading = null;
+        }
+
+        // Successful FromStore
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.Init))]
+        internal static void Postfix_Init(Ship __instance)
+        {
+            if (_IsLoading)
+                Postfix_FromStore(__instance);
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.TechGunGrade))]
+        internal static void Postfix_TechGunGrade(Ship __instance, PartData gun, bool requireValid, ref int __result)
+        {
+            // Let's hope the gun grade cache is only used in this method!
+            // If it's used elsewhere, we won't catch that case. The reason
+            // is that we can't patch the cache if we want to use it at all,
+            // because we need to preserve the _real_ grade but we also
+            // don't want to cache-bust every time.
+            int newGrade = __instance.TAFData().GunGrade(gun, __result);
+            if (newGrade != __result)
+            {
+                Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced grade for part {gun.name} with {newGrade} (was {__result})");
+                __result = newGrade;
+            }
         }
 
         // I'm sure more will get patched later.
@@ -154,6 +192,49 @@ namespace TweaksAndFixes
             Patch_Ship._IsGenerating = false;
             Patch_Ship._ShipForGenerateRandom = null;
             //Melon<TweaksAndFixes>.Logger.Msg($"Iteration for state {__state} ended, new state {__instance.__1__state}");
+        }
+    }
+
+    [HarmonyPatch(typeof(VesselEntity))]
+    internal class Patch_VesselEntityFromStore
+    {
+        // Harmony can't patch methods that take nullable arguments.
+        // So instead of patching Ship.FromStore() we have to patch
+        // this, which it calls near the start.
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(VesselEntity.FromBaseStore))]
+        internal static void Prefix_FromBaseStore(VesselEntity __instance, VesselEntity.VesselEntityStore store, bool isSharedDesign)
+        {
+            Ship ship = __instance.GetComponent<Ship>();
+            if (ship == null)
+                return;
+
+            var sStore = store.TryCast<Ship.Store>();
+            if (sStore == null)
+                return;
+
+            if (sStore.mission != null && LoadSave.Get(sStore.mission, G.GameData.missions) == null)
+                return;
+
+            Patch_Ship._IsLoading = true;
+            Patch_Ship._ShipForLoading = ship;
+            Patch_Ship._StoreForLoading = sStore;
+            ship.TAFData().FromStore(sStore);
+        }
+    }
+
+    // This is an early-out condition in Ship.FromStore
+    [HarmonyPatch(typeof(LoadSave))]
+    internal class Patch_LoadSaveFromStore
+    {
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(LoadSave.GetShip), new Type[] { typeof(Il2CppSystem.Guid) })]
+        internal static void Postfix(Ship __result)
+        {
+            if (Patch_Ship._IsLoading && __result == null)
+            {
+                Patch_Ship.Postfix_FromStore(null);
+            }
         }
     }
 }
