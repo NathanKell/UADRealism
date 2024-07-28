@@ -44,6 +44,12 @@ namespace UADRealism
         public float Fineness => _fineness;
         private bool _ignoreNextPartYChange = false;
         public bool IgnoreNextPartYChange => _ignoreNextPartYChange;
+
+        private float _scantlingStrength = 1f;
+        public float scantlingStrength => _scantlingStrength;
+        private float _machineryMult = 1f;
+        public float machineryMult => _machineryMult;
+
         private Ship _ship = null;
 
         public void SetFreeboard(float fb) => _freeboard = fb;
@@ -79,9 +85,26 @@ namespace UADRealism
             _ship.draught = store.draught;
         }
 
+        public void OnChangeHullPre(PartData hull)
+        {
+            if (hull == null)
+            {
+                _scantlingStrength = 1f;
+                _machineryMult = 1f;
+                return;
+            }
+
+            if (!hull.paramx.TryGetValue("scantlings", out var s) || !float.TryParse(s[0], out _scantlingStrength))
+                _scantlingStrength = ShipStats.GetScantlingStrength(hull.shipType.name, TweaksAndFixes.Database.GetYear(hull), hull);
+            if (!hull.paramx.TryGetValue("machinery", out var m) || !float.TryParse(m[0], out _machineryMult))
+                _machineryMult = 1f;
+        }
+
         private void Awake()
         {
             _ship = gameObject.GetComponent<Ship>();
+            if (_ship.hull != null && _ship.hull.data != null)
+                OnChangeHullPre(_ship.hull.data);
         }
     }
 }

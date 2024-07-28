@@ -4,6 +4,7 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using TweaksAndFixes;
 
 namespace UADRealism
 {
@@ -92,6 +93,164 @@ namespace UADRealism
             }
         }
 
+        private static void ChangeShipType(PartData part, string newType)
+        {
+            if (part == null || string.IsNullOrEmpty(newType) || !G.GameData.shipTypes.TryGetValue(newType, out var st))
+                return;
+
+            part.shipType = st;
+            if (part.paramx.TryGetValue("type", out var pList) && pList.Count > 0)
+                pList[0] = newType;
+        }
+
+        private static bool AddCountry(PartData part, string c)
+        {
+            if (part == null || string.IsNullOrEmpty(c) || !G.GameData.players.TryGetValue(c, out var pd))
+                return false;
+
+            if (part.countriesx == null || part.countriesx.Count == 0 || part.countriesx.Contains(pd))
+                return true;
+
+            part.countriesx.Add(pd);
+            part.countries += ", " + c;
+            return true;
+        }
+
+        private static bool RemoveCountry(PartData part, string c)
+        {
+            if (part == null || string.IsNullOrEmpty(c) || !G.GameData.players.TryGetValue(c, out var pd))
+                return false;
+
+            if (part.countriesx == null || part.countriesx.Count == 0)
+                return false;
+
+            if (!part.countriesx.Contains(pd))
+                return true;
+
+            part.countriesx.Remove(pd);
+            if (part.countriesx.Count == 0)
+            {
+                part.countries = string.Empty;
+                return true;
+            }
+
+            part.countries = part.countries.Replace(c, string.Empty);
+            part.countries.Trim();
+            if (part.countries.StartsWith(','))
+                part.countries = part.countries.Substring(1).Trim();
+            if (part.countries.EndsWith(','))
+                part.countries = part.countries.Substring(0, part.countries.Length - 1).Trim();
+
+            return true;
+        }
+
+        [Flags]
+        private enum NoArmor
+        {
+            All = 0,
+            Deck = 1 << 0,
+            Belt = 1 << 1,
+            Both = Deck | Belt,
+        }
+
+        private static Il2CppSystem.Collections.Generic.List<string> GetNoArmorList(NoArmor mask)
+        {
+            var ret = new Il2CppSystem.Collections.Generic.List<string>();
+            for (Ship.A val = Ship.A.Belt; val <= Ship.A.InnerDeck_3rd; ++val)
+            {
+                if ((mask & NoArmor.Belt) != 0 &&
+                    (val >= Ship.A.Belt && val <= Ship.A.BeltStern)
+                    || (val >= Ship.A.InnerBelt_1st && val <= Ship.A.InnerBelt_3rd))
+                    ret.Add(((int)val).ToString());
+                if ((mask & NoArmor.Deck) != 0 &&
+                    (val >= Ship.A.Deck && val <= Ship.A.DeckStern)
+                    || (val >= Ship.A.InnerDeck_1st && val <= Ship.A.InnerDeck_3rd))
+                    ret.Add(((int)val).ToString());
+            }
+            return ret;
+        }
+
+        private static void HandleNoArmor()
+        {
+
+            foreach (var part in G.GameData.parts.Values)
+            {
+                // Custom handling
+                if (part.paramx.ContainsKey("noarmor"))
+                    continue;
+
+                switch (part.name)
+                {
+                    case "ca_1_naniwa_3mast":
+                    case "ca_1_joseph_3mast":
+                        ChangeShipType(part, "ca");
+                        part.nameUi = "1st Class Protected 3-Mast Cruiser";
+                        part.paramx["noarmor"] = GetNoArmorList(NoArmor.Belt);
+                        continue;
+
+                    case "cl_1_3mast_armored": // Chiyoda
+                        ChangeShipType(part, "ca");
+                        AddCountry(part, "france");
+                        part.nameUi = "1st Class Armored 3-Mast Cruiser";
+                        continue;
+
+                    case "cl_1_austria_belted":
+                        AddCountry(part, "germany");
+                        ChangeShipType(part, "ca");
+                        goto case "ca_0_belted";
+
+                    case "ca_0_belted":
+                        part.nameUi = "1st Class Belted Cruiser";
+                        part.paramx["noarmor"] = GetNoArmorList(NoArmor.Deck);
+                        continue;
+
+                    case "cl_3_usa_exp":
+                        part.nameUi = "Semi-Armored Cruiser";
+                        break;
+
+                    // Add extra countries to these and
+                    // let the generic code handle it
+                    case "cl_1_rambow_3mast_early":
+                        AddCountry(part, "germany");
+                        AddCountry(part, "italy");
+                        AddCountry(part, "austria");
+                        break;
+                    case "cl_1_rambow_3mast":
+                        AddCountry(part, "germany");
+                        AddCountry(part, "italy");
+                        AddCountry(part, "france");
+                        break;
+                }
+
+                // Generic handling
+                if (part.name.Contains("3mast"))
+                {
+                    bool isArmor = part.name.Contains("armor");
+                    bool isCA = part.shipType.name == "ca";
+                    if (isCA || isArmor)
+                    {
+                        part.paramx["noarmor"] = GetNoArmorList(NoArmor.Deck);
+                        part.nameUi = "1st Class Belted 3-Mast Cruiser";
+                    }
+                    else if (part.nameUi.StartsWith("Standard"))
+                    {
+                        part.paramx["noarmor"] = GetNoArmorList(NoArmor.Both);
+                        part.nameUi = "3rd Class 3-Mast Cruiser";
+                    }
+                    else
+                    {
+                        part.paramx["noarmor"] = GetNoArmorList(NoArmor.Belt);
+                        part.nameUi = "2nd Class Protected 3-Mast Cruiser";
+                    }
+                }
+                else if (part.nameUi.Contains("Semi-") && part.shipType.name != "bb")
+                {
+                    part.name.Replace("Semi-Armored", "2nd Class Protected");
+                    part.paramx["noarmor"] = GetNoArmorList(NoArmor.Belt);
+                }
+            }
+        }
+
         private static void NARChanges(GameData __instance)
         {
             // Some shiptype stats are too restrictive
@@ -116,11 +275,13 @@ namespace UADRealism
                 }
             }
 
+            Il2CppSystem.Collections.Generic.List<string> pList = null;
             foreach (var kvp in __instance.parts)
             {
                 var part = kvp.Value;
                 if (part.isHull)
                 {
+
                     switch (part.name)
                     {
                         // ** Britain **
@@ -174,9 +335,12 @@ namespace UADRealism
 
                         // ** Japan **
                         case "ca_4_ibuki":
-                            part.shipType = G.GameData.shipTypes["ca"];
-                            if (part.paramx.TryGetValue("type", out var ibukiType) && ibukiType.Count > 0)
-                                ibukiType[0] = "ca";
+                            ChangeShipType(part, "ca");
+                            break;
+
+                        // ** Russia **
+                        case "ca_1_3mast_russia":
+                            part.tonnageMin = 8000; // added a new smaller cruiser
                             break;
                     }
                 }

@@ -37,7 +37,7 @@ namespace UADRealism
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ship.ChangeHull))]
-        internal static void Prefix_Ship_ChangeHull(Ship __instance, Ship.Store store, ref bool byHuman, out bool __state)
+        internal static void Prefix_Ship_ChangeHull(Ship __instance, PartData data, Ship.Store store, ref bool byHuman, out bool __state)
         {
             _IsChangeHull = true;
             if (store != null)
@@ -45,6 +45,8 @@ namespace UADRealism
                 _IsLoadingStore = true;
                 __instance.ModData().SetIgnoreNextPartYChange(true);
             }
+
+            __instance.ModData().OnChangeHullPre(data);
 
             __state = byHuman;
             // We can't reach into the middle of this code.

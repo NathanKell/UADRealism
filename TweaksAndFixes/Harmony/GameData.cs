@@ -58,7 +58,6 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Postfix_PostProcessAll(GameData __instance)
         {
-            
             foreach (var rp in __instance.randParts.Values)
             {
                 FixRandPart(rp);
@@ -86,6 +85,49 @@ namespace TweaksAndFixes
             yield return new WaitForEndOfFrame();
             Database.FillDatabase();
             Melon<TweaksAndFixes>.Logger.Msg("Loaded database");
+
+            //foreach (var hull in G.GameData.parts.Values)
+            //    if (hull.isHull)
+            //        hull.nameUi = Patch_Ship.GetHullModelKey(hull);
+
+            //var playerToShips = new Dictionary<PlayerData, Dictionary<ShipType, List<Tuple<PartData, int>>>>();
+            //foreach (var hull in G.GameData.parts.Values)
+            //{
+            //    if (!hull.isHull)
+            //        continue;
+
+            //    foreach (var pd in hull.countriesx)
+            //    {
+            //        var year = Database.GetYear(hull);
+            //        if (year < 0)
+            //            continue;
+            //        playerToShips.ValueOrNew(pd).ValueOrNew(hull.shipType).Add(new Tuple<PartData, int>(hull, year));
+            //    }
+            //}
+
+            //string logstr = "\nname,nameUi,type,year,model,scale,country,tonnageMin,tonnageMax,speedLimiter,param";
+            //foreach (var kvp in playerToShips)
+            //{
+            //    foreach (var list in kvp.Value.Values)
+            //    {
+            //        list.Sort((a, b) => b.Item2.CompareTo(a.Item2));
+            //        foreach (var tpl in list)
+            //        {
+            //            var hull = tpl.Item1;
+            //            var year = tpl.Item2;
+            //            string countries = kvp.Key.name;
+            //            if (hull.countriesx.Count > 1)
+            //            {
+            //                foreach (var c in hull.countriesx)
+            //                    if (c != kvp.Key)
+            //                        countries += ", " + c.name;
+            //                countries = "\"" + countries + "\"";
+            //            }
+            //            logstr += $"\n{hull.name},{hull.nameUi},{hull.shipType.name},{year},{hull.model},{hull.scale:F2},{countries},{hull.tonnageMin:F0},{hull.tonnageMax:F0},{hull.speedLimiter:F1},\"{hull.param}\"";
+            //        }
+            //    }
+            //}
+            //Debug.Log(logstr);
         }
     }
 }

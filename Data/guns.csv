@@ -1,0 +1,13 @@
+name,caliber,length,year,remainInService,countries,grade
+1_5pdr_QF,37,43,1910,No,britain,
+2pdr_QF,40,39,1914,UntilReplaceSameCal,britain,
+Hotchkiss47,47,40,1885,UntilReplaceSameCal,all,
+3pdr50_QF,47,50,1900,UntilReplaceSameInch,britain,
+Hotchkiss57,57,40,1883,UntilReplaceSameCal,all,
+6pdr_QF,57,47,1928,UntilReplaceSameInch,britain,
+12pdr_40_QF,3,40,1893,UntilReplaceSameInch,"britain, japan, italy",
+12pdr_50_QF,3,50,1902,UntilReplaceSameInch,britain,
+12pdr_45_QFHA,3,45,1910,UntilReplaceSameInch,britain,
+
+#
+3_50RF,3,50,1944,Yes,"britain, us",

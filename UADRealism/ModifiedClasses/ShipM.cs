@@ -427,7 +427,7 @@ namespace UADRealism
             // NOTE this is the design year, not the hull's unlock year. This is because we presume
             // the machinery will be current (and the player might have selected an engine type
             // unlocked later than the hull anyway!)
-            weight *= ShipStats.GetMachineryWeightMult(ship.shipType.name, ship.GetYear(ship));
+            weight *= ShipStats.GetMachineryWeightMult(ship.shipType.name, ship.GetYear(ship), ship.hull.data) * ship.ModData().machineryMult;
             if (!flaws || !GameManager.IsCampaign || !Ship.IsFlawsActive(ship))
                 return weight;
 
@@ -573,7 +573,7 @@ namespace UADRealism
                 float citadelLength = ship.GetDynamicCitadelMaxZ(false, false) - ship.GetDynamicCitadelMinZ(false, false);
                 float citPct = citadelLength / stats.Lwl;
 
-                float scantlingStrength = ShipStats.GetScantlingStrength(ship.shipType.name, year, data);
+                float scantlingStrength = ship.ModData().scantlingStrength;
 
                 var statsNormal = ShipStats.GetLoadingStats(ship, HullLoadState.Normal);
                 float lbd = statsNormal.Lwl * statsNormal.B * statsNormal.T;

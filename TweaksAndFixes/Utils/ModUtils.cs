@@ -605,6 +605,22 @@ namespace TweaksAndFixes
             dict[key] = val;
             return val;
         }
+
+        public static string GetHullModelKey(PartData data)
+        {
+            string key = data.model;
+            if (data.shipType.name == "dd" || data.shipType.name == "tb")
+                key += "%";
+            if (data.paramx.TryGetValue("var", out var desiredVars))
+            {
+                key += "$";
+                for (int i = 0; i < desiredVars.Count - 1; ++i)
+                    key += desiredVars[i] + ";";
+                key += desiredVars[desiredVars.Count - 1];
+            }
+
+            return key;
+        }
     }
 
     [RegisterTypeInIl2Cpp]

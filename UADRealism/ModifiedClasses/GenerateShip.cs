@@ -85,7 +85,7 @@ namespace UADRealism
             NonCenter = Casemate | Side,
             All = Casemate | Center | Side,
         }
-
+        
         private static bool _StaticsInit = false;
         private static int _Next = 0;
         private static readonly Dictionary<int, List<RandPartInfo>> _Lookup = new Dictionary<int, List<RandPartInfo>>();
@@ -97,7 +97,7 @@ namespace UADRealism
         [Serializer.Field] public string name;
         [Serializer.Field] public bool refit = false;
         [Serializer.Field] private string shipTypes;
-        [Serializer.Field] private string nations;
+        [Serializer.Field] private string countries;
         [Serializer.Field] public RPType type;
         [Serializer.Field] public bool required = true;
         [Serializer.Field] public int chance = 100;
@@ -157,11 +157,11 @@ namespace UADRealism
             EnsureStatics();
 
             int refitHash = refit ? 1 : 0;
-            var stSplit = shipTypes.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var nSplit = nations.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (stSplit.Length > 0)
+            var stSplit = ModUtils.HumanListToList(shipTypes);
+            var nSplit = ModUtils.HumanListToList(countries);
+            if (stSplit.Count > 0)
             {
-                if (nSplit.Length > 0)
+                if (nSplit.Count > 0)
                 {
                     foreach (var s in stSplit)
                         foreach (var n in nSplit)
@@ -173,7 +173,7 @@ namespace UADRealism
                         Add(s.GetHashCode() ^ refitHash);
                 }
             }
-            else if (nSplit.Length > 0)
+            else if (nSplit.Count > 0)
             {
                 foreach (var n in nSplit)
                     Add(n.GetHashCode() ^ refitHash);
@@ -526,8 +526,8 @@ namespace UADRealism
                     _Lookup[Key(st.name, n.name)] = new List<RandPartInfo>();
         }
 
-        private static int Key(string st, string nation)
-            => st.GetHashCode() ^ nation.GetHashCode();
+        private static int Key(string st, string country)
+            => st.GetHashCode() ^ country.GetHashCode();
 
         private static int Key(Ship ship)
             => Key(ship.shipType.name, ship.player.data.name);
@@ -569,7 +569,7 @@ namespace UADRealism
         float _designYear;
         float _avgYear;
         string _sType;
-        string _nation;
+        string _country;
         HullData _hData;
         float _tngLimit;
         bool _isLight;
@@ -1051,7 +1051,7 @@ namespace UADRealism
                             return -1f;
 
                     case "ca":
-                        if (_parent._hullYear < 1915 && _parent._nation == "usa")
+                        if (_parent._hullYear < 1915 && _parent._country == "usa")
                             return Util.Remap(tng, 8000f, 15000f, _rp.calMin, _rp.calMax, true);
                         else
                             return -1f;
@@ -1096,13 +1096,20 @@ namespace UADRealism
 
             public GunInfo FindGunInfo()
             {
-                var gunDB = GunDatabase.GetGunDB(_parent._nation);
+                var gunDB = GunDatabase.GetGunDB(_parent._country);
                 if (gunDB == null)
                     return null;
 
                 _TempGradeInfo.Clear();
-                int inchFloor = (int)_rp.calMin;
-                int inchLimit = Mathf.RoundToInt(_rp.calMax) + 1;
+                int inchFloor = GunInfo.CalInch(_rp.calMin);
+                int inchLimit = GunInfo.CalInch(_rp.calMax);
+                int localLimit = _rp.battery == RandPartInfo.Battery.Main ? (int)(_parent._ship.shipType.mainTo + 0.1f) : (int)(_parent._ship.shipType.secTo + 0.1f);
+                if (_parent._ship.hull.data.maxAllowedCaliber > 0 && localLimit > _parent._ship.hull.data.maxAllowedCaliber)
+                    localLimit = _parent._ship.hull.data.maxAllowedCaliber;
+                if (inchLimit > localLimit)
+                    inchLimit = localLimit;
+                ++inchLimit;
+
                 int maxGrade = -1;
                 GunInfo maxGradeGun = null;
                 for (int cal = inchFloor; cal < inchLimit; ++cal)
@@ -1237,7 +1244,7 @@ namespace UADRealism
             _designYear = ship.GetYear(ship);
             _avgYear = (_hullYear + _designYear) * 0.5f;
             _sType = ship.shipType.name;
-            _nation = ship.player.data.name;
+            _country = ship.player.data.name;
             _hData = ShipStats.GetData(ship);
             _tngLimit = ship.player.TonnageLimit(ship.shipType);
             _isLight = _sType == "dd" || _sType == "tb";
@@ -1875,26 +1882,26 @@ namespace UADRealism
         //private void SetupGunInfo()
         //{
         //    GunDatabase.TechGunGrades(_ship, _gunGrades);
-        //    float agTert = _nation == "austria" ? 47 : 88;
-        //    int agTert2 = _nation == "austria" ? 66 : 88;
+        //    float agTert = _country == "austria" ? 47 : 88;
+        //    int agTert2 = _country == "austria" ? 66 : 88;
         //    switch (_sType)
         //    {
         //        case "tb":
         //            if (_hullYear > 1891)
         //            {
-        //                switch (_nation)
+        //                switch (_country)
         //                {
         //                    case "britain":
         //                    case "usa":
         //                    case "spain":
         //                    case "russia":
-        //                        int metrMain = _nation == "spain" || _nation == "russia" ? 75 : 76;
+        //                        int metrMain = _country == "spain" || _country == "russia" ? 75 : 76;
         //                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, metrMain, metrMain), new CalInfo(GunCal.Main, 57, 57) };
         //                        break;
 
         //                    case "france":
         //                    case "austria":
-        //                        int frMain = _nation == "france" ? 65 : 66;
+        //                        int frMain = _country == "france" ? 65 : 66;
         //                        _calInfos = new List<CalInfo>() { new CalInfo(GunCal.Main, frMain, frMain), new CalInfo(GunCal.Main, 47, 47) };
         //                        break;
 
@@ -1919,7 +1926,7 @@ namespace UADRealism
         //            if (_hullYear < 1905)
         //            {
         //                // Traditional armored cruiser or first-class protected cruiser
-        //                switch (_nation)
+        //                switch (_country)
         //                {
         //                    case "france":
         //                        _calInfos = new List<CalInfo>() {
@@ -1991,7 +1998,7 @@ namespace UADRealism
         //                // These will either have unified main armament
         //                // (Blucher) or battleship-class main guns with
         //                // heavy main-class "secondaries" (Ibuki)
-        //                switch (_nation)
+        //                switch (_country)
         //                {
         //                    case "france":
         //                        _calInfos = new List<CalInfo>() {
@@ -2078,7 +2085,7 @@ namespace UADRealism
         //            // predreads
         //            if (_sType != "bc" && !_ship.hull.name.StartsWith("bb"))
         //            {
-        //                switch (_nation)
+        //                switch (_country)
         //                {
         //                    case "usa":
         //                        _calInfos = new List<CalInfo>() {
@@ -2116,7 +2123,7 @@ namespace UADRealism
         //                    default:
         //                        _calInfos = new List<CalInfo>() {
         //                            new CalInfo(GunCal.Main, 11, 13.5f),
-        //                            new CalInfo(GunCal.Sec, _nation == "britain" ? 6 : 5, 6),
+        //                            new CalInfo(GunCal.Sec, _country == "britain" ? 6 : 5, 6),
         //                            new CalInfo(GunCal.Ter, 3, 3),
         //                            new CalInfo(GunCal.Ter, 47, 57) };
         //                        break;
@@ -2125,7 +2132,7 @@ namespace UADRealism
         //                // semi-dreads
         //                if (_ship.TechVar("use_main_side_guns") != 0f)
         //                {
-        //                    if (_nation == "russia")
+        //                    if (_country == "russia")
         //                    {
         //                        _calInfos.RemoveAt(3);
         //                        _calInfos.Insert(1, new CalInfo(GunCal.Sec, 8, 8));
@@ -2154,7 +2161,7 @@ namespace UADRealism
         //            {
         //                if (_avgYear < 1919)
         //                {
-        //                    switch (_nation)
+        //                    switch (_country)
         //                    {
         //                        case "france":
         //                            _calInfos = new List<CalInfo>() {
@@ -2205,7 +2212,7 @@ namespace UADRealism
         //                    }
         //                    if (_hullYear >= 1910)
         //                    {
-        //                        if (_nation == "britain")
+        //                        if (_country == "britain")
         //                        {
         //                            _calInfos[1]._min = 3 * 25.4f;
         //                            _calInfos[1]._max = 3 * 25.4f;
@@ -2220,7 +2227,7 @@ namespace UADRealism
         //                }
         //                else if (_hullYear < 1927)
         //                {
-        //                    switch (_nation)
+        //                    switch (_country)
         //                    {
         //                        case "usa":
         //                            _calInfos = new List<CalInfo>() {
@@ -2275,7 +2282,7 @@ namespace UADRealism
         //                }
         //                else // Fast Battleship
         //                {
-        //                    switch (_nation)
+        //                    switch (_country)
         //                    {
         //                        case "france":
         //                            _calInfos = new List<CalInfo>() {

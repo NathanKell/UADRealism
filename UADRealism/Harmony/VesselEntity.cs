@@ -21,9 +21,9 @@ namespace UADRealism
 
         //}
 
-        // Before the net6 upgrade we couldn't patch the Ship version because it
-        // has a nullable var in it and Il2Cpp patching crashed. That works now
-        // but we're leaving this since it's working fine.
+        // Harmony can't patch methods that take nullable arguments.
+        // So instead of patching Ship.FromStore() we have to patch
+        // this, which it calls near the start.
         [HarmonyPrefix]
         [HarmonyPatch(nameof(VesselEntity.FromBaseStore))]
         internal static void Prefix_FromBaseStore(VesselEntity __instance, VesselEntity.VesselEntityStore store, bool isSharedDesign)

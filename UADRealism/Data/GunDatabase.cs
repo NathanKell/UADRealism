@@ -7,6 +7,7 @@ using Il2CppSystem.Runtime.InteropServices;
 using Il2CppSystem.Net;
 
 #pragma warning disable CS8603
+#pragma warning disable CS8618
 #pragma warning disable CS8625
 
 namespace UADRealism.Data
@@ -21,6 +22,7 @@ namespace UADRealism.Data
         CheckDown = 1 << 3,
         MatchCaliber = 1 << 4,
 
+        UntilReplace = RequireReplacement | CheckUp | CheckDown,
         UntilReplaceSameInch = Yes | RequireReplacement,
         UntilReplaceSameCal = UntilReplaceSameInch | MatchCaliber,
         UntilReplaceSameOrGreaterCal = Yes | RequireReplacement | CheckUp
@@ -28,40 +30,46 @@ namespace UADRealism.Data
 
     public class GunInfo : Serializer.IPostProcess
     {
+        [Serializer.Field] public string name;
         [Serializer.Field] public float caliber;
         [Serializer.Field] public float length;
         [Serializer.Field] public int year;
         public int _calInch;
         [Serializer.Field] public GunRemainInService remainInService;
-        [Serializer.Field] public string nations = string.Empty;
-        [Serializer.Field] public int grade;
-        public HashSet<string> _nations = new HashSet<string>();
+        [Serializer.Field] private string countries = string.Empty;
+        [Serializer.Field] public int grade = -1;
+        public HashSet<string> _countries = new HashSet<string>();
 
-        private static float _CalStepHalf = -1f;
+        private static float _CalStep = -1f;
+
+        public static int CalInch(float caliber)
+        {
+            if (_CalStep < 0f)
+                _CalStep = MonoBehaviourExt.Param("gun_diameter_step", 0.1f);
+
+            if (caliber <= (3f - _CalStep) * 25.4f)
+            {
+                return 2;
+            }
+            else if (caliber >= 20f * 25.4f)
+            {
+                return 20;
+            }
+            else
+            {
+                int cal = (int)(caliber * (1f / 25.4f));
+                if (caliber > (cal - _CalStep) * 25.4f)
+                    ++cal;
+                return cal;
+            }
+        }
 
         public void PostProcess()
         {
             if (caliber < 21f)
                 caliber *= 25.4f;
 
-            if (_CalStepHalf < 0f)
-                _CalStepHalf = MonoBehaviourExt.Param("gun_diameter_step", 0.1f) * 0.5f;
-
-            if (caliber < (3f - _CalStepHalf) * 25.4f)
-            {
-                _calInch = 2;
-            }
-            else if (caliber >= 20f * 25.4f)
-            {
-                _calInch = 20;
-            }
-            else
-            {
-                _calInch = (int)(caliber * 1f / 25.4f);
-                if (caliber >= (Mathf.Ceil(caliber * 1f / 25.4f) - _CalStepHalf) * 25.4f)
-                    ++_calInch;
-
-            }
+            _calInch = CalInch(caliber);
 
             if (grade < 1)
             {
@@ -79,11 +87,18 @@ namespace UADRealism.Data
                 }
             }
 
-            foreach (var nation in nations.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            if (countries.ToLower() == "all")
             {
-                _nations.Add(nation);
-                GunDatabase.Add(nation, this);
+                foreach (var pd in G.GameData.playersMajor.Values)
+                    _countries.Add(pd.name);
             }
+            else
+            {
+                _countries = ModUtils.HumanListToSet(countries);
+            }
+
+            foreach(var country in _countries)
+                GunDatabase.Add(country, this);
         }
     }
 
@@ -91,15 +106,15 @@ namespace UADRealism.Data
     {
         public const int MaxGunGrade = 5;
 
-        private static readonly Dictionary<string, GunDatabase> _InfoByNation = new Dictionary<string, GunDatabase>();
+        private static readonly Dictionary<string, GunDatabase> _InfoByCountry = new Dictionary<string, GunDatabase>();
 
-        public string nation;
+        public string country;
         public List<GunInfo>[] byGrade = new List<GunInfo>[MaxGunGrade + 1];
         public List<GunInfo>[,] byCalAndGrade = new List<GunInfo>[21, MaxGunGrade + 1];
 
-        public GunDatabase(string nat)
+        public GunDatabase(string country)
         {
-            nation = nat;
+            this.country = country;
             for (int i = 1; i < byGrade.Length; ++i)
                 byGrade[i] = new List<GunInfo>();
 
@@ -110,7 +125,7 @@ namespace UADRealism.Data
 
         public void Add(GunInfo info)
         {
-            // If this nation already has an identical gun,
+            // If this country already has an identical gun,
             // then just update its year and early-out
             foreach (var gi in byCalAndGrade[info._calInch, info.grade])
             {
@@ -125,12 +140,12 @@ namespace UADRealism.Data
             byGrade[info.grade].Add(info);
         }
 
-        public static void Add(string nation, GunInfo info)
+        public static void Add(string country, GunInfo info)
         {
-            if (!_InfoByNation.TryGetValue(nation, out var data))
+            if (!_InfoByCountry.TryGetValue(country, out var data))
             {
-                data = new GunDatabase(nation);
-                _InfoByNation[nation] = data;
+                data = new GunDatabase(country);
+                _InfoByCountry[country] = data;
             }
             data.Add(info);
         }
@@ -251,7 +266,7 @@ namespace UADRealism.Data
 
         public static bool HasGunOrGreaterThan(Ship ship, int cal, int[] gunGrades)
         {
-            if (!_InfoByNation.TryGetValue(ship.player.data.name, out var gunDB))
+            if (!_InfoByCountry.TryGetValue(ship.player.data.name, out var gunDB))
                 return false;
 
             for (; cal < gunDB.byCalAndGrade.GetLength(0); ++cal)
@@ -265,8 +280,8 @@ namespace UADRealism.Data
             return false;
         }
 
-        public static GunDatabase GetGunDB(string nation)
-            => _InfoByNation.GetValueOrDefault(nation);
+        public static GunDatabase GetGunDB(string country)
+            => _InfoByCountry.GetValueOrDefault(country);
 
         //public static void FillData()
         //{

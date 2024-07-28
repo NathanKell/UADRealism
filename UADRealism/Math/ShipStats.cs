@@ -724,9 +724,8 @@ namespace UADRealism
             File.WriteAllLines(pathHData, lines);
         }
 
-        private static float GunModelScale(float caliber)
+        private static float GunModelScale(float calInch)
         {
-            float calInch = caliber * (1f / 25.4f);
             return (0.9f + 0.1f * Mathf.Cos((calInch < 11.87f ?
                 (Mathf.Pow(Mathf.Max(0, calInch - 4f), 0.78f) + 4)
                 : (Mathf.Pow(calInch - 11.87f, 1.25f) + 11.87f)) * Mathf.PI * 0.5f)) * 0.5f + 0.85f * 0.5f;
@@ -1042,7 +1041,8 @@ namespace UADRealism
             const float scantlingLightEarly = 0.5f;
             const float scantlingLightLate = 0.71f;
             const float scantlingCruiser = 0.95f;
-            const float scantlingCL = 0.9f;
+            const float scantlingCruiser2nd = 0.9f;
+            const float scantlingCL = 0.8f;
             const float scantlingACR = 1f;
             const float scantlingBB = 1.1f;
             switch (sType)
@@ -1055,10 +1055,10 @@ namespace UADRealism
                     scantlingStrength = scantlingBB;
                     break;
                 case "cl":
-                    scantlingStrength = hull.nameUi.Contains("Semi-") ? scantlingCruiser : Util.Remap(year, 1890f, 1920f, scantlingCL, scantlingCruiser, true);
+                    scantlingStrength = year > 1910 || hull.nameUi.Contains("Light") || hull.nameUi.Contains("Scout") ? Util.Remap(year, 1905f, 1925f, scantlingCL, scantlingCruiser, true) : scantlingCruiser2nd;
                     break;
                 case "ca":
-                    scantlingStrength = Util.Remap(year, 1910f, 1925f, scantlingACR, scantlingCruiser, true);
+                    scantlingStrength = hull.nameUi.StartsWith("1st") || hull.nameUi.Contains("Armor") ? scantlingACR : scantlingCruiser;
                     break;
                 case "bc":
                     scantlingStrength = Util.Remap(year, 1900f, 1930f, scantlingACR, scantlingBB, true);
@@ -1079,26 +1079,27 @@ namespace UADRealism
             return scantlingStrength;
         }
 
-        public static float GetMachineryWeightMult(string sType, float year)
+        // Note this is design year not hull year!
+        public static float GetMachineryWeightMult(string sType, float year, PartData hull)
         {
             float machMult = 1f;
             switch (sType)
             {
                 case "tb":
                 case "dd":
-                    machMult = Util.Remap(year, 1900f, 1940f, 0.25f, 0.45f, true);
-                    break;
-
-                case "cl":
-                    machMult = Util.Remap(year, 1900f, 1940f, 0.4f, 0.72f, true);
-                    break;
-
-                case "bc":
-                    machMult = Util.Remap(year, 1900f, 1940f, 0.75f, 1f, true);
+                    machMult = Util.Remap(year, 1900f, 1930f, 0.25f, 0.45f, true);
                     break;
 
                 case "ca":
-                    machMult = Util.Remap(year, 1900f, 1940f, 0.75f, 0.72f, true);
+                case "cl":
+                    if (year > 1910 || hull.nameUi.Contains("Light") || hull.nameUi.Contains("Scout"))
+                        machMult = Util.Remap(year, 1900f, 1930f, 0.4f, 0.72f, true); 
+                    else
+                        machMult = Util.Remap(year, 1900f, 1930f, 0.75f, 0.72f, true);
+                    break;
+
+                case "bc":
+                    machMult = Util.Remap(year, 1900f, 1930f, 0.75f, 1f, true);
                     break;
 
                 case "bb":
