@@ -186,7 +186,7 @@ namespace TweaksAndFixes
                 
                 button.onClick.AddListener(new System.Action(() =>
                 {
-                    ship.TAFData().ResetGrade(calInch, isCasemate);
+                    ship.TAFData().ResetGunGrade(calInch, isCasemate);
                 }));
             }
         }

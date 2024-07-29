@@ -105,6 +105,7 @@ namespace TweaksAndFixes
 
         public TAFShipData(IntPtr ptr) : base(ptr) { }
 
+        private static List<Part.Store> _TempPartStore = new List<Part.Store>();
         private List<GunGradeData> _gradeData = new List<GunGradeData>();
         private int _torpedoGrade = -1;
         private bool _allowOverrideGrade = true;
@@ -256,16 +257,51 @@ namespace TweaksAndFixes
             return false;
         }
 
-        public void ResetGrade(Ship.TurretCaliber tc)
-            => ResetGrade(tc.turretPartData.GetCaliberInch(), tc.isCasemateGun);
+        public void ResetAllGrades()
+        {
+            ResetAllGunGrades();
+            ResetTorpGrade();
+        }
 
-        static List<Part.Store> _TempPartStore = new List<Part.Store>();
-        public void ResetGrade(float calInch, bool casemate)
+        public void ResetAllGunGrades()
+        {
+            // Annoyingly we don't save partdatas
+            // so we have to trawl TCs for each GGD.
+            for(int i = _gradeData.Count; i-- > 0;)
+            {
+                var ggd = _gradeData[i];
+                if (ggd.grade < 0)
+                    continue;
+
+                for(int j = _ship.shipGunCaliber.Count; j-- > 0;)
+                {
+                    var tc = _ship.shipGunCaliber[j];
+                    if (tc.isCasemateGun != ggd.isCasemateGun || tc.turretPartData.GetCaliberInch() != ggd.calInch)
+                        continue;
+
+                    var trueGrade = GetTrueGunGrade(tc.turretPartData);
+                    if (ggd.grade != trueGrade)
+                        ResetGunGrade(ggd);
+
+                    break;
+                }
+            }
+        }
+
+        public void ResetGunGrade(Ship.TurretCaliber tc)
+            => ResetGunGrade(tc.turretPartData.GetCaliberInch(), tc.isCasemateGun);
+
+        public void ResetGunGrade(float calInch, bool casemate)
         {
             var ggd = FindGGD(calInch, casemate);
             if (ggd == null)
                 return;
 
+            ResetGunGrade(ggd);
+        }
+
+        private void ResetGunGrade(GunGradeData ggd)
+        {
             Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
             ggd.grade = -1; // will be updated next call to TechGunGrade.
 
@@ -294,9 +330,11 @@ namespace TweaksAndFixes
                     p.LoadModel(_ship, true);
                 }
             }
-            _TempPartStore.Clear();
-            _ship.Init();
-            _ship.CalcInstability(true);
+            if (_TempPartStore.Count > 0)
+            {
+                _ship.Init();
+                _ship.CalcInstability(true);
+            }
             G.ui.Refresh(true);
         }
 

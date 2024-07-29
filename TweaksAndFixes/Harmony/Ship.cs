@@ -200,12 +200,18 @@ namespace TweaksAndFixes
 
             // So we know what state we started in.
             __state = __instance.__1__state;
+            if(__state == 0)
+                __instance.__4__this.TAFData().ResetAllGrades();
         }
 
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
         [HarmonyPostfix]
         internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, int __state)
         {
+            // For now, we're going to reset all grades regardless.
+            //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))
+            //    __instance.__4__this.TAFData().ResetAllGrades();
+
             Patch_Ship._IsGenerating = false;
             Patch_Ship._ShipForGenerateRandom = null;
             //Melon<TweaksAndFixes>.Logger.Msg($"Iteration for state {__state} ended, new state {__instance.__1__state}");
