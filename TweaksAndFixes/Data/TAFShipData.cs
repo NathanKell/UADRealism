@@ -11,6 +11,7 @@ using UnityEngine;
 using Il2Cpp;
 using Il2CppInterop.Runtime.Attributes;
 
+#pragma warning disable CS8600
 #pragma warning disable CS8602
 #pragma warning disable CS8603
 #pragma warning disable CS8604
@@ -105,28 +106,35 @@ namespace TweaksAndFixes
         public TAFShipData(IntPtr ptr) : base(ptr) { }
 
         private List<GunGradeData> _gradeData = new List<GunGradeData>();
+        private int _torpedoGrade = -1;
         private bool _allowOverrideGrade = true;
 
         private Ship _ship = null;
 
-        public void ToStore(Ship.Store store, bool isPostLoad)
+        public void ToStore(Ship.Store store, bool isPostFromStore)
         {
-            if (isPostLoad)
+            // We need to reserialize atter FromStore runs, because
+            // otherwise when this ship is next restored from store,
+            // it'll have lost all this data.
+            if (isPostFromStore)
             {
                 Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: FromStore Post. Updating store for ship {_ship?.name ?? "<NULL>"}");
                 SaveTCs(store);
+                SaveTorpGrade(store);
 
                 return;
             }
 
             Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: ToStore for ship {_ship?.name ?? "<NULL>"}");
             SaveTCs(store);
+            SaveTorpGrade(store);
         }
 
         public void FromStore(Ship.Store store)
         {
             Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: FromStore for ship {_ship?.name ?? "<NULL>"}");
             LoadTCs(store);
+            LoadTorpGrade(store);
         }
 
         public void OnChangeHullPre(PartData hull)
@@ -199,15 +207,51 @@ namespace TweaksAndFixes
             return grade;
         }
 
+        public int TorpedoGrade(int defaultGrade)
+        {
+            if (!_allowOverrideGrade)
+                return defaultGrade;
+
+            if (_torpedoGrade == -1)
+                _torpedoGrade = defaultGrade;
+            
+            return _torpedoGrade;
+        }
+
+        public int GetTrueTorpGrade(PartData data)
+        {
+            bool old = _allowOverrideGrade;
+            _allowOverrideGrade = false;
+            var grade = _ship.TechTorpedoGrade(data);
+            _allowOverrideGrade = old;
+            return grade;
+        }
+
+        public bool IsTorpGradeOverridden()
+        {
+            foreach (var p in _ship.parts)
+                if (p != null && p.data != null && p.data.isTorpedo)
+                    return IsGradeOverridden(p.data);
+
+            return false;
+        }
+
         public bool IsGradeOverridden(PartData data)
         {
             if (data == null)
                 return false;
 
-            var trueGrade = GetTrueGunGrade(data);
-            var ggd = FindGGD(data.GetCaliberInch(), Ship.IsCasemateGun(data));
-            if (ggd != null && ggd.grade != -1 && ggd.grade != trueGrade)
-                return true;
+            if (data.isGun)
+            {
+                var trueGrade = GetTrueGunGrade(data);
+                var ggd = FindGGD(data.GetCaliberInch(), Ship.IsCasemateGun(data));
+                if (ggd != null && ggd.grade != -1 && ggd.grade != trueGrade)
+                    return true;
+            }
+            else if (data.isTorpedo)
+            {
+                return _torpedoGrade != -1 && _torpedoGrade != GetTrueTorpGrade(data);
+            }
 
             return false;
         }
@@ -256,6 +300,42 @@ namespace TweaksAndFixes
             G.ui.Refresh(true);
         }
 
+        public void ResetTorpGrade()
+        {
+            Melon<TweaksAndFixes>.Logger.Msg($"For torps, reset grade (was {_torpedoGrade})");
+            _torpedoGrade = -1; // will be updated next call to TechTorpedoGrade.
+
+            // We need to now replace all parts that are torpedoes. Otherwise
+            // they'll all be using the old model. We could do something
+            // smarter where we actually switch the models in place but
+            // this is much safer, and also solves the case where changing
+            // the model removes mount points (RmeovePart is called with
+            // the optional bool for erasing those).
+            for (int i = _ship.parts.Count; i-- > 0;)
+            {
+                var p = _ship.parts[i];
+                if (!p.data.isTorpedo)
+                    continue;
+
+                _TempPartStore.Add(p.ToStore());
+                _ship.RemovePart(p, true, true);
+            }
+            for (int i = _TempPartStore.Count; i-- > 0;)
+            {
+                var p = Part.CreateFromStore(_TempPartStore[i], _ship, _ship.partsCont);
+                if (p != null)
+                {
+                    p.SetActiveX(true);
+                    _ship.AddPart(p);
+                    p.LoadModel(_ship, true);
+                }
+            }
+            _TempPartStore.Clear();
+            _ship.Init();
+            _ship.CalcInstability(true);
+            G.ui.Refresh(true);
+        }
+
         private void LoadTCs(Ship.Store store)
         {
             _gradeData.Clear();
@@ -284,6 +364,44 @@ namespace TweaksAndFixes
                 Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, saved grade {ggd.grade}");
                 tcs.turretPartDataName = pName + ";" + ggd.grade.ToString();
             }
+        }
+
+        private void LoadTorpGrade(Ship.Store store)
+        {
+            if (store.hullName.Contains(';'))
+            {
+                var split = store.hullName.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                store.hullName = split[0];
+                if (split.Length > 1 && int.TryParse(split[1], out var g))
+                    _torpedoGrade = g;
+            }
+            Melon<TweaksAndFixes>.Logger.Msg($"Loaded torpedo grade {_torpedoGrade}");
+        }
+
+        private void SaveTorpGrade(Ship.Store store)
+        {
+            PartData torpData = null;
+            foreach (var p in _ship.parts)
+            {
+                if (p == null || p.data == null || !p.data.isTorpedo)
+                    continue;
+                torpData = p.data;
+                break;
+            }
+            if (torpData == null)
+                return;
+
+            string hName = store.hullName;
+            if (hName.Contains(';'))
+            {
+                var split = hName.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                hName = split[0];
+            }
+            if (_torpedoGrade < 0)
+                _torpedoGrade = _ship.TechTorpedoGrade(torpData);
+
+            Melon<TweaksAndFixes>.Logger.Msg($"Saved torpedo grade {_torpedoGrade}");
+            store.hullName = hName + ";" + _torpedoGrade;
         }
     }
 }

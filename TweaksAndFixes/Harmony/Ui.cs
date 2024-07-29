@@ -55,6 +55,40 @@ namespace TweaksAndFixes
             var objCase = ui.gameObject.FindDeepChild("CasemateCalibers");
             if (objCase != null)
                 ClearButtons(objCase);
+
+            var objComps = FindArmamentsComponentList(ui);
+            if (objComps != null)
+                ClearButtons(objComps);
+        }
+
+        private static GameObject FindArmamentsComponentList(Ui ui)
+        {
+            string label = LocalizeManager.Localize("$comptypes_category_armament");
+            var objComps = ui.gameObject.FindDeepChild("Components");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Finding complist. Label {label}. Child count {objComps.transform.childCount}");
+
+            for (int i = objComps.transform.childCount - 1; i-- > 0;)
+            {
+                var subTrf = objComps.transform.GetChild(i);
+                //Melon<TweaksAndFixes>.Logger.Msg($"Object: {subTrf.gameObject.name}");
+                if (!subTrf.gameObject.name.StartsWith("Header"))
+                    continue;
+                var text = subTrf.gameObject.GetComponentInChildren<Text>();
+                if (text == null)
+                    continue;
+
+                //Melon<TweaksAndFixes>.Logger.Msg($"Found header text with {text.text}, compare to {label}");
+                if (text.text != label)
+                    continue;
+
+                var nextObj = objComps.transform.GetChild(i + 1).gameObject;
+                //Melon<TweaksAndFixes>.Logger.Msg($"Next object name is {nextObj.name}");
+                if (nextObj.name.StartsWith("Components"))
+                    return nextObj;
+            }
+
+            Melon<TweaksAndFixes>.Logger.Error("Could not find Armaments components list!");
+            return null;
         }
 
         private static void ClearButtons(GameObject parent)
@@ -109,16 +143,19 @@ namespace TweaksAndFixes
             }
 
             _Turrets.Sort((a, b) => b.turretPartData.GetCaliber().CompareTo(a.turretPartData.GetCaliber()));
-            EnsureButtons(ship, objTCs, _Turrets);
+            EnsureTCButtons(ship, objTCs, _Turrets);
 
             _Casemates.Sort((a, b) => b.turretPartData.GetCaliber().CompareTo(a.turretPartData.GetCaliber()));
-            EnsureButtons(ship, objCase, _Casemates);
+            EnsureTCButtons(ship, objCase, _Casemates);
 
             _Turrets.Clear();
             _Casemates.Clear();
+
+
+            EnsureTorpButton(ship, ui);
         }
 
-        private static void EnsureButtons(Ship ship, GameObject parent, List<Ship.TurretCaliber> tcs)
+        private static void EnsureTCButtons(Ship ship, GameObject parent, List<Ship.TurretCaliber> tcs)
         {
             int idx = tcs.Count - 1;
             for (int i = parent.transform.childCount; i-- > 0 && idx >= 0;)
@@ -137,7 +174,7 @@ namespace TweaksAndFixes
                 if (!ship.TAFData().IsGradeOverridden(tc.turretPartData))
                     continue;
 
-                var button = AddButton(obj, i + 1);
+                var button = AddTCButton(obj, i + 1);
                 if (button == null)
                 {
                     Melon<TweaksAndFixes>.Logger.Error($"Could not add button for tc for part {tc.turretPartData.name}!");
@@ -154,7 +191,7 @@ namespace TweaksAndFixes
             }
         }
 
-        private static Button AddButton(GameObject obj, int idx)
+        private static Button AddTCButton(GameObject obj, int idx)
         {
             var buttonOld = obj.transform.GetChild("Less");
             if (buttonOld == null)
@@ -185,9 +222,52 @@ namespace TweaksAndFixes
             var button = buttonNew.GetComponent<Button>();
             button.interactable = true;
 
-            button.gameObject.name = $"ResetGrade";
+            button.gameObject.name = "ResetGrade";
 
             return button;
+        }
+
+        private static void EnsureTorpButton(Ship ship, Ui ui)
+        {
+            if (!ship.TAFData().IsTorpGradeOverridden())
+                return;
+
+            Melon<TweaksAndFixes>.Logger.Msg("Adding torp upgrade button");
+
+            var buttonOld = ui.gameObject.FindDeepChild("ShipNew")?.GetChild("Button", true);
+            if (buttonOld == null)
+            {
+                Melon<TweaksAndFixes>.Logger.Error("Could not find button to clone!");
+                return;
+            }
+
+            var compList = FindArmamentsComponentList(ui);
+            if (compList == null)
+                return;
+
+            var buttonNew = GameObject.Instantiate(buttonOld);
+            buttonNew.transform.SetParent(compList.transform, true);
+            buttonNew.name = "ResetGrade";
+            var image = buttonNew.GetChild("Image");
+            if (image != null && image.gameObject != null)
+                GameObject.Destroy(image.gameObject);
+
+            var le = buttonNew.gameObject.AddComponent<LayoutElement>();
+            le.preferredHeight = 75;
+            le.preferredWidth = 53;
+            var text = buttonNew.transform.GetChild("Text").GetComponent<Text>();
+            text.text = "Upgrade\nTorpedo\nMark";
+            text.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+            text.resizeTextMinSize = text.resizeTextMaxSize = 10;
+            text.rectTransform.anchorMax = new Vector2(1f, 1f);
+            buttonNew.GetChild("Bg").transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+            var button = buttonNew.GetComponent<Button>();
+            button.onClick.AddListener(new System.Action(() =>
+            {
+                ship.TAFData().ResetTorpGrade();
+            }));
+
+            buttonNew.SetActive(true);
         }
     }
 }

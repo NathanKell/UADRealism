@@ -63,7 +63,24 @@ namespace TweaksAndFixes
             int newGrade = __instance.TAFData().GunGrade(gun, __result);
             if (newGrade != __result)
             {
-                Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced grade for part {gun.name} with {newGrade} (was {__result})");
+                Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced gun grade for part {gun.name} with {newGrade} (was {__result})");
+                __result = newGrade;
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ship.TechTorpedoGrade))]
+        internal static void Postfix_TechTorpedoGrade(Ship __instance, PartData torpedo, bool requireValid, ref int __result)
+        {
+            // Let's hope the torp grade cache is only used in this method!
+            // If it's used elsewhere, we won't catch that case. The reason
+            // is that we can't patch the cache if we want to use it at all,
+            // because we need to preserve the _real_ grade but we also
+            // don't want to cache-bust every time.
+            int newGrade = __instance.TAFData().TorpedoGrade(__result);
+            if (newGrade != __result)
+            {
+                Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced torpedo grade for part {torpedo.name} with {newGrade} (was {__result})");
                 __result = newGrade;
             }
         }
