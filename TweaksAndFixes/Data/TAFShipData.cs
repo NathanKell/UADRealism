@@ -300,6 +300,7 @@ namespace TweaksAndFixes
             ResetGunGrade(ggd);
         }
 
+        [HideFromIl2Cpp]
         private void ResetGunGrade(GunGradeData ggd)
         {
             Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
