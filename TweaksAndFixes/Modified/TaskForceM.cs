@@ -29,6 +29,9 @@ namespace TweaksAndFixes
             if (fields == null)
                 return;
 
+            if (!MinesFieldManagerM.CanAttackTFNoChange(_this))
+                return;
+
             foreach (var field in fields)
             {
                 var dmgRadius = field.GetRadiusForDamage(true);
@@ -38,14 +41,14 @@ namespace TweaksAndFixes
                         continue;
                     var player = field.GetPlayer();
 
-                    var displacement = mm.DamageTaskForce(_this, player, dmgRadius, field.DamageMultiplier);
-                    mm.MineHitSpenting(displacement, field);
+                    var displacement = MinesFieldManagerM.DamageTaskForce(mm, _this, player, dmgRadius, field.DamageMultiplier);
+                    MinesFieldManagerM.MineHitSpenting(mm, displacement, field);
                     if (_this.Vessels.Count > 0)
-                        mm.Minesweep(field, _this);
+                        MinesFieldManagerM.Minesweep(mm, field, _this);
                 }
             }
 
-            // check sub fields. Rather than use GetTaskForceInsideRadius we inline it.
+            // check submarine fields. Rather than use GetTaskForceInsideRadius we inline it.
             float mod = MonoBehaviourExt.Param("submarine_minefield_modifier", 10f);
             float max = MonoBehaviourExt.Param("max_minefield_size", 360f);
             foreach (var tf in CampaignController.Instance.CampaignData.TaskForces)
@@ -76,7 +79,7 @@ namespace TweaksAndFixes
                 {
                     if (!MathfExt.LineCircleIntersection(vecList[i - 1], vecList[i], tf.WorldPos, subFieldRadiusInWorld))
                         continue;
-                    mm.DamageTaskForce(_this, tf.Controller, subFieldRadiusInWorld, 1f);
+                    MinesFieldManagerM.DamageTaskForce(mm, _this, tf.Controller, subFieldRadiusInWorld, 1f);
                 }
             }
         }
