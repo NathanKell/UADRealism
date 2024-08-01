@@ -83,8 +83,16 @@ namespace TweaksAndFixes
                         }
                         _Buf[bufIdx++] = c;
                     }
+                    // We have three cases.
+                    // In the first case, we end with an unterminated entry
                     if (bufIdx > 0)
                         lst.Add(new string(_Buf, 0, bufIdx));
+                    // In the second case, we wend with a comma, which means
+                    // effectively this is an empty entry
+                    else if (pInput[len - 1] == ',')
+                        lst.Add(string.Empty);
+                    // In the third case, we end with a terminated entry or an escape start.
+                    // In this case, we don't have anything to add.
                 }
 
                 return lst;
@@ -150,9 +158,24 @@ namespace TweaksAndFixes
                 if (tc == null)
                     return false;
 
-                List<string> header = ParseLine(lines[0]);
+                int firstLineIdx = 0;
+                while (lines[firstLineIdx].StartsWith('#'))
+                    ++firstLineIdx;
+
+                List<string> header = ParseLine(lines[firstLineIdx++]);
+                if (useComments)
+                {
+                    for (int i = 0; i < header.Count; ++i)
+                    {
+                        if (header[i].StartsWith('@'))
+                        {
+                            header[i] = header[i].Substring(1);
+                            break;
+                        }
+                    }
+                }
                 bool allSucceeded = true;
-                for (int i = 1; i < lLen; ++i)
+                for (int i = firstLineIdx; i < lLen; ++i)
                 {
                     if (useComments && lines[i].StartsWith('#'))
                         continue;
@@ -179,21 +202,39 @@ namespace TweaksAndFixes
             {
                 int lLen = lines.Length;
                 if (lLen < 2)
+                {
+                    Debug.LogError("[TweaksAndFixes] CSV: Tried to read csv for dictionary but line count was less than 2");
                     return false;
+                }
 
                 var tc = GetOrCreate(typeof(TValue));
                 if (tc == null)
+                {
+                    Debug.LogError("[TweaksAndFixes] CSV: Could not fetch type info for " + (typeof(TValue).Name));
                     return false;
-
-                if (!tc._nameToField.TryGetValue(keyName, out var keyField))
-                    return false;
+                }
 
                 bool create = output.Count == 0;
 
-                List<string> header = ParseLine(lines[0]);
+                int firstLineIdx = 0;
+                while (lines[firstLineIdx].StartsWith('#'))
+                    ++firstLineIdx;
+
+                List<string> header = ParseLine(lines[firstLineIdx++]);
                 int keyIdx;
                 if (keyName != null)
                 {
+                    if (useComments)
+                    {
+                        for (int i = 0; i < header.Count; ++i)
+                        {
+                            if (header[i].StartsWith('@'))
+                            {
+                                header[i] = header[i].Substring(1);
+                                break;
+                            }
+                        }
+                    }
                     keyIdx = header.IndexOf(keyName);
                 }
                 else
@@ -205,15 +246,25 @@ namespace TweaksAndFixes
                         {
                             keyIdx = i;
                             header[i] = header[i].Substring(1);
+                            keyName = header[i];
                             break;
                         }
                     }
                 }
                 if (keyIdx < 0)
+                {
+                    Debug.LogError("[TweaksAndFixes] CSV: Could not find key in header");
                     return false;
+                }
+
+                if (!tc._nameToField.TryGetValue(keyName, out var keyField))
+                {
+                    Debug.LogError($"[TweaksAndFixes] CSV: Could not find field named {keyName} on {typeof(TValue).Name}");
+                    return false;
+                }
 
                 bool allSucceeded = true;
-                for (int i = 1; i < lLen; ++i)
+                for (int i = firstLineIdx; i < lLen; ++i)
                 {
                     if (useComments && lines[i].StartsWith('#'))
                         continue;

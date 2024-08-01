@@ -45,6 +45,10 @@
       <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>False</Private>
