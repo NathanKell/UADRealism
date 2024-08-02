@@ -144,15 +144,16 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Read<TList, TItem>(string[] lines, TList output, bool useComments = true) where TList : IList<TItem>
+            public static bool Read<TList, TItem>(string[] lines, TList output, bool useComments = true, bool useDefault = false) where TList : IList<TItem>
             {
                 int lLen = lines.Length;
                 if (lLen < 2)
+                {
+                    Debug.LogError("[TweaksAndFixes] CSV: Tried to read csv for list but line count was less than 2");
                     return false;
+                }
 
                 bool create = output.Count == 0;
-                if (!create && output.Count != lLen - 1)
-                    return false;
 
                 var tc = GetOrCreate(typeof(TItem));
                 if (tc == null)
@@ -175,22 +176,28 @@ namespace TweaksAndFixes
                     }
                 }
                 bool allSucceeded = true;
+                List<string> defaults = null;
                 for (int i = firstLineIdx; i < lLen; ++i)
                 {
                     if (useComments && lines[i].StartsWith('#'))
                         continue;
 
                     var line = ParseLine(lines[i]);
+                    if (defaults == null && useDefault && line.Count > 0 && line[0] == "default")
+                    {
+                        defaults = line;
+                        continue;
+                    }
                     if (create)
                     {
                         var item = (TItem)GetNewInstance(typeof(TItem));
-                        allSucceeded &= tc.ReadType(item, line, header);
+                        allSucceeded &= tc.ReadType(item, line, header, defaults);
                         output.Add(item);
                     }
                     else
                     {
                         var item = output[i - 1];
-                        allSucceeded &= tc.ReadType(item, line, header);
+                        allSucceeded &= tc.ReadType(item, line, header, defaults);
                         output[i - 1] = item; // if valuetype, we need to do this
                     }
                 }
@@ -198,7 +205,7 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Read<TDict, TKey, TValue>(string[] lines, TDict output, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
+            public static bool Read<TDict, TKey, TValue>(string[] lines, TDict output, string keyName = null, bool useComments = true, bool useDefault = false) where TDict : IDictionary<TKey, TValue>
             {
                 int lLen = lines.Length;
                 if (lLen < 2)
@@ -264,12 +271,18 @@ namespace TweaksAndFixes
                 }
 
                 bool allSucceeded = true;
+                List<string> defaults = null;
                 for (int i = firstLineIdx; i < lLen; ++i)
                 {
                     if (useComments && lines[i].StartsWith('#'))
                         continue;
 
                     var line = ParseLine(lines[i]);
+                    if (defaults == null && useDefault && line.Count > 0 && line[0] == "default")
+                    {
+                        defaults = line;
+                        continue;
+                    }
 
                     var keyObj = keyField.ReadValue(line[keyIdx]);
                     if (keyObj == null)
@@ -282,7 +295,7 @@ namespace TweaksAndFixes
 
                     if (!create && output.TryGetValue(key, out var existing))
                     {
-                        allSucceeded &= tc.ReadType(existing, line, header);
+                        allSucceeded &= tc.ReadType(existing, line, header, defaults);
                         output[key] = existing; // if valuetype, we need to do this
                         continue;
                     }
@@ -296,7 +309,7 @@ namespace TweaksAndFixes
                     }
 
                     var item = (TValue)GetNewInstance(typeof(TValue));
-                    allSucceeded &= tc.ReadType(item, ParseLine(lines[i]), header);
+                    allSucceeded &= tc.ReadType(item, ParseLine(lines[i]), header, defaults);
                     output.Add(key, item);
                 }
 
@@ -875,7 +888,7 @@ namespace TweaksAndFixes
                 _isPostProcess = typeof(IPostProcess).IsAssignableFrom(t);
             }
 
-            public bool ReadType(object host, List<string> line, List<string> header)
+            public bool ReadType(object host, List<string> line, List<string> header, List<string> defaults)
             {
                 bool allSucceeded = true;
                 int count = line.Count;
@@ -884,13 +897,21 @@ namespace TweaksAndFixes
                     Debug.LogError($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}");
                     return false;
                 }
-
+                if (defaults != null && count != defaults.Count)
+                {
+                    Debug.LogError($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}");
+                    return false;
+                }
                 for (int i = 0; i < count; ++i)
                 {
                     if (!_nameToField.TryGetValue(header[i], out FieldData fieldItem))
                         continue;
 
-                    allSucceeded &= fieldItem.Read(line[i], host);
+                    string value = line[i];
+                    if (value == string.Empty && defaults != null)
+                        value = defaults[i];
+
+                    allSucceeded &= fieldItem.Read(value, host);
                 }
 
                 if (_isPostProcess && host is IPostProcess ipp)
