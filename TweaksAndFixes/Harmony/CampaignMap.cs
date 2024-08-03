@@ -17,12 +17,16 @@ namespace TweaksAndFixes
             return false;
         }
 
+        internal static bool _SkipNextMapPatch = false;
+
         [HarmonyPatch(nameof(CampaignMap.PreInit))]
         [HarmonyPrefix]
         internal static void Prefix_PreInit(CampaignMap __instance)
         {
-            if (MonoBehaviourExt.Param("taf_override_map", 0) > 0)
-                MapData.LoadMapData(__instance);
+            if (!_SkipNextMapPatch && MonoBehaviourExt.Param("taf_override_map", 0) > 0)
+                MapData.LoadMapData();
+
+            _SkipNextMapPatch = false;
         }
     }
 }

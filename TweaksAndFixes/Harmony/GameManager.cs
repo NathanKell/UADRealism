@@ -39,4 +39,19 @@ namespace TweaksAndFixes
             return true;
         }
     }
+
+    [HarmonyPatch(typeof(GameManager._LoadCampaign_d__102))]
+    internal class Patch_GameManager_LoadCampaignd102
+    {
+        // This method calls CampaignController.PrepareProvinces *before* CampaignMap.PreInit
+        // So we patch here and skip the preinit patch.
+        [HarmonyPatch(nameof(GameManager._LoadCampaign_d__102.MoveNext))]
+        [HarmonyPrefix]
+        internal static void Prefix_MoveNext(GameManager._LoadCampaign_d__102 __instance)
+        {
+            if (__instance.__1__state == 6 && MonoBehaviourExt.Param("taf_override_map", 0) > 0)
+                MapData.LoadMapData();
+            Patch_CampaignMap._SkipNextMapPatch = true;
+        }
+    }
 }

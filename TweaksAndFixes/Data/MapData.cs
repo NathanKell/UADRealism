@@ -10,6 +10,7 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 using Il2CppInterop.Runtime.Attributes;
+using Il2CppSystem.Runtime.Remoting.Messaging;
 
 #pragma warning disable CS0649
 #pragma warning disable CS8600
@@ -23,44 +24,47 @@ namespace TweaksAndFixes
 {
     public class MapData
     {
-        public class PortElement : Serializer.IPostProcess
+        public abstract class MapDataLoader<T> where T : Il2Cpp.MapElement2D
+        {
+            [Serializer.Field] public string name;
+            public abstract void Apply(T old);
+            public abstract void FillFrom(T old);
+        }
+
+        public class PortElementDTO : MapDataLoader<Il2Cpp.PortElement>
         {
             //@name,enabled,nameUi,province,#provinceName,latitude,longitude,#posLink,portСapacity,#baseportcapacity,#balancer,seaControlDistanceMultiplier,inBeingDistanceMultiplier,#changesea
-            [Serializer.Field] string name;
             [Serializer.Field] string nameUi;
             [Serializer.Field] string province;
             [Serializer.Field] int portCapacity = -1;
             [Serializer.Field] float seaControlDistanceMultiplier = -1;
             [Serializer.Field] float inBeingDistanceMultiplier = -1;
 
-            public void PostProcess()
+            public override void Apply(PortElement old)
             {
-                Il2Cpp.PortElement old = null;
-                foreach (var p in _Instance._map.Ports.Ports)
-                {
-                    if (p.Id == name)
-                    {
-                        old = p;
-                        break;
-                    }
-                }
-                if (old == null)
-                    return;
-
                 old.Name = nameUi;
                 old.ProvinceId = province;
                 old.PortCapacity = portCapacity;
                 old.SeaControlDistanceMultiplier = seaControlDistanceMultiplier;
                 old.InBeingDistanceMultiplier = inBeingDistanceMultiplier;
             }
+
+            public override void FillFrom(Il2Cpp.PortElement old)
+            {
+                name = old.Id;
+                nameUi = old.Name;
+                province = old.ProvinceId;
+                portCapacity = old.PortCapacity;
+                seaControlDistanceMultiplier = old.SeaControlDistanceMultiplier;
+                inBeingDistanceMultiplier = old.InBeingDistanceMultiplier;
+            }
         }
 
-        public class Province : Serializer.IPostProcess
+        public class ProvinceDTO : MapDataLoader<Il2Cpp.Province>
         {
             //@name,enabled,nameUi,area,controller,controller_1890,controller_1900,controller_1910,controller_1920,controller_1930,controller_1940,claim,isHome,
             ///type,latitude,longitude,#posLink,development,port,population,oilDiscoveryYear,oilDiscoveryBaseChance,oilCapacity,oilReservesInTurns,revoltChance,provinceArmyPercentage,
             ///ProvinceDefenderBonus,neighbour_provinces,#Naval_Defense_Level,#Enemies,#Protectors,#Rebellion_Chance,#Naval_Invasion_Chance,#Min_Naval_Invasion_Displacement,#AverageFleetStrength,#comment,#comment2
-            [Serializer.Field] string name;
             [Serializer.Field] string nameUi;
             [Serializer.Field] string area;
             [Serializer.Field] string controller;
@@ -85,20 +89,8 @@ namespace TweaksAndFixes
             [Serializer.Field] float ProvinceDefenderBonus;
             [Serializer.Field] string neighbour_provinces;
 
-            public void PostProcess()
+            public override void Apply(Province old)
             {
-                Il2Cpp.Province old = null;
-                foreach (var p in _Instance._map.Provinces.Provinces)
-                {
-                    if (p.Id == name)
-                    {
-                        old = p;
-                        break;
-                    }
-                }
-                if (old == null)
-                    return;
-
                 old.Name = nameUi;
                 old.AreaId = area;
                 old.Controller = controller;
@@ -111,7 +103,7 @@ namespace TweaksAndFixes
                 old.Claim = claim;
                 old.IsHome = isHome > 0;
                 old.Type = type;
-                old.Development = development;
+                old.InitialDevelopment = development;
                 old.Port = port;
                 old.population = population;
                 old.oilDiscoveryYear = oilDiscoveryYear;
@@ -123,33 +115,66 @@ namespace TweaksAndFixes
                 old.ProvinceDefenderBonus = ProvinceDefenderBonus;
                 old.NeighbourProvincesString = neighbour_provinces;
             }
+
+            public override void FillFrom(Il2Cpp.Province old)
+            {
+                name = old.Id;
+                nameUi = old.Name;
+                area = old.AreaId;
+                controller = old.Controller;
+                controller_1890 = old.Controller_1890;
+                controller_1900 = old.Controller_1900;
+                controller_1910 = old.Controller_1910;
+                controller_1920 = old.Controller_1920;
+                controller_1930 = old.Controller_1930;
+                controller_1940 = old.Controller_1940;
+                claim = old.Claim;
+                isHome = old.IsHome ? 1 : 0;
+                type = old.Type;
+                development = old.InitialDevelopment;
+                port = old.Port;
+                population = old.population;
+                oilDiscoveryYear = old.oilDiscoveryYear;
+                oilDiscoveryBaseChance = old.oilDiscoveryBaseChance;
+                oilCapacity = old.oilCapacity;
+                oilReservesInTurns = old.oilReservesInTurns;
+                revoltChance = old.RevoltChance;
+                provinceArmyPercentage = old.ProvinceArmyPercentage;
+                ProvinceDefenderBonus = old.ProvinceDefenderBonus;
+                neighbour_provinces = old.NeighbourProvincesString;
+            }
         }
 
-        static MapData _Instance = null;
-
-        CampaignMap _map;
-
-        public static void LoadMapData(CampaignMap map)
+        public static void LoadMapData()
         {
-            _Instance = new MapData(map);
-            _Instance.LoadData();
-            _Instance = null;
+            if (MonoBehaviourExt.Param("taf_override_map", 0) == 2)
+                WriteData();
+            LoadData();
         }
 
-        public MapData(CampaignMap map) { _map = map; }
-
-        private void LoadData()
+        private static void WriteData()
         {
             bool success = true;
-            success &= Load<PortElement>("ports");
-            success &= Load<Province>("provinces");
+            success &= Write<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
+            success &= Write<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
+            if (success)
+                Melon<TweaksAndFixes>.Logger.Msg($"Wrote original map data successfully`");
+            else
+                Melon<TweaksAndFixes>.Logger.Error($"Failed to write original map data");
+        }
+
+        private static void LoadData()
+        {
+            bool success = true;
+            success &= Load<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
+            success &= Load<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
             if(success)
                 Melon<TweaksAndFixes>.Logger.Msg($"Loaded map data successfully`");
             else
                 Melon<TweaksAndFixes>.Logger.Error($"Failed to load overriding map data");
         }
 
-        private bool Load<T>(string assetName)
+        private static bool Load<T, U>(string assetName, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
         {
             var text = Util.ResourcesLoad<TextAsset>(assetName, false);
             if (text == null)
@@ -157,14 +182,41 @@ namespace TweaksAndFixes
                 Melon<TweaksAndFixes>.Logger.Error($"Could not find asset `{assetName}`");
                 return false;
             }
-            List<T> items = new List<T>();
             var input = text.text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             if (input.Length < 2)
             {
                 Melon<TweaksAndFixes>.Logger.Error($"Fewer than 2 lines of text in asset `{assetName}`");
                 return false;
             }
-            return Serializer.CSV.Read<List<T>, T>(input, items, true, true);
+            Dictionary<string, T> dict = new Dictionary<string, T>();
+
+            bool success = Serializer.CSV.Read<Dictionary<string, T>, string, T>(input, dict, "name", true, true);
+            foreach (var old in oldList)
+                if (dict.TryGetValue(old.Id, out var item))
+                    item.Apply(old);
+
+            return success;
+        }
+
+        private static bool Write<T, U>(string typeName, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
+        {
+            string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            if (!Directory.Exists(basePath))
+            {
+                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + basePath);
+                return false;
+            }
+            string filePath = Path.Combine(basePath, typeName + ".csv");
+
+            List<T> list = new List<T>();
+            foreach (var old in oldList)
+            {
+                var item = new T();
+                item.FillFrom(old);
+                list.Add(item);
+            }
+
+            return Serializer.CSV.Write<List<T>, T>(list, filePath, "name", true);
         }
     }
 }
