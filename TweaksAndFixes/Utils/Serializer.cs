@@ -3,8 +3,6 @@ using UnityEngine;
 using System.Text;
 using Il2Cpp;
 using System.Collections;
-using Il2CppDigitalRuby.PyroParticles;
-using System.Runtime.Intrinsics.Arm;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -98,18 +96,23 @@ namespace TweaksAndFixes
                 return lst;
             }
 
-            public static bool Write<TColl, TItem>(TColl coll, List<string> output) where TColl : ICollection<TItem>
+            public static bool Write<TColl, TItem>(TColl coll, List<string> output, string keyName = null, bool markKey = true) where TColl : ICollection<TItem>
             {
                 var tc = GetOrCreate(typeof(TItem));
                 if (tc == null)
                     return false;
 
-                var header = tc.WriteHeader();
+                FieldData key = null;
+                if (keyName != null)
+                    tc._nameToField.TryGetValue(keyName, out key);
+
+                var header = tc.WriteHeader(key, markKey);
                 output.Add(header);
+
                 bool allSucceeded = true;
                 foreach (var item in coll)
                 {
-                    bool ok = tc.WriteType(item, out var s);
+                    bool ok = tc.WriteType(item, out var s, key);
                     if (ok)
                         output.Add(s);
 
@@ -119,22 +122,23 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Write<TKey, TItem>(IDictionary<TKey, TItem> coll, List<string> output, bool markKey = true)
+            public static bool Write<TKey, TItem>(IDictionary<TKey, TItem> coll, List<string> output, bool markKey = true, string keyName = null)
             {
                 var tc = GetOrCreate(typeof(TItem));
                 if (tc == null)
                     return false;
 
                 FieldData key = null;
-                if (markKey)
+                if (keyName == null || !tc._nameToField.TryGetValue(keyName, out key))
                     key = tc.GetKey(coll as System.Collections.IDictionary);
 
-                var header = tc.WriteHeader(key);
+                var header = tc.WriteHeader(key, markKey);
                 output.Add(header);
+
                 bool allSucceeded = true;
                 foreach (var item in coll)
                 {
-                    bool ok = tc.WriteType(item, out var s);
+                    bool ok = tc.WriteType(item, out var s, key);
                     if (ok)
                         output.Add(s);
 
@@ -319,18 +323,18 @@ namespace TweaksAndFixes
             // It would be better to do these line by line. But
             // (a) this is faster, and (b) the alloc isn't too
             // bad given actual use cases.
-            public static bool Write<TColl, TItem>(TColl coll, string path) where TColl : ICollection<TItem>
+            public static bool Write<TColl, TItem>(TColl coll, string path, string keyName = null, bool markKey = true) where TColl : ICollection<TItem>
             {
                 var lines = new List<string>();
-                bool ok = Write<TColl, TItem>(coll, lines);
+                bool ok = Write<TColl, TItem>(coll, lines, keyName, markKey);
                 File.WriteAllLines(path, lines);
                 return ok;
             }
 
-            public static bool Write<TKey, TItem>(IDictionary<TKey, TItem> dict, string path, bool markKey = true)
+            public static bool Write<TKey, TItem>(IDictionary<TKey, TItem> dict, string path, bool markKey = true, string keyName = null)
             {
                 var lines = new List<string>();
-                bool ok = Write<TKey, TItem>(dict, lines, markKey);
+                bool ok = Write<TKey, TItem>(dict, lines, markKey, keyName);
                 File.WriteAllLines(path, lines);
                 return ok;
             }
@@ -685,59 +689,70 @@ namespace TweaksAndFixes
 
                     int count = 0;
                     int len = output.Length;
-                    fixed (char *pszO = output)
+                    bool hasComma = false;
+                    while (true)
                     {
-                        for (int i = len; i-- > 0;)
+                        fixed (char* pszO = output)
                         {
-                            char c = pszO[i];
-                            switch (c)
+                            for (int i = len; i-- > 0;)
                             {
-
-                                case '\a':
-                                case '\b':
-                                case '\f':
-                                case '\n':
-                                case '\r':
-                                case '\t':
-                                case '\v':
-                                case '"':
-                                    ++count;
-                                    break;
-                            }
-                        }
-                    }
-                    if (count == 0)
-                        return true;
-
-                    string oldStr = output;
-                    output = new string('x', count + len + 2);
-                    fixed (char* pszNew = output)
-                    {
-                        fixed (char* pszOld = oldStr)
-                        {
-                            int j = 0;
-                            pszNew[j++] = '"';
-                            for (int i = 0; i < len; ++i)
-                            {
-                                char c = pszOld[i];
-                                char c2 = c switch
+                                char c = pszO[i];
+                                switch (c)
                                 {
-                                    '\a' => 'a',
-                                    '\b' => 'b',
-                                    '\f' => 'f',
-                                    '\n' => 'n',
-                                    '\r' => 'r',
-                                    '\t' => 't',
-                                    '\v' => 'v',
-                                    _ => c
-                                };
-                                if(c2 != c || c == '"')
-                                    pszNew[j++] = '\\';
-                                pszNew[j++] = c2;
+
+                                    case '\a':
+                                    case '\b':
+                                    case '\f':
+                                    case '\n':
+                                    case '\r':
+                                    case '\t':
+                                    case '\v':
+                                    case '"':
+                                        ++count;
+                                        break;
+
+                                    case ',':
+                                        hasComma = true;
+                                        break;
+                                }
                             }
-                            pszNew[j] = '"';
                         }
+                        if (count == 0)
+                            break;
+
+                        string oldStr = output;
+                        output = new string('x', count + len + 2);
+                        fixed (char* pszNew = output)
+                        {
+                            fixed (char* pszOld = oldStr)
+                            {
+                                int j = 0;
+                                pszNew[j++] = '"';
+                                for (int i = 0; i < len; ++i)
+                                {
+                                    char c = pszOld[i];
+                                    char c2 = c switch
+                                    {
+                                        '\a' => 'a',
+                                        '\b' => 'b',
+                                        '\f' => 'f',
+                                        '\n' => 'n',
+                                        '\r' => 'r',
+                                        '\t' => 't',
+                                        '\v' => 'v',
+                                        _ => c
+                                    };
+                                    if (c2 != c || c == '"')
+                                        pszNew[j++] = '\\';
+                                    pszNew[j++] = c2;
+                                }
+                                pszNew[j] = '"';
+                            }
+                        }
+                        break;
                     }
+                    if (hasComma)
+                        output = '"' + output + '"';
 
                     return true;
                 }
@@ -920,15 +935,27 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public bool WriteType(object obj, out string output)
+            public bool WriteType(object obj, out string output, FieldData key = null)
             {
                 int num = _fields.Count;
                 bool allSucceeded = true;
                 bool isNotFirst = false;
 
+                if (key != null)
+                {
+                    isNotFirst = true;
+                    object value = key._fieldInfo.GetValue(obj);
+                    if (value != null)
+                    {
+                        allSucceeded &= key.Write(value, out string val);
+                        if (val != null)
+                            _StringBuilder.Append(val);
+                    }
+                }
+
                 foreach (var fieldData in _fields)
                 {
-                    if (!fieldData._attrib.writeable)
+                    if (fieldData == key || !fieldData._attrib.writeable)
                         continue;
 
                     if (isNotFirst)
@@ -942,6 +969,8 @@ namespace TweaksAndFixes
 
                     bool success = fieldData.Write(value, out string val);
                     allSucceeded &= success;
+                    if (val == null)
+                        continue;
                     if (success)
                         _StringBuilder.Append(val);
                 }
@@ -999,10 +1028,18 @@ namespace TweaksAndFixes
                 return null;
             }
 
-            public string WriteHeader(FieldData key = null)
+            public string WriteHeader(FieldData key = null, bool markKey = false)
             {
                 int num = _fields.Count;
                 bool isNotFirst = false;
+
+                if (key != null)
+                {
+                    isNotFirst = true;
+                    if (markKey)
+                        _StringBuilder.Append('@');
+                    _StringBuilder.Append(key._fieldName);
+                }
 
                 foreach(var fieldData in _fields)
                 {
@@ -1015,7 +1052,7 @@ namespace TweaksAndFixes
                         isNotFirst = true;
 
                     if (key == fieldData)
-                        _StringBuilder.Append('@');
+                        continue;
 
                     _StringBuilder.Append(fieldData._fieldName);
                 }
