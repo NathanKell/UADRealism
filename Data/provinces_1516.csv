@@ -295,7 +295,7 @@ southern_algeria,Southern Algeria,medit2,neutral,neutral,neutral,france,france,f
 north_egypt,Northern Egypt,medit,ottoman,ottoman,ottoman,ottoman,britain,britain,britain,egypt,0,colony,12,45000,-1,1890,100,950,1000,15,0.029999999,1.5,"palestine, cyrenaica"
 south_egypt,Southern Egypt,red_sea,ottoman,ottoman,ottoman,ottoman,britain,britain,britain,egypt,0,colony,8,25000,-1,1912,10,450,1000,15,0.029999999,1.5,"cyrenaica, sudan"
 north_brazil,Northern Brazil,c_atlantic,brazil,brazil,brazil,brazil,brazil,brazil,brazil,brazil,0,country,7.5,45000,-1,1930,5,800,300,7,0.029999999,2,"french_guiana, suriname, british_guiana, venezuela, southern_colombia, peru, bolivia, south_brazil"
-south_brazil,Southern Brazil,s_am_east,brazil,brazil,brazil,brazil,brazil,brazil,brazil,brazil,0,country,9.5,45000,-1,1930,5,800,300,7,0.029999999,2,"uruguay, paraguay, argentina,, bolivia"
+south_brazil,Southern Brazil,s_am_east,brazil,brazil,brazil,brazil,brazil,brazil,brazil,brazil,0,country,9.5,45000,-1,1930,5,800,300,7,0.029999999,2,"uruguay, paraguay, argentina, bolivia"
 eastern_sweden,Eastern Sweden,baltic,sweden,sweden,sweden,sweden,sweden,sweden,sweden,sweden,0,country,6,75000,-1,-1,0,0,0,7,0.039000001,3,"western_sweden, northern_norway, southern_norway, northern_finland"
 western_sweden,Western Sweden,n_sea,sweden,sweden,sweden,sweden,sweden,sweden,sweden,sweden,0,country,6,75000,-1,-1,0,0,0,7,0.039000001,3,"eastern_sweden, southern_norway"
 northern_norway,Northern Norway,arctic,norway,norway,norway,norway,norway,norway,norway,norway,0,country,6,60000,-1,1930,5,200,150,7,0.055,3,"eastern_sweden, southern_norway"

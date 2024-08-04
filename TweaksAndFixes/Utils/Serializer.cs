@@ -1043,16 +1043,13 @@ namespace TweaksAndFixes
 
                 foreach(var fieldData in _fields)
                 {
-                    if (!fieldData._attrib.writeable)
+                    if (fieldData == key || !fieldData._attrib.writeable)
                         continue;
 
                     if (isNotFirst)
                         _StringBuilder.Append(',');
                     else
                         isNotFirst = true;
-
-                    if (key == fieldData)
-                        continue;
 
                     _StringBuilder.Append(fieldData._fieldName);
                 }

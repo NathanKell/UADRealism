@@ -1,4 +1,4 @@
-@name,nameUi,province,portCapacity,seaControlDistanceMultiplier,inBeingDistanceMultiplier,
+@name,nameUi,province,portCapacity,seaControlDistanceMultiplier,inBeingDistanceMultiplier
 al_manama,Al Manama,bahrain,1050,1,1
 rangoon,Rangoon,burma,1050,1,1
 doha,Doha,qatar,1400,1,1
