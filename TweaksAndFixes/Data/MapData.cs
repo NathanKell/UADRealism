@@ -24,14 +24,14 @@ namespace TweaksAndFixes
 {
     public class MapData
     {
-        public abstract class MapDataLoader<T> where T : Il2Cpp.MapElement2D
+        public abstract class MapDataLoader<T> where T : MapElement2D
         {
             [Serializer.Field] public string name;
             public abstract void Apply(T old);
             public abstract void FillFrom(T old);
         }
 
-        public class PortElementDTO : MapDataLoader<Il2Cpp.PortElement>
+        public class PortElementDTO : MapDataLoader<PortElement>
         {
             //@name,enabled,nameUi,province,#provinceName,latitude,longitude,#posLink,portСapacity,#baseportcapacity,#balancer,seaControlDistanceMultiplier,inBeingDistanceMultiplier,#changesea
             [Serializer.Field] string nameUi;
@@ -49,7 +49,7 @@ namespace TweaksAndFixes
                 old.InBeingDistanceMultiplier = inBeingDistanceMultiplier;
             }
 
-            public override void FillFrom(Il2Cpp.PortElement old)
+            public override void FillFrom(PortElement old)
             {
                 name = old.Id;
                 nameUi = old.Name;
@@ -60,7 +60,7 @@ namespace TweaksAndFixes
             }
         }
 
-        public class ProvinceDTO : MapDataLoader<Il2Cpp.Province>
+        public class ProvinceDTO : MapDataLoader<Province>
         {
             //@name,enabled,nameUi,area,controller,controller_1890,controller_1900,controller_1910,controller_1920,controller_1930,controller_1940,claim,isHome,
             ///type,latitude,longitude,#posLink,development,port,population,oilDiscoveryYear,oilDiscoveryBaseChance,oilCapacity,oilReservesInTurns,revoltChance,provinceArmyPercentage,
@@ -116,7 +116,7 @@ namespace TweaksAndFixes
                 old.NeighbourProvincesString = neighbour_provinces;
             }
 
-            public override void FillFrom(Il2Cpp.Province old)
+            public override void FillFrom(Province old)
             {
                 name = old.Id;
                 nameUi = old.Name;
