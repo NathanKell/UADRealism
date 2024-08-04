@@ -46,9 +46,9 @@ namespace UADRealism
         public bool isCasemate => _isCasemate;
 
 
-        public GunDataM(PartData data, Ship ship, bool checkLength) : this(G.GameData.GunData(data), data, ship, ship == null ? null : ShipM.FindMatchingTurretCaliber(ship, data), Ship.IsCasemateGun(data), checkLength) { }
+        public GunDataM(PartData data, Ship ship, bool checkLength) : this(G.GameData.GunData(data), data, ship, ship == null ? null : TweaksAndFixes.ShipM.FindMatchingTurretCaliber(ship, data), Ship.IsCasemateGun(data), checkLength) { }
 
-        public GunDataM(GunData gunData, PartData data, Ship ship, bool checkLength) : this(gunData, data, ship, ship == null ? null : ShipM.FindMatchingTurretCaliber(ship, data), Ship.IsCasemateGun(data), checkLength) { }
+        public GunDataM(GunData gunData, PartData data, Ship ship, bool checkLength) : this(gunData, data, ship, ship == null ? null : TweaksAndFixes.ShipM.FindMatchingTurretCaliber(ship, data), Ship.IsCasemateGun(data), checkLength) { }
 
         public GunDataM(PartData data, Ship ship, Ship.TurretCaliber tc, bool checkLength) : this(G.GameData.GunData(data), data, ship, tc, Ship.IsCasemateGun(data), checkLength) { }
 

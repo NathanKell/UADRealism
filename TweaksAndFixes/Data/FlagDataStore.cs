@@ -112,8 +112,8 @@ namespace TweaksAndFixes
                     if (!string.IsNullOrEmpty(navalFlag))
                         _naval.Add(navalFlag, FlagType.Default);
 
-                    var dictCivil = ModUtils.HumanModToDictionary1D(civilGovFlags);
-                    var dictNaval = ModUtils.HumanModToDictionary1D(navalGovFlags);
+                    var dictCivil = Serializer.Human.HumanModToDictionary1D(civilGovFlags);
+                    var dictNaval = Serializer.Human.HumanModToDictionary1D(navalGovFlags);
 
                     AddFlags(dictCivil, _civil);
                     AddFlags(dictNaval, _naval);

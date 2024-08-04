@@ -3,6 +3,7 @@ using UnityEngine;
 using System.Text;
 using Il2Cpp;
 using System.Collections;
+using MelonLoader;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -153,7 +154,7 @@ namespace TweaksAndFixes
                 int lLen = lines.Length;
                 if (lLen < 2)
                 {
-                    Debug.LogError("[TweaksAndFixes] CSV: Tried to read csv for list but line count was less than 2");
+                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to read csv for list but line count was less than 2");
                     return false;
                 }
 
@@ -214,14 +215,14 @@ namespace TweaksAndFixes
                 int lLen = lines.Length;
                 if (lLen < 2)
                 {
-                    Debug.LogError("[TweaksAndFixes] CSV: Tried to read csv for dictionary but line count was less than 2");
+                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to read csv for dictionary but line count was less than 2");
                     return false;
                 }
 
                 var tc = GetOrCreate(typeof(TValue));
                 if (tc == null)
                 {
-                    Debug.LogError("[TweaksAndFixes] CSV: Could not fetch type info for " + (typeof(TValue).Name));
+                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Could not fetch type info for " + (typeof(TValue).Name));
                     return false;
                 }
 
@@ -264,13 +265,13 @@ namespace TweaksAndFixes
                 }
                 if (keyIdx < 0)
                 {
-                    Debug.LogError("[TweaksAndFixes] CSV: Could not find key in header");
+                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Could not find key in header");
                     return false;
                 }
 
                 if (!tc._nameToField.TryGetValue(keyName, out var keyField))
                 {
-                    Debug.LogError($"[TweaksAndFixes] CSV: Could not find field named {keyName} on {typeof(TValue).Name}");
+                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Could not find field named {keyName} on {typeof(TValue).Name}");
                     return false;
                 }
 
@@ -308,7 +309,7 @@ namespace TweaksAndFixes
                     // so no need to test.
                     if (create && output.ContainsKey(key))
                     {
-                        Debug.LogError("[TweaksAndFixes] CSV: Tried to add object to dictionary with duplicate key " + key.ToString());
+                        Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to add object to dictionary with duplicate key " + key.ToString());
                         continue;
                     }
 
@@ -352,6 +353,16 @@ namespace TweaksAndFixes
                 return Read<TDict, TKey, TValue>(lines, output, keyName, useComments);
             }
 
+            public static string[] TextAssetToLines(string assetName)
+            {
+                var text = Util.ResourcesLoad<TextAsset>(assetName, false);
+                if (text == null)
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Could not find asset `{assetName}`");
+                    return null;
+                }
+                return text.text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            }
 
             private static readonly string _TempTextAssetName = "tafTempTA";
 
@@ -574,7 +585,7 @@ namespace TweaksAndFixes
 
                     if (val == null)
                     {
-                        Debug.LogError($"[TweaksAndFixes] CSV: Failed to parse {value} to type {_dataType} on field type {_fieldType}");
+                        Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Failed to parse {value} to type {_dataType} on field type {_fieldType}");
                         return false;
                     }
 
@@ -909,12 +920,12 @@ namespace TweaksAndFixes
                 int count = line.Count;
                 if (count != header.Count)
                 {
-                    Debug.LogError($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}");
+                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}");
                     return false;
                 }
                 if (defaults != null && count != defaults.Count)
                 {
-                    Debug.LogError($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}");
+                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}");
                     return false;
                 }
                 for (int i = 0; i < count; ++i)
@@ -1071,7 +1082,7 @@ namespace TweaksAndFixes
                 var tc = new CSV(t);
                 if (tc._fields.Count == 0)
                 {
-                    Debug.LogError($"[TweaksAndFixes] CSV: No serializing fields on object of type {t.Name} that is referenced in persistent field, adding as null to TypeCache.");
+                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: No serializing fields on object of type {t.Name} that is referenced in persistent field, adding as null to TypeCache.");
                     tc = null;
                 }
 
@@ -1217,6 +1228,271 @@ namespace TweaksAndFixes
 
                 public void SetVec(Vector2 v) { vec = v; }
                 public void SetGuid() { guid = System.Guid.NewGuid(); }
+            }
+        }
+
+        public class Human
+        {
+            public abstract class MemberData
+            {
+                public abstract string Name { get; }
+                public abstract Type Type { get; }
+                public abstract object GetValue(object host);
+                public abstract void SetValue(object host, object value);
+            }
+
+            private class FieldData : MemberData
+            {
+                private FieldInfo _fi;
+                public FieldData(FieldInfo f) { _fi = f; }
+                public override string Name => _fi.Name;
+                public override Type Type => _fi.FieldType;
+                public override object GetValue(object host)
+                    => _fi.GetValue(host);
+                public override void SetValue(object host, object value)
+                    => _fi.SetValue(host, value);
+            }
+
+            private class PropertyData : MemberData
+            {
+                private PropertyInfo _pi;
+                public PropertyData(PropertyInfo p) { _pi = p; }
+                public override string Name => _pi.Name;
+                public override Type Type => _pi.PropertyType;
+                public override object GetValue(object host)
+                    => _pi.GetValue(host);
+                public override void SetValue(object host, object value)
+                    => _pi.SetValue(host, value);
+            }
+
+
+            private static readonly Dictionary<Type, Dictionary<string, MemberData>> _DictTypeCache = new Dictionary<Type, Dictionary<string, MemberData>>();
+
+            private static Dictionary<string, MemberData> CreateCacheFor(Type type)
+            {
+                var dict = new Dictionary<string, MemberData>();
+                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                foreach (var f in fields)
+                    dict[f.Name] = new FieldData(f);
+                var props = type.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                foreach (var p in props)
+                    dict[p.Name] = new PropertyData(p);
+
+                _DictTypeCache[type] = dict;
+                return dict;
+            }
+
+            public static Dictionary<string, MemberData> GetCache(Type type)
+            {
+                if (!_DictTypeCache.TryGetValue(type, out var dict))
+                    return CreateCacheFor(type);
+                return dict;
+            }
+
+            public static Il2CppSystem.Collections.Generic.Dictionary<int, T> HumanListToIndexedDictParsed<T>(string input, Il2CppSystem.Collections.Generic.Dictionary<int, T> dict = null)
+            {
+                if(dict == null)
+                    dict = new Il2CppSystem.Collections.Generic.Dictionary<int, T>();
+
+                int parenL = input.IndexOf('(');
+                int parenR = input.IndexOf(')');
+                if (parenL == -1 || parenR == -1)
+                    return dict;
+
+                var dataType = Serializer.CSV.FieldData.ValueDataType(typeof(T));
+                var items = input.Substring(parenL + 1, parenR - parenL - 1);
+                var split = items.Split(';');
+                for (int i = 1; i < split.Length; i += 2)
+                {
+                    if (!int.TryParse(split[i - 1], out var idx))
+                        continue;
+                    if (string.IsNullOrEmpty(split[i]))
+                        dict[idx] = default(T);
+                    else
+                        dict[idx] = (T)Serializer.CSV.FieldData.ReadValue(split[i], dataType, typeof(T));
+                }
+
+                return dict;
+            }
+
+            public static Il2CppSystem.Collections.Generic.Dictionary<int, T> HumanListToIndexedDict<T>(string input, Il2CppSystem.Collections.Generic.Dictionary<int, T> dict = null)
+            {
+                if (dict == null)
+                    dict = new Il2CppSystem.Collections.Generic.Dictionary<int, T>();
+                int parenL = input.IndexOf('(');
+                int parenR = input.IndexOf(')');
+                if (parenL == -1 || parenR == -1)
+                    return dict;
+
+                var dataType = Serializer.CSV.FieldData.ValueDataType(typeof(T));
+                var items = input.Substring(parenL + 1, parenR - parenL - 1);
+                var split = items.Split(';');
+                for (int i = 1; i < split.Length; i += 2)
+                {
+                    if (!int.TryParse(split[i - 1], out var idx))
+                        continue;
+
+                    // this is INSANE but it won't let me cast string to T, so...
+                    // (note we know that this is only called when T is string,
+                    // but due to C# being not fast-and-loose like C, we can't
+                    // do what we would in a low-level language.)
+                    object o = split[i];
+                    dict[idx] = (T)o;
+                }
+
+                return dict;
+            }
+
+            public static Dictionary<string, Il2CppSystem.Collections.Generic.Dictionary<int, T>> HumanModsToIndexedDicts<T>(string input)
+            {
+                var dict = new Dictionary<string, Il2CppSystem.Collections.Generic.Dictionary<int, T>>();
+                var dataType = Serializer.CSV.FieldData.ValueDataType(typeof(T));
+                bool isString = dataType == Serializer.CSV.DataType.ValueString;
+                var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var s in split)
+                {
+                    int parenL = input.IndexOf('(');
+                    if (parenL < 0)
+                        continue;
+                    var key = s.Substring(0, parenL);
+                    var sub = isString ? HumanListToIndexedDict<T>(s) : HumanListToIndexedDictParsed<T>(s);
+                    if (sub == null)
+                        continue;
+                    dict[key] = sub;
+                }
+
+                return dict;
+            }
+
+            public static bool FillIndexedDicts(object host, string input, bool update = false)
+            {
+                if (host == null)
+                    return false;
+
+                var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (split.Length == 0)
+                    return true;
+
+                var cache = GetCache(host.GetType());
+
+                bool allSucceeded = true;
+                foreach (var s in split)
+                {
+                    int parenL = input.IndexOf('(');
+                    if (parenL < 0)
+                        continue;
+                    var fieldName = s.Substring(0, parenL);
+                    if (!cache.TryGetValue(fieldName, out var data))
+                    {
+                        allSucceeded = false;
+                        continue;
+                    }
+
+                    Il2CppSystem.Object dict = update ? (Il2CppSystem.Object)(data.GetValue(host)) : null;
+                    if (data.Type == typeof(Il2CppSystem.Collections.Generic.Dictionary<int, int>))
+                        dict = HumanListToIndexedDictParsed<int>(s, (Il2CppSystem.Collections.Generic.Dictionary<int, int>)dict);
+                    else if (data.Type == typeof(Il2CppSystem.Collections.Generic.Dictionary<int, float>))
+                        dict = HumanListToIndexedDictParsed<float>(s, (Il2CppSystem.Collections.Generic.Dictionary<int, float>)dict);
+                    else if (data.Type == typeof(Il2CppSystem.Collections.Generic.Dictionary<int, string>))
+                        dict = HumanListToIndexedDict<string>(s, (Il2CppSystem.Collections.Generic.Dictionary<int, string>)dict);
+                    else
+                    {
+                        allSucceeded = false;
+                        continue;
+                    }
+                    if (!update)
+                        data.SetValue(host, dict);
+                }
+                return allSucceeded;
+            }
+
+            private static List<string> HumanModToList(string input, out string key, HashSet<string> discard)
+            {
+                key = null;
+                input.Trim();
+                int parenA = input.IndexOf('(');
+                if (parenA < 0)
+                {
+                    if (discard != null && discard.Contains(input))
+                        return null;
+
+                    key = input;
+                    return new List<string>();
+                }
+
+
+                key = input.Substring(0, parenA);
+                if (discard != null && discard.Contains(key))
+                    return null;
+
+                int parenB = input.LastIndexOf(')');
+                if (parenB < parenA)
+                    parenB = input.Length;
+
+                ++parenA;
+                string val = input.Substring(parenA, parenB - parenA);
+                val.Trim();
+                var split = val.Split(';');
+                if (split == null || split.Length == 0)
+                    return new List<string>();
+
+                var lst = new List<string>();
+                foreach (var s in split)
+                    lst.Add(s.Trim());
+
+                return lst;
+            }
+
+            public static Dictionary<string, List<string>> HumanModToDictionary1D(string input, HashSet<string> discard = null)
+            {
+                var dict = new Dictionary<string, List<string>>();
+                var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var s in split)
+                {
+                    var list = HumanModToList(s, out var key, discard);
+                    if (list == null)
+                        continue;
+                    dict[key] = list;
+                }
+                return dict;
+            }
+
+            public static Dictionary<string, List<List<string>>> HumanModToDictionary2D(string input, HashSet<string> discard = null)
+            {
+                var dict = new Dictionary<string, List<List<string>>>();
+                var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var s in split)
+                {
+                    var list = HumanModToList(s, out var key, discard);
+                    if (list == null)
+                        continue;
+
+                    if (dict.TryGetValue(key, out var l))
+                    {
+                        l.Add(list);
+                    }
+                    else
+                    {
+                        l = new List<List<string>>();
+                        l.Add(list);
+                        dict[key] = l;
+                    }
+                }
+                return dict;
+            }
+
+            static readonly char[] _SplitChars = new char[] { ' ', ',', '\t', ';' };
+
+            public static List<string> HumanListToList(string input)
+            {
+                var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
+                return arr.ToList();
+            }
+
+            public static HashSet<string> HumanListToSet(string input)
+            {
+                var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
+                return arr.ToHashSet();
             }
         }
 

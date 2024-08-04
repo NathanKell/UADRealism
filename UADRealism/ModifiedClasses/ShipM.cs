@@ -447,26 +447,6 @@ namespace UADRealism
             return weight;
         }
 
-        public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
-        {
-            bool isCasemate = Ship.IsCasemateGun(data);
-            foreach (var ta in ship.shipTurretArmor)
-                if (ta.turretPartData.caliber == data.caliber && ta.isCasemateGun == isCasemate)
-                    return ta;
-
-            return null;
-        }
-
-        public static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData data)
-        {
-            bool isCasemate = Ship.IsCasemateGun(data);
-            foreach (var tc in ship.shipGunCaliber)
-                if (tc.turretPartData.caliber == data.caliber && isCasemate == tc.isCasemateGun)
-                    return tc;
-
-            return null;
-        }
-
         private const float _TurretLengthMult = 1.55f;
         private const float _TurretCalBigExp = 0.65f;
         private const float _TurretCalSmallExp = 1.5f;
@@ -827,7 +807,7 @@ namespace UADRealism
                 mat.cost = 0f;
                 mats.Add(mat);
 
-                var ta = FindMatchingTurretArmor(ship, data);
+                var ta = TweaksAndFixes.ShipM.FindMatchingTurretArmor(ship, data);
                 if (ta != null)
                 {
                     float aTop, aFace, aSides;
@@ -986,7 +966,7 @@ namespace UADRealism
             //                    }
             //                    float cal = m.employedPart.data.caliber;
             //                    int gunYear = Database.GetGunYear(Mathf.RoundToInt(cal * (1f / 25.4f)), ship.TechGunGrade(m.employedPart.data));
-            //                    var tc = FindMatchingTurretCaliber(ship, m.employedPart.data);
+            //                    var tc = TweaksAndFixes.ShipM.FindMatchingTurretCaliber(ship, m.employedPart.data);
             //                    if (tc != null)
             //                        cal += tc.diameter;
             //                    float barbetteWidth = TurretBaseWidth(cal, gunYear) * TurretBarrelsWidthMult(m.employedPart.data.barrels);
@@ -1403,15 +1383,6 @@ namespace UADRealism
                 }
             }
             return ok;
-        }
-
-        public static bool ExistsMount(Ship ship, PartData part, Il2CppSystem.Collections.Generic.List<string> demandMounts = null, Il2CppSystem.Collections.Generic.List<string> excludeMounts = null, bool allowUsed = true)
-        {
-            foreach (var m in ship.mounts)
-                if ((allowUsed || m.employedPart == null) && m.Fits(part, demandMounts, excludeMounts))
-                    return true;
-
-            return false;
         }
     }
 }

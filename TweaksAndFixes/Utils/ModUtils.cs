@@ -5,6 +5,7 @@ using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
 using System.Runtime.CompilerServices;
+using System.Reflection;
 
 #pragma warning disable CS8601
 #pragma warning disable CS8603
@@ -416,95 +417,6 @@ namespace TweaksAndFixes
                     return;
                 }
             }
-        }
-
-        private static List<string> HumanModToList(string input, out string key, HashSet<string> discard)
-        {
-            key = null;
-            input.Trim();
-            int parenA = input.IndexOf('(');
-            if (parenA < 0)
-            {
-                if (discard != null && discard.Contains(input))
-                    return null;
-
-                key = input;
-                return new List<string>();
-            }
-            
-
-            key = input.Substring(0, parenA);
-            if (discard != null && discard.Contains(key))
-                return null;
-
-            int parenB = input.LastIndexOf(')');
-            if (parenB < parenA)
-                parenB = input.Length;
-
-            ++parenA;
-            string val = input.Substring(parenA, parenB - parenA);
-            val.Trim();
-            var split = val.Split(';');
-            if (split == null || split.Length == 0)
-                return new List<string>();
-
-            var lst = new List<string>();
-            foreach (var s in split)
-                lst.Add(s.Trim());
-
-            return lst;
-        }
-
-        public static Dictionary<string, List<string>> HumanModToDictionary1D(string input, HashSet<string> discard = null)
-        {
-            var dict = new Dictionary<string, List<string>>();
-            var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var s in split)
-            {
-                var list = HumanModToList(s, out var key, discard);
-                if (list == null)
-                    continue;
-                dict[key] = list;
-            }
-            return dict;
-        }
-
-        public static Dictionary<string, List<List<string>>> HumanModToDictionary2D(string input, HashSet<string> discard = null)
-        {
-            var dict = new Dictionary<string, List<List<string>>>();
-            var split = input.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var s in split)
-            {
-                var list = HumanModToList(s, out var key, discard);
-                if (list == null)
-                    continue;
-
-                if (dict.TryGetValue(key, out var l))
-                {
-                    l.Add(list);
-                }
-                else
-                {
-                    l = new List<List<string>>();
-                    l.Add(list);
-                    dict[key] = l;
-                }
-            }
-            return dict;
-        }
-
-        static readonly char[] _SplitChars = new char[] { ' ', ',', '\t', ';' };
-
-        public static List<string> HumanListToList(string input)
-        {
-            var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
-            return arr.ToList();
-        }
-
-        public static HashSet<string> HumanListToSet(string input)
-        {
-            var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
-            return arr.ToHashSet();
         }
 
         public static List<T> ToManaged<T>(this Il2CppSystem.Collections.Generic.List<T> list)

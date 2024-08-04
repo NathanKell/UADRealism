@@ -712,7 +712,7 @@ namespace UADRealism
 
                 foreach (var part in _parts)
                 {
-                    if (ShipM.FindMatchingTurretArmor(_parent._ship, part.data) == null)
+                    if (TweaksAndFixes.ShipM.FindMatchingTurretArmor(_parent._ship, part.data) == null)
                         _parent._ship.AddShipTurretArmor(part);
                 }
             }
@@ -2477,7 +2477,7 @@ namespace UADRealism
                             {
                                 if (_ship.shipGunCaliber == null)
                                     _ship.shipGunCaliber = new Il2CppSystem.Collections.Generic.List<Ship.TurretCaliber>();
-                                if (ShipM.FindMatchingTurretCaliber(_ship, data) == null)
+                                if (TweaksAndFixes.ShipM.FindMatchingTurretCaliber(_ship, data) == null)
                                 {
                                     var tempPart = Part.Create(data, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int, false);
                                     AddTCForGun(tempPart, gi);
@@ -2621,7 +2621,7 @@ namespace UADRealism
 
                 foreach (var rpu in _rpAll)
                     foreach (var data in rpu._datas)
-                        if (data.isGun && ShipM.FindMatchingTurretArmor(_ship, data) == null)
+                        if (data.isGun && TweaksAndFixes.ShipM.FindMatchingTurretArmor(_ship, data) == null)
                             _ship.shipTurretArmor.Add(new Ship.TurretArmor(data, _ship));
 
                 foreach (var ta in _ship.shipTurretArmor)
@@ -2976,7 +2976,7 @@ namespace UADRealism
                 float armLimitTop = float.MaxValue;
                 if (!Ship.IsMainCal(ta.turretPartData, _ship.shipType))
                 {
-                    var tc = ShipM.FindMatchingTurretCaliber(_ship, ta.turretPartData);
+                    var tc = TweaksAndFixes.ShipM.FindMatchingTurretCaliber(_ship, ta.turretPartData);
                     float mmCal = ta.turretPartData.caliber;
                     if (tc != null)
                         mmCal += tc.diameter;

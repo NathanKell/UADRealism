@@ -106,6 +106,7 @@ namespace TweaksAndFixes
         public TAFShipData(IntPtr ptr) : base(ptr) { }
 
         private static List<Part.Store> _TempPartStore = new List<Part.Store>();
+        private static HashSet<PartData> _TempDatas = new HashSet<PartData>();
         private List<GunGradeData> _gradeData = new List<GunGradeData>();
         private int _torpedoGrade = -1;
         private bool _allowOverrideGrade = true;
@@ -306,6 +307,9 @@ namespace TweaksAndFixes
             Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
             ggd.grade = -1; // will be updated next call to TechGunGrade.
 
+            Ship.TurretCaliber tc = null;
+            Ship.TurretArmor ta = null;
+
             // We need to now replace all parts using this TC. Otherwise
             // they'll all be using the old model. We could do something
             // smarter where we actually switch the models in place but
@@ -318,6 +322,11 @@ namespace TweaksAndFixes
                 if (!p.data.isGun || p.data.GetCaliberInch() != ggd.calInch || Ship.IsCasemateGun(p.data) != ggd.isCasemateGun)
                     continue;
 
+                if (tc == null)
+                    tc = ShipM.FindMatchingTurretCaliber(_ship, p.data);
+                if (ta == null)
+                    ta = ShipM.FindMatchingTurretArmor(_ship, p.data);
+
                 _TempPartStore.Add(p.ToStore());
                 _ship.RemovePart(p, true, true);
             }
@@ -326,6 +335,7 @@ namespace TweaksAndFixes
                 var p = Part.CreateFromStore(_TempPartStore[i], _ship, _ship.partsCont);
                 if (p != null)
                 {
+                    _TempDatas.Add(p.data);
                     p.SetActiveX(true);
                     _ship.AddPart(p);
                     p.LoadModel(_ship, true);
@@ -333,6 +343,18 @@ namespace TweaksAndFixes
             }
             if (_TempPartStore.Count > 0)
             {
+                // Expected count: 1. But just in case.
+                foreach (var p in _TempDatas)
+                {
+                    var tcnew = ShipM.FindMatchingTurretCaliber(_ship, p);
+                    if (tcnew != null)
+                        tcnew.CloneFrom(tc);
+                    var tanew = ShipM.FindMatchingTurretArmor(_ship, p);
+                    if (tanew != null)
+                        tanew.CloneFrom(ta);
+                }
+                _TempDatas.Clear();
+                _TempPartStore.Clear();
                 _ship.Init();
                 _ship.CalcInstability(true);
             }

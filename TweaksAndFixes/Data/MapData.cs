@@ -177,13 +177,10 @@ namespace TweaksAndFixes
 
         private static bool Load<T, U>(string assetName, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
         {
-            var text = Util.ResourcesLoad<TextAsset>(assetName, false);
-            if (text == null)
-            {
-                Melon<TweaksAndFixes>.Logger.Error($"Could not find asset `{assetName}`");
+            var input = Serializer.CSV.TextAssetToLines(assetName);
+            if (input == null)
                 return false;
-            }
-            var input = text.text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
             if (input.Length < 2)
             {
                 Melon<TweaksAndFixes>.Logger.Error($"Fewer than 2 lines of text in asset `{assetName}`");
