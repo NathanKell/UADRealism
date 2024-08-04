@@ -149,7 +149,8 @@ namespace TweaksAndFixes
         {
             if (MonoBehaviourExt.Param("taf_override_map", 0) == 2)
                 WriteData();
-            LoadData();
+            else
+                LoadData();
         }
 
         private static void WriteData()
