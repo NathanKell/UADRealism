@@ -47,16 +47,18 @@ namespace TweaksAndFixes
             int oldestNew = int.MaxValue;
             int newestOld = int.MinValue;
             List<float> techCoverage = new List<float>();
+            int maxYearUp = Mathf.RoundToInt(MonoBehaviourExt.Param("taf_shareddesign_maxYearsIntoFuture", 10f));
+            int maxYearDpwnForSplit = Mathf.RoundToInt(MonoBehaviourExt.Param("taf_shareddesign_yearsInPastForSplit", 5f));
             foreach (var tuple in designs)
             {
                 var store = tuple.Item1;
                 if (store.shipType != shipType.name)
                     continue;
 
-                if (store.YearCreated > year + 10)
+                if (store.YearCreated > year + maxYearUp)
                     continue;
 
-                if (store.YearCreated < year - 5)
+                if (store.YearCreated < year - maxYearDpwnForSplit)
                 {
                     olderShips.Add(store);
                     if (store.YearCreated > newestOld)
@@ -74,12 +76,16 @@ namespace TweaksAndFixes
             if (newerShips.Count == 0 && olderShips.Count == 0)
                 return null;
 
+            if (newerShips.Count == 0)
+                oldestNew = newestOld - 5;
+
             // If some ships are borderline, grab them too.
-            if (newestOld + 3 > oldestNew)
+            int yearBorder = Mathf.RoundToInt(MonoBehaviourExt.Param("taf_shareddesign_yearClosenessAroundSplit", 3f));
+            if (newestOld + yearBorder > oldestNew)
             {
                 for (int i = olderShips.Count - 1; i >= 0; --i)
                 {
-                    if (olderShips[i].YearCreated + 3 > oldestNew)
+                    if (olderShips[i].YearCreated + yearBorder > oldestNew)
                     {
                         newerShips.Add(olderShips[i]);
                         techCoverage.Add(0f);
@@ -141,12 +147,15 @@ namespace TweaksAndFixes
             List<int> indices = new List<int>();
             List<int> indicesMed = new List<int>();
             List<int> indicesLow = new List<int>();
+            float bestVal = MonoBehaviourExt.Param("taf_shareddesign_bestTechValue", 0.9f);
+            float okVal = MonoBehaviourExt.Param("taf_shareddesign_okTechValue", 0.75f);
+            float minVal = MonoBehaviourExt.Param("taf_shareddesign_minTechValue", 0.5f);
             for (int i = 0; i < techCoverage.Count; ++i)
-                if (techCoverage[i] > 0.9f)
+                if (techCoverage[i] > bestVal)
                     indices.Add(i);
-                else if (techCoverage[i] > 0.75f)
+                else if (techCoverage[i] > okVal)
                     indicesMed.Add(i);
-                else if (techCoverage[i] > 0.5f)
+                else if (techCoverage[i] > minVal)
                     indicesLow.Add(i);
 
             if (indices.Count == 0)
