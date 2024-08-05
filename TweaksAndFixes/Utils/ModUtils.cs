@@ -518,6 +518,18 @@ namespace TweaksAndFixes
             return val;
         }
 
+        public static void FillGradeData<T>(Il2CppSystem.Collections.Generic.Dictionary<int, T> dict, int max)
+        {
+            int maxGradeFound = 5;
+            for (int grade = 6; grade <= max; ++grade)
+            {
+                if (dict.ContainsKey(grade))
+                    maxGradeFound = grade;
+                else
+                    dict[grade] = dict[maxGradeFound];
+            }
+        }
+
         public static string GetHullModelKey(PartData data)
         {
             string key = data.model;

@@ -353,15 +353,25 @@ namespace TweaksAndFixes
                 return Read<TDict, TKey, TValue>(lines, output, keyName, useComments);
             }
 
-            public static string[] TextAssetToLines(string assetName)
+            public static string[] TextAssetToLines(string assetName, bool allowOverride = true)
             {
-                var text = Util.ResourcesLoad<TextAsset>(assetName, false);
-                if (text == null)
+                string text;
+                if (allowOverride)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"Could not find asset `{assetName}`");
-                    return null;
+                    text = GameDataM.GetTextFromFileOrAsset(assetName);
                 }
-                return text.text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                else
+                {
+                    var textA = Util.ResourcesLoad<TextAsset>(assetName, false);
+                    if (textA == null)
+                    {
+                        Melon<TweaksAndFixes>.Logger.Error($"Could not find asset `{assetName}`");
+                        return null;
+                    }
+                    text = textA.text;
+                }
+                
+                return text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             }
 
             private static readonly string _TempTextAssetName = "tafTempTA";

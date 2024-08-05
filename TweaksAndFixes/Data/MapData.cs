@@ -169,7 +169,7 @@ namespace TweaksAndFixes
             bool success = true;
             success &= Load<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
             success &= Load<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
-            if(success)
+            if (success)
                 Melon<TweaksAndFixes>.Logger.Msg($"Loaded map data successfully`");
             else
                 Melon<TweaksAndFixes>.Logger.Error($"Failed to load overriding map data");

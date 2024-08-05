@@ -4,7 +4,8 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
-using Il2CppInterop.Runtime;
+
+#pragma warning disable CS8600
 
 namespace TweaksAndFixes
 {
@@ -12,10 +13,20 @@ namespace TweaksAndFixes
     internal class Patch_GameData
     {
         [HarmonyPrefix]
+        [HarmonyPatch(nameof(GameData.Update))]
+        internal static bool Prefix_Update(GameData __instance)
+        {
+            GameDataM.Update(__instance);
+            return false;
+        }        
+
+        [HarmonyPrefix]
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Prefix_PostProcessAll(GameData __instance)
         {
             //Serializer.CSV.TestNative();
+
+            GradeExtensions.LoadData();
         }
 
         private static readonly List<string> _FixKeys = new List<string>();
