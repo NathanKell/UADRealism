@@ -45,17 +45,17 @@ namespace TweaksAndFixes
 
             public static int GetMaxGrade(GunData gd)
             {
-                int max = 1;
+                int max = 6;
                 for (; ; ++max)
                 {
                     if (gd.accuracies.ContainsKey(max)
-                        && gd.barrelWeights.ContainsKey(max)
-                        && gd.firerates.ContainsKey(max)
-                        && gd.penetrations.ContainsKey(max)
-                        && gd.ranges.ContainsKey(max)
-                        && gd.shellVelocities.ContainsKey(max)
-                        && gd.shellWeights.ContainsKey(max)
-                        && gd.accuracies.ContainsKey(max))
+                        || gd.barrelWeights.ContainsKey(max)
+                        || gd.firerates.ContainsKey(max)
+                        || gd.penetrations.ContainsKey(max)
+                        || gd.ranges.ContainsKey(max)
+                        || gd.shellVelocities.ContainsKey(max)
+                        || gd.shellWeights.ContainsKey(max)
+                        || gd.accuracies.ContainsKey(max))
                         continue;
 
                     break;
@@ -65,11 +65,11 @@ namespace TweaksAndFixes
 
             public static void LoadData()
             {
-                var lines = Serializer.CSV.TextAssetToLines("guns");
-                if (lines != null)
+                var text = Serializer.CSV.GetTextFromFileOrAsset("guns");
+                if (text != null)
                 {
                     List<GunDataExtension> list = new List<GunDataExtension>();
-                    Serializer.CSV.Read<List<GunDataExtension>, GunDataExtension>(lines, list, true, true);
+                    Serializer.CSV.Read<List<GunDataExtension>, GunDataExtension>(text, list, true, true);
                 }
 
                 // We need to ensure that everything goes up to the max grade.
@@ -84,7 +84,11 @@ namespace TweaksAndFixes
                     ModUtils.FillGradeData(gd.shellWeights, Config.MaxGunGrade);
                     ModUtils.FillGradeData(gd.accuracies, Config.MaxGunGrade);
                 }
-                GunData.gradesTotal = Config.MaxGunGrade;
+                if (Config.MaxGunGrade > 5)
+                {
+                    GunData.gradesTotal = Config.MaxGunGrade;
+                    Melon<TweaksAndFixes>.Logger.Msg("Max gun grade is now " + Config.MaxGunGrade);
+                }
             }
         }
 
@@ -106,11 +110,11 @@ namespace TweaksAndFixes
 
             public static void LoadData()
             {
-                var lines = Serializer.CSV.TextAssetToLines("partModels");
-                if (lines != null)
+                var text = Serializer.CSV.GetTextFromFileOrAsset("partModels");
+                if (text != null)
                 {
                     List<PartModelExtension> list = new List<PartModelExtension>();
-                    Serializer.CSV.Read<List<PartModelExtension>, PartModelExtension>(lines, list, true, true);
+                    Serializer.CSV.Read<List<PartModelExtension>, PartModelExtension>(text, list, true, true);
                 }
 
                 // We need to ensure that everything goes up to the max grade.

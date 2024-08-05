@@ -21,9 +21,10 @@ namespace TweaksAndFixes
         {
             private static readonly char[] _Buf = new char[1024];
 
-            private static unsafe List<string> ParseLine(string input)
+            private static unsafe List<List<string>> ParseLines(string input)
             {
-                var lst = new List<string>();
+                var allLines = new List<List<string>>();
+                var curLine = new List<string>();
                 int len = input.Length;
                 bool inQuote = false;
                 bool escaped = false;
@@ -33,6 +34,26 @@ namespace TweaksAndFixes
                     for (int i = 0; i < len; ++i)
                     {
                         char c = pInput[i];
+                        if (c == '\n' || c == '\r')
+                        {
+                            if (escaped)
+                            {
+                                escaped = false;
+                                _Buf[bufIdx++] = '\\';
+                            }
+
+                            if (!inQuote)
+                            {
+                                if (curLine.Count > 0 || bufIdx > 0)
+                                {
+                                    curLine.Add(bufIdx == 0 ? string.Empty : new string(_Buf, 0, bufIdx));
+                                    allLines.Add(curLine);
+                                    curLine = new List<string>();
+                                }
+                                bufIdx = 0;
+                                continue;
+                            }
+                        }
                         if (escaped)
                         {
                             escaped = false;
@@ -62,7 +83,7 @@ namespace TweaksAndFixes
                                     inQuote = !inQuote;
                                     if (!inQuote) // i.e. we were quoted before
                                     {
-                                        lst.Add(new string(_Buf, 0, bufIdx));
+                                        curLine.Add(new string(_Buf, 0, bufIdx));
                                         bufIdx = 0;
                                         ++i; // skip the comma. If this is the end
                                         // of the line this is still safe because the
@@ -73,7 +94,7 @@ namespace TweaksAndFixes
                                 case ',':
                                     if (!inQuote)
                                     {
-                                        lst.Add(new string(_Buf, 0, bufIdx));
+                                        curLine.Add(new string(_Buf, 0, bufIdx));
                                         bufIdx = 0;
                                         continue;
                                     }
@@ -85,16 +106,22 @@ namespace TweaksAndFixes
                     // We have three cases.
                     // In the first case, we end with an unterminated entry
                     if (bufIdx > 0)
-                        lst.Add(new string(_Buf, 0, bufIdx));
+                    {
+                        curLine.Add(new string(_Buf, 0, bufIdx));
+                        allLines.Add(curLine);
+                    }
                     // In the second case, we wend with a comma, which means
                     // effectively this is an empty entry
                     else if (pInput[len - 1] == ',')
-                        lst.Add(string.Empty);
+                    {
+                        curLine.Add(string.Empty);
+                        allLines.Add(curLine);
+                    }
                     // In the third case, we end with a terminated entry or an escape start.
                     // In this case, we don't have anything to add.
                 }
 
-                return lst;
+                return allLines;
             }
 
             public static bool Write<TColl, TItem>(TColl coll, List<string> output, string keyName = null, bool markKey = true) where TColl : ICollection<TItem>
@@ -149,9 +176,10 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Read<TList, TItem>(string[] lines, TList output, bool useComments = true, bool useDefault = false) where TList : IList<TItem>
+            public static bool Read<TList, TItem>(string text, TList output, bool useComments = true, bool useDefault = false) where TList : IList<TItem>
             {
-                int lLen = lines.Length;
+                var lines = ParseLines(text);
+                int lLen = lines.Count;
                 if (lLen < 2)
                 {
                     Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to read csv for list but line count was less than 2");
@@ -165,10 +193,10 @@ namespace TweaksAndFixes
                     return false;
 
                 int firstLineIdx = 0;
-                while (lines[firstLineIdx].StartsWith('#'))
+                while (lines[firstLineIdx][0].StartsWith('#'))
                     ++firstLineIdx;
 
-                List<string> header = ParseLine(lines[firstLineIdx++]);
+                List<string> header = lines[firstLineIdx++];
                 if (useComments)
                 {
                     for (int i = 0; i < header.Count; ++i)
@@ -184,10 +212,10 @@ namespace TweaksAndFixes
                 List<string> defaults = null;
                 for (int i = firstLineIdx; i < lLen; ++i)
                 {
-                    if (useComments && lines[i].StartsWith('#'))
+                    if (useComments && lines[i][0].StartsWith('#'))
                         continue;
 
-                    var line = ParseLine(lines[i]);
+                    var line = lines[i];
                     if (defaults == null && useDefault && line.Count > 0 && line[0] == "default")
                     {
                         defaults = line;
@@ -196,13 +224,13 @@ namespace TweaksAndFixes
                     if (create)
                     {
                         var item = (TItem)GetNewInstance(typeof(TItem));
-                        allSucceeded &= tc.ReadType(item, line, header, defaults);
+                        allSucceeded &= tc.ReadType(item, line, header, defaults, useComments);
                         output.Add(item);
                     }
                     else
                     {
                         var item = output[i - 1];
-                        allSucceeded &= tc.ReadType(item, line, header, defaults);
+                        allSucceeded &= tc.ReadType(item, line, header, defaults, useComments);
                         output[i - 1] = item; // if valuetype, we need to do this
                     }
                 }
@@ -210,9 +238,10 @@ namespace TweaksAndFixes
                 return allSucceeded;
             }
 
-            public static bool Read<TDict, TKey, TValue>(string[] lines, TDict output, string keyName = null, bool useComments = true, bool useDefault = false) where TDict : IDictionary<TKey, TValue>
+            public static bool Read<TDict, TKey, TValue>(string text, TDict output, string keyName = null, bool useComments = true, bool useDefault = false) where TDict : IDictionary<TKey, TValue>
             {
-                int lLen = lines.Length;
+                var lines = ParseLines(text);
+                int lLen = lines.Count;
                 if (lLen < 2)
                 {
                     Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to read csv for dictionary but line count was less than 2");
@@ -229,10 +258,10 @@ namespace TweaksAndFixes
                 bool create = output.Count == 0;
 
                 int firstLineIdx = 0;
-                while (lines[firstLineIdx].StartsWith('#'))
+                while (lines[firstLineIdx][0].StartsWith('#'))
                     ++firstLineIdx;
 
-                List<string> header = ParseLine(lines[firstLineIdx++]);
+                List<string> header = lines[firstLineIdx++];
                 int keyIdx;
                 if (keyName != null)
                 {
@@ -279,10 +308,10 @@ namespace TweaksAndFixes
                 List<string> defaults = null;
                 for (int i = firstLineIdx; i < lLen; ++i)
                 {
-                    if (useComments && lines[i].StartsWith('#'))
+                    if (useComments && lines[i][0].StartsWith('#'))
                         continue;
 
-                    var line = ParseLine(lines[i]);
+                    var line = lines[i];
                     if (defaults == null && useDefault && line.Count > 0 && line[0] == "default")
                     {
                         defaults = line;
@@ -300,7 +329,7 @@ namespace TweaksAndFixes
 
                     if (!create && output.TryGetValue(key, out var existing))
                     {
-                        allSucceeded &= tc.ReadType(existing, line, header, defaults);
+                        allSucceeded &= tc.ReadType(existing, line, header, defaults, useComments);
                         output[key] = existing; // if valuetype, we need to do this
                         continue;
                     }
@@ -314,7 +343,7 @@ namespace TweaksAndFixes
                     }
 
                     var item = (TValue)GetNewInstance(typeof(TValue));
-                    allSucceeded &= tc.ReadType(item, ParseLine(lines[i]), header, defaults);
+                    allSucceeded &= tc.ReadType(item, line, header, defaults, useComments);
                     output.Add(key, item);
                 }
 
@@ -343,35 +372,45 @@ namespace TweaksAndFixes
 
             public static bool Read<TList, TItem>(TList output, string path, bool useComments = true) where TList : IList<TItem>
             {
-                var lines = File.ReadAllLines(path);
-                return Read<TList, TItem>(lines, output, useComments);
+                var text = File.ReadAllText(path);
+                return Read<TList, TItem>(text, output, useComments);
             }
 
             public static bool Read<TDict, TKey, TValue>(TDict output, string path, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
             {
-                var lines = File.ReadAllLines(path);
-                return Read<TDict, TKey, TValue>(lines, output, keyName, useComments);
+                var text = File.ReadAllText(path);
+                return Read<TDict, TKey, TValue>(text, output, keyName, useComments);
             }
 
-            public static string[] TextAssetToLines(string assetName, bool allowOverride = true)
+            public static string? GetTextFromFileOrAsset(string assetName)
             {
-                string text;
-                if (allowOverride)
-                {
-                    text = GameDataM.GetTextFromFileOrAsset(assetName);
-                }
-                else
+                string text = GetTextFromFile(assetName);
+                if (text == null)
                 {
                     var textA = Util.ResourcesLoad<TextAsset>(assetName, false);
-                    if (textA == null)
-                    {
-                        Melon<TweaksAndFixes>.Logger.Error($"Could not find asset `{assetName}`");
-                        return null;
-                    }
-                    text = textA.text;
+                    if (textA != null)
+                        text = textA.text;
                 }
-                
-                return text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                if (text == null)
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Could not find or load asset `{assetName}`");
+                    return null;
+                }
+
+                return text;
+            }
+
+            public static string? GetTextFromFile(string assetName)
+            {
+                string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                if (!Directory.Exists(basePath))
+                    return null;
+
+                string filePath = Path.Combine(basePath, assetName + ".csv");
+                if (!File.Exists(filePath))
+                    return null;
+
+                return File.ReadAllText(filePath);
             }
 
             private static readonly string _TempTextAssetName = "tafTempTA";
@@ -405,9 +444,21 @@ namespace TweaksAndFixes
                 }
             }
 
-            private static List<FieldInfo> GetCopyFields(Type type, string firstLine)
+            private static List<FieldInfo> GetCopyFields(Type type, string text)
             {
-                List<string> header = ParseLine(firstLine);
+                var allLines = ParseLines(text);
+                List<string> header = null;
+                for (int i = 0; i < allLines.Count; ++i)
+                {
+                    if (allLines[i].Count > 0 && allLines[i][0].StartsWith('@'))
+                    {
+                        header = allLines[i];
+                        break;
+                    }
+                }
+                if (header == null)
+                    header = new List<string>();
+
                 HashSet<string> okNames = new HashSet<string>();
                 foreach (var s in header)
                 {
@@ -458,7 +509,7 @@ namespace TweaksAndFixes
                     if (existing.TryGetValue(kvp.Key, out var oldData))
                     {
                         if (fieldsToCopy == null)
-                            fieldsToCopy = GetCopyFields(typeof(T), text.Substring(0, text.IndexOf('\n')));
+                            fieldsToCopy = GetCopyFields(typeof(T), text);
                         foreach (var fi in fieldsToCopy)
                             fi.SetValue(oldData, fi.GetValue(kvp.Value));
 
@@ -924,21 +975,32 @@ namespace TweaksAndFixes
                 _isPostProcess = typeof(IPostProcess).IsAssignableFrom(t);
             }
 
-            public bool ReadType(object host, List<string> line, List<string> header, List<string> defaults)
+            public bool ReadType(object host, List<string> line, List<string> header, List<string> defaults, bool useComments)
             {
                 bool allSucceeded = true;
                 int count = line.Count;
-                if (count != header.Count)
+                int hCountTrue = header.Count;
+                if (useComments)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}");
+                    for (int i = hCountTrue; i-- > 0;)
+                    {
+                        if (header[i].StartsWith('#'))
+                            --hCountTrue;
+                        else
+                            break;
+                    }
+                }
+                if (count < hCountTrue)
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}\n{string.Join(",", header)}\n{string.Join(",", line)}");
                     return false;
                 }
-                if (defaults != null && count != defaults.Count)
+                if (defaults != null && defaults.Count < hCountTrue)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}");
+                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}\n{string.Join(",", header)}\n{string.Join(",", defaults)}");
                     return false;
                 }
-                for (int i = 0; i < count; ++i)
+                for (int i = 0; i < hCountTrue; ++i)
                 {
                     if (!_nameToField.TryGetValue(header[i], out FieldData fieldItem))
                         continue;
@@ -1398,13 +1460,13 @@ namespace TweaksAndFixes
                         continue;
                     }
 
-                    Il2CppSystem.Object dict = update ? (Il2CppSystem.Object)(data.GetValue(host)) : null;
+                    Il2CppSystem.Object dict = null;
                     if (data.Type == typeof(Il2CppSystem.Collections.Generic.Dictionary<int, int>))
-                        dict = HumanListToIndexedDictParsed<int>(s, (Il2CppSystem.Collections.Generic.Dictionary<int, int>)dict);
+                        dict = HumanListToIndexedDictParsed<int>(s, update ? (Il2CppSystem.Collections.Generic.Dictionary<int, int>)data.GetValue(host) : null);
                     else if (data.Type == typeof(Il2CppSystem.Collections.Generic.Dictionary<int, float>))
-                        dict = HumanListToIndexedDictParsed<float>(s, (Il2CppSystem.Collections.Generic.Dictionary<int, float>)dict);
+                        dict = HumanListToIndexedDictParsed<float>(s, update ? (Il2CppSystem.Collections.Generic.Dictionary<int, float>)data.GetValue(host) : null);
                     else if (data.Type == typeof(Il2CppSystem.Collections.Generic.Dictionary<int, string>))
-                        dict = HumanListToIndexedDict<string>(s, (Il2CppSystem.Collections.Generic.Dictionary<int, string>)dict);
+                        dict = HumanListToIndexedDict<string>(s, update ? (Il2CppSystem.Collections.Generic.Dictionary<int, string>)data.GetValue(host) : null);
                     else
                     {
                         allSucceeded = false;

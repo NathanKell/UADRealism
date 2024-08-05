@@ -58,12 +58,14 @@ namespace TweaksAndFixes
 
         private static void ProcessLoadInfo(GameData _this, GameData.LoadInfo l)
         {
-            string? text = GetTextFromFile(l.name);
+            string? text = Serializer.CSV.GetTextFromFile(l.name);
             if (text == null)
             {
                 l.process.Invoke(l);
                 return;
             }
+
+            Melon<TweaksAndFixes>.Logger.Msg($"Overriding built-in asset {l.name} with {l.name}.csv");
 
             switch (l.name)
             {
@@ -214,37 +216,6 @@ namespace TweaksAndFixes
         {
             dict = Serializer.CSV.ProcessCSV<T>(text, fillCustom);
             return dict;
-        }
-
-        private static string? GetTextFromFile(string assetName)
-        {
-            string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            if (!Directory.Exists(basePath))
-                return null;
-
-            string filePath = Path.Combine(basePath, assetName + ".csv");
-            if (!File.Exists(filePath))
-                return null;
-
-            return File.ReadAllText(filePath);
-        }
-
-        public static string? GetTextFromFileOrAsset(string assetName)
-        {
-            string text = GetTextFromFile(assetName);
-            if (text == null)
-            {
-                var textA = Util.ResourcesLoad<TextAsset>(assetName, false);
-                if (textA != null)
-                    text = textA.text;
-            }
-            if (text == null)
-            {
-                Melon<TweaksAndFixes>.Logger.Error($"Could not find or load asset `{assetName}`");
-                return null;
-            }
-
-            return text;
         }
     }
 }

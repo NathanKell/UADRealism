@@ -177,7 +177,7 @@ namespace TweaksAndFixes
 
         private static bool Load<T, U>(string assetName, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
         {
-            var input = Serializer.CSV.TextAssetToLines(assetName);
+            var input = Serializer.CSV.GetTextFromFileOrAsset(assetName);
             if (input == null)
                 return false;
 
