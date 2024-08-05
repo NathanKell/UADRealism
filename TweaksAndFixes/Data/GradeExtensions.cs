@@ -37,6 +37,17 @@ namespace TweaksAndFixes
                 if (!G.GameData.guns.TryGetValue(name, out var gd))
                     return;
 
+                // To make life easier for modders, let them use the column names
+                // in the csv rather than the names of the fields.
+                param = param.Replace("firerate(", "firerates(");
+                param = param.Replace("barrelW(", "barrelWeights(");
+                param = param.Replace("firerate(", "firerates(");
+                param = param.Replace("shellW(", "shellWeights(");
+                param = param.Replace("shellV(", "shellVelocities(");
+                param = param.Replace("range(", "ranges(");
+                param = param.Replace("accuracy(", "accuracies(");
+                param = param.Replace("penetration(", "penetrations(");
+
                 Serializer.Human.FillIndexedDicts(gd, param, true);
 
                 int max = GetMaxGrade(gd);
@@ -104,6 +115,14 @@ namespace TweaksAndFixes
 
                 if (!G.GameData.partModels.TryGetValue(name, out var pm))
                     return;
+
+                // To make life easier for modders, let them use the column names
+                // in the csv rather than the names of the fields.
+                param = param.Replace("model(", "models(");
+                param = param.Replace("scale(", "scales(");
+                param = param.Replace("max_scale(", "maxScales(");
+                param = param.Replace("weight_modifier(", "weightModifiers(");
+                param = param.Replace("caliber_length_modifier(", "caliberLengthModifiers(");
 
                 Serializer.Human.FillIndexedDicts(pm, param, true);
             }
