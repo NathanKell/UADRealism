@@ -21,10 +21,12 @@ namespace TweaksAndFixes
     public static class ShipM
     {
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
+            => FindMatchingTurretArmor(ship, data.caliber, Ship.IsCasemateGun(data));
+
+        public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, float caliber, bool isCasemate)
         {
-            bool isCasemate = Ship.IsCasemateGun(data);
             foreach (var ta in ship.shipTurretArmor)
-                if (ta.turretPartData.caliber == data.caliber && ta.isCasemateGun == isCasemate)
+                if (ta.turretPartData.caliber == caliber && ta.isCasemateGun == isCasemate)
                     return ta;
 
             return null;
@@ -39,10 +41,12 @@ namespace TweaksAndFixes
         }
 
         public static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, PartData data)
+            => FindMatchingTurretCaliber(ship, data.caliber, Ship.IsCasemateGun(data));
+
+        public static Ship.TurretCaliber FindMatchingTurretCaliber(Ship ship, float caliber, bool isCasemate)
         {
-            bool isCasemate = Ship.IsCasemateGun(data);
             foreach (var tc in ship.shipGunCaliber)
-                if (tc.turretPartData.caliber == data.caliber && isCasemate == tc.isCasemateGun)
+                if (tc.turretPartData.caliber == caliber && isCasemate == tc.isCasemateGun)
                     return tc;
 
             return null;

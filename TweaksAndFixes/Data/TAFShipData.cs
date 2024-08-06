@@ -38,14 +38,14 @@ namespace TweaksAndFixes
         public class GunGradeData
         {
             public int grade = -1;
-            public float calInch = 0;
+            public float caliber = 0;
             public bool isCasemateGun;
 
             public GunGradeData() { }
 
             public GunGradeData(Ship.TurretCaliber tc, Ship ship)
             {
-                calInch = tc.turretPartData.GetCaliberInch();
+                caliber = tc.turretPartData.caliber;
                 isCasemateGun = tc.isCasemateGun;
                 grade = ship.TechGunGrade(tc.turretPartData);
             }
@@ -54,7 +54,7 @@ namespace TweaksAndFixes
             {
                 if (G.GameData.parts.TryGetValue(tcs.turretPartDataName, out var data))
                 {
-                    calInch = data.GetCaliberInch();
+                    caliber = data.caliber;
                     grade = ship.TechGunGrade(data);
                 }
 
@@ -75,7 +75,7 @@ namespace TweaksAndFixes
                         grade = g;
                 }
                 if (G.GameData.parts.TryGetValue(tcs.turretPartDataName, out var turretPartData))
-                    calInch = turretPartData.GetCaliberInch();
+                    caliber = turretPartData.caliber;
             }
 
             public static GunGradeData ProcessTCS(Ship.TurretCaliber.Store tcs)
@@ -96,9 +96,9 @@ namespace TweaksAndFixes
                         ggd.grade = g;
                 }
                 if (G.GameData.parts.TryGetValue(tcs.turretPartDataName, out var turretPartData))
-                    ggd.calInch = turretPartData.GetCaliberInch();
+                    ggd.caliber = turretPartData.caliber;
 
-                Melon<TweaksAndFixes>.Logger.Msg($"Loaded TC grade for caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, loaded grade {ggd.grade}");
+                Melon<TweaksAndFixes>.Logger.Msg($"Loaded TC grade for caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, loaded grade {ggd.grade}");
                 return ggd;
             }
         }
@@ -106,7 +106,6 @@ namespace TweaksAndFixes
         public TAFShipData(IntPtr ptr) : base(ptr) { }
 
         private static List<Part.Store> _TempPartStore = new List<Part.Store>();
-        private static HashSet<PartData> _TempDatas = new HashSet<PartData>();
         private List<GunGradeData> _gradeData = new List<GunGradeData>();
         private int _torpedoGrade = -1;
         private bool _allowOverrideGrade = true;
@@ -157,18 +156,18 @@ namespace TweaksAndFixes
 
         [HideFromIl2Cpp]
         private GunGradeData FindGGD(Ship.TurretCaliber tc)
-            => FindGGD(tc.turretPartData.GetCaliberInch(), tc.isCasemateGun);
+            => FindGGD(tc.turretPartData.caliber, tc.isCasemateGun);
 
         [HideFromIl2Cpp]
-        private GunGradeData FindGGD(float calInch, bool isCasemateGun)
+        private GunGradeData FindGGD(float caliber, bool isCasemateGun)
         {
             foreach (var ggd in _gradeData)
             {
-                if (ggd.calInch < 1)
+                if (ggd.caliber < 1)
                     continue;
                 if (ggd.isCasemateGun != isCasemateGun)
                     continue;
-                if (ggd.calInch != calInch)
+                if (ggd.caliber != caliber)
                     continue;
 
                 return ggd;
@@ -178,17 +177,17 @@ namespace TweaksAndFixes
         }
 
         public int GunGrade(PartData data, int defaultGrade)
-            => GunGrade(data.GetCaliberInch(), Ship.IsCasemateGun(data), defaultGrade);
+            => GunGrade(data.caliber, Ship.IsCasemateGun(data), defaultGrade);
 
         public int GunGrade(Ship.TurretCaliber tc, int defaultGrade)
-            => GunGrade(tc.turretPartData.GetCaliberInch(), tc.isCasemateGun, defaultGrade);
+            => GunGrade(tc.turretPartData.caliber, tc.isCasemateGun, defaultGrade);
 
-        public int GunGrade(float calInch, bool casemate, int defaultGrade)
+        public int GunGrade(float caliber, bool casemate, int defaultGrade)
         {
             if (!_allowOverrideGrade)
                 return defaultGrade;
 
-            var ggd = FindGGD(calInch, casemate);
+            var ggd = FindGGD(caliber, casemate);
             if (ggd == null)
                 return defaultGrade;
 
@@ -246,7 +245,7 @@ namespace TweaksAndFixes
             if (data.isGun)
             {
                 var trueGrade = GetTrueGunGrade(data);
-                var ggd = FindGGD(data.GetCaliberInch(), Ship.IsCasemateGun(data));
+                var ggd = FindGGD(data.caliber, Ship.IsCasemateGun(data));
                 if (ggd != null && ggd.grade != -1 && ggd.grade != trueGrade)
                     return true;
             }
@@ -277,7 +276,7 @@ namespace TweaksAndFixes
                 for(int j = _ship.shipGunCaliber.Count; j-- > 0;)
                 {
                     var tc = _ship.shipGunCaliber[j];
-                    if (tc.isCasemateGun != ggd.isCasemateGun || tc.turretPartData.GetCaliberInch() != ggd.calInch)
+                    if (tc.isCasemateGun != ggd.isCasemateGun || tc.turretPartData.caliber != ggd.caliber)
                         continue;
 
                     var trueGrade = GetTrueGunGrade(tc.turretPartData);
@@ -290,11 +289,11 @@ namespace TweaksAndFixes
         }
 
         public void ResetGunGrade(Ship.TurretCaliber tc)
-            => ResetGunGrade(tc.turretPartData.GetCaliberInch(), tc.isCasemateGun);
+            => ResetGunGrade(tc.turretPartData.caliber, tc.isCasemateGun);
 
-        public void ResetGunGrade(float calInch, bool casemate)
+        public void ResetGunGrade(float caliber, bool casemate)
         {
-            var ggd = FindGGD(calInch, casemate);
+            var ggd = FindGGD(caliber, casemate);
             if (ggd == null)
                 return;
 
@@ -304,11 +303,11 @@ namespace TweaksAndFixes
         [HideFromIl2Cpp]
         private void ResetGunGrade(GunGradeData ggd)
         {
-            Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
+            Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
             ggd.grade = -1; // will be updated next call to TechGunGrade.
 
-            Ship.TurretCaliber tc = null;
-            Ship.TurretArmor ta = null;
+            Ship.TurretCaliber tc = ShipM.FindMatchingTurretCaliber(_ship, ggd.caliber, ggd.isCasemateGun);
+            Ship.TurretArmor ta = ShipM.FindMatchingTurretArmor(_ship, ggd.caliber, ggd.isCasemateGun);
 
             // We need to now replace all parts using this TC. Otherwise
             // they'll all be using the old model. We could do something
@@ -319,7 +318,7 @@ namespace TweaksAndFixes
             for(int i = _ship.parts.Count; i-- > 0;)
             {
                 var p = _ship.parts[i];
-                if (!p.data.isGun || p.data.GetCaliberInch() != ggd.calInch || Ship.IsCasemateGun(p.data) != ggd.isCasemateGun)
+                if (!p.data.isGun || p.data.caliber != ggd.caliber || Ship.IsCasemateGun(p.data) != ggd.isCasemateGun)
                     continue;
 
                 if (tc == null)
@@ -335,7 +334,6 @@ namespace TweaksAndFixes
                 var p = Part.CreateFromStore(_TempPartStore[i], _ship, _ship.partsCont);
                 if (p != null)
                 {
-                    _TempDatas.Add(p.data);
                     p.SetActiveX(true);
                     _ship.AddPart(p);
                     p.LoadModel(_ship, true);
@@ -343,17 +341,14 @@ namespace TweaksAndFixes
             }
             if (_TempPartStore.Count > 0)
             {
-                // Expected count: 1. But just in case.
-                foreach (var p in _TempDatas)
-                {
-                    var tcnew = ShipM.FindMatchingTurretCaliber(_ship, p);
-                    if (tcnew != null)
-                        tcnew.CloneFrom(tc);
-                    var tanew = ShipM.FindMatchingTurretArmor(_ship, p);
-                    if (tanew != null)
-                        tanew.CloneFrom(ta);
-                }
-                _TempDatas.Clear();
+                _ship.CheckCaliberOnShip(_ship);
+                var tcnew = ShipM.FindMatchingTurretCaliber(_ship, ggd.caliber, ggd.isCasemateGun);
+                if (tcnew != null && tc != null)
+                    tcnew.CloneFrom(tc);
+                var tanew = ShipM.FindMatchingTurretArmor(_ship, ggd.caliber, ggd.isCasemateGun);
+                if (tanew != null && ta != null)
+                    tanew.CloneFrom(ta);
+
                 _TempPartStore.Clear();
                 _ship.Init();
                 _ship.CalcInstability(true);
@@ -416,13 +411,13 @@ namespace TweaksAndFixes
                 }
 
                 var data = G.GameData.parts[pName];
-                var ggd = FindGGD(data.GetCaliberInch(), tcs.isCasemateGun);
+                var ggd = FindGGD(data.caliber, tcs.isCasemateGun);
                 if (ggd == null)
                     ggd = new GunGradeData(tcs, _ship);
                 else if (ggd.grade < 0)
                     ggd.grade = _ship.TechGunGrade(data);
 
-                Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.calInch:F0}, casemate {ggd.isCasemateGun}, saved grade {ggd.grade}");
+                Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, saved grade {ggd.grade}");
                 tcs.turretPartDataName = pName + ";" + ggd.grade.ToString();
             }
         }

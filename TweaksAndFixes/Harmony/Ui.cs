@@ -181,12 +181,12 @@ namespace TweaksAndFixes
                     continue;
                 }
                 button.onClick.RemoveAllListeners();
-                float calInch = tc.turretPartData.GetCaliberInch();
+                float caliber = tc.turretPartData.caliber;
                 bool isCasemate = tc.isCasemateGun;
                 
                 button.onClick.AddListener(new System.Action(() =>
                 {
-                    ship.TAFData().ResetGunGrade(calInch, isCasemate);
+                    ship.TAFData().ResetGunGrade(caliber, isCasemate);
                 }));
             }
         }
