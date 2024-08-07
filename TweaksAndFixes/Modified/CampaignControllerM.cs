@@ -31,7 +31,7 @@ namespace TweaksAndFixes
 
             foreach (var s in player.GetFleetAll())
             {
-                if (s.isScrapped || s.isSunk)
+                if (s.isScrapped || s.isSunk || s.isBuilding || s.isRefit)
                     continue;
 
                 float weight = s.Weight();
