@@ -17,43 +17,32 @@ namespace TweaksAndFixes
 {
     public static class GameDataM
     {
-        public static void Update(GameData _this)
+        public static void LoadData(GameData _this)
         {
-            switch (_this.state)
+            if (!_this.forceUseLocal)
             {
-                case GameData.State.LoadVersion:
-                    //MonoBehaviourExt.Fail();
-                    return;
-                case GameData.State.LoadData:
-                    if (!_this.forceUseLocal)
-                    {
-                        //MonoBehaviourExt.Fail();
-                        return;
-                    }
-
-                    string loadingText = null;
-                    // It is unclear why stock does this, since it doesn't yield or fail, so why check for remaining loaders.
-                    // But sure, let's replciate it.
-                    var newList = new Il2CppSystem.Collections.Generic.List<GameData.LoadInfo>();
-                    foreach (var l in _this.loaders)
-                        newList.Add(l);
-                    foreach (var l in newList)
-                    {
-                        _this.loaders.Remove(l);
-                        ProcessLoadInfo(_this, l);
-                    }
-                    if (_this.loaders.Count > 0)
-                    {
-                        string loc = LocalizeManager.Localize("$Ui_Loading");
-                        string name = Util.CamelCaseSplit(_this.loaders[0].name, ";", true);
-                        loadingText = loc + ";" + name;
-                    }
-                    G.ui._loadingText_k__BackingField = loadingText;
-                    if (_this.loaders.Count == 0)
-                        _this.DataLoaded();
-
-                    return;
+                //MonoBehaviourExt.Fail();
+                return;
             }
+
+            string loadingText = null;
+            // It is unclear why stock does this, since it doesn't yield or fail, so why check for remaining loaders.
+            // But sure, let's replciate it.
+            var newList = new Il2CppSystem.Collections.Generic.List<GameData.LoadInfo>();
+            foreach (var l in _this.loaders)
+                newList.Add(l);
+            foreach (var l in newList)
+            {
+                _this.loaders.Remove(l);
+                ProcessLoadInfo(_this, l);
+            }
+            if (_this.loaders.Count > 0)
+            {
+                string loc = LocalizeManager.Localize("$Ui_Loading");
+                string name = Util.CamelCaseSplit(_this.loaders[0].name, ";", true);
+                loadingText = loc + ";" + name;
+            }
+            G.ui._loadingText_k__BackingField = loadingText;
         }
 
         private static void ProcessLoadInfo(GameData _this, GameData.LoadInfo l)

@@ -16,8 +16,16 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameData.Update))]
         internal static bool Prefix_Update(GameData __instance)
         {
-            GameDataM.Update(__instance);
-            return false;
+            if (__instance.state == GameData.State.LoadData)
+            {
+                GameDataM.LoadData(__instance);
+
+                // Let the game itself move on afterwards, if we succeeded
+                if (__instance.loaders.Count > 0)
+                    return false;
+            }
+
+            return true;
         }        
 
         [HarmonyPrefix]
