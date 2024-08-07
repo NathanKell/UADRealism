@@ -59,6 +59,18 @@ Assuming you put a 256x128 png called `britain.png` in the Flags folder under Mo
 ### Map overriding
 While the ports, provinces, etc. TextAssets aren't actually loaded by the game (oddly canals is), TAF allows overriding some port and province data. Add the param `taf_override_map` to params and set it to 2, and TAF will dump the game's built in data for ports and provinces. Make a backup of these dumps, then edit them as desired. Paste the entirety of ports.csv into the ports TextAsset (and same for provinces). Then set `taf_override_map` to 1 in params. This will override port and province data with the data in those assets. This can be combined with editing players, AI admirals, relations matrix, etc, and adding flags (see above) to make other nations playable.
 
+### Replacement scrapping behavior
+The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships in order of mothballed ships first (to that target), then active ships (to that target), and finally all ships to the all-ships target tonnage. The target tonnage is determined with a minimum base tonnage and then a coefficient times (shipyard capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params (you will likely also want to set `min_fleet_tonnage_for_scrap` to 1 or something so that doesn't block scrapping), then tune using the following values:
+```
+taf_scrap_useOnlyShipAge - if set to 1, ships are scrapped purely in order of age (oldest first). If not present or set to 0, then ships will be scrapped proportionally, so if the fleet has a high tonnage of cruisers, more cruisers will be scrapped than other ships.
+taf_scrap_hysteresisMult - In order to not scrap every turn, the AI will only scrap when its fleet tonnage is greater than this multiplier times its scrap target. Once scrapping, it will scrap down to the scrap target, however.
+taf_scrap_capacityExponent - an exponent to shipyard capacity. This is multiplied by the appropriate Coeff to get the scrap target tonnage.
+taf_scrap_scrapTargetBaseMothball and taf_scrap_capacityCoeffMothball - target tonnage is the base plus the coeff times (shipyard capacity to the capacity Exponent power).
+taf_scrap_scrapTargetBaseMain and taf_scrap_capacityCoeffMain - as above, but for active ships.
+taf_scrap_scrapTargetBaseTotal and taf_scrap_capacityCoeffTotal - as above but for total fleet tonnage
+taf_scrap_multToScrapRequiredVsShipTng - when determining whether to scrap a ship, if a ship's tonnage is greater than this value times the remaining tonnage to scrap to reach the target (either the global target, or the per-shiptype target), then don't scrap this ship.
+```
+
 ### Tunable mine behavior
 Mine attacks on task forces have been reimplemented so they can be tuned. The following params are supported:
 ```
@@ -79,7 +91,6 @@ taf_mines_ship_damage_percent_max,200,The maximum percent damage to apply to the
 taf_mines_crew_damage_percent_min,5,The minimum percent damage to the crew of the ship,,,,,,,
 taf_mines_crew_damage_percent_max,35,The maximum percent damage to the crew of the ship. This is before being multiplied by the dmg_factor_crew and by antimine and by the minefield damage mult.,,,,,,,
 ```
-
 
 ### Serialization support
 TAF includes a serialization library for reading and writing CSV files to managed data, as well as the ability to read to BaseData formats on demand from arbitrary files/strings. In addition, a number of the HumanXtoY methods have been reimplemented in managed code, and support exists to read a set of params and update indexed dictionaries (as used by guns, torpedos, and partModels).
