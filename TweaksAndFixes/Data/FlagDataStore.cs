@@ -280,6 +280,16 @@ namespace TweaksAndFixes
             }
         }
 
+        public static void Recreate()
+        {
+            if (_Instance != null)
+            {
+                GameObject.DestroyImmediate(_Instance.gameObject);
+                var go = new GameObject("FlagDataHolder");
+                go.AddComponent<FlagDatabase>();
+            }
+        }
+
         private FlagDataStore _flagStore;
         private Il2CppSystem.Collections.Generic.Dictionary<string, Sprite> _sprites = new Il2CppSystem.Collections.Generic.Dictionary<string, Sprite>();
 

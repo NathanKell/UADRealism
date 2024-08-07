@@ -35,7 +35,7 @@ namespace TweaksAndFixes
                 if (list[i] == sType)
                 {
                     var res = float.Parse(list[i + 1]);
-                    Melon<TweaksAndFixes>.Logger.Msg($"Type {list[i]}: returning {res}");
+                    //Melon<TweaksAndFixes>.Logger.Msg($"Type {list[i]}: returning {res}");
                     return res;
                 }
             }
