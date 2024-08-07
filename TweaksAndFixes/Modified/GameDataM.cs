@@ -60,7 +60,6 @@ namespace TweaksAndFixes
             {
                 case "loadingScreens":
                     _this.loadingScreens = LoadCSV(text, _this.loadingScreens);
-                    _this.loadingScreens = Serializer.CSV.ProcessCSV<LoadingScreenData>(text, false);
                     _this.loadingScreensByType = new Il2CppSystem.Collections.Generic.Dictionary<string, Il2CppSystem.Collections.Generic.List<LoadingScreenData>>();
                     foreach (var ls in _this.loadingScreens.Values)
                         _this.loadingScreensByType.ValueOrNew(ls.text).Add(ls);
@@ -71,7 +70,7 @@ namespace TweaksAndFixes
                     _this.paramsRaw = LoadCSV(text, _this.paramsRaw);
                     _this.parms = new Il2CppSystem.Collections.Generic.Dictionary<string, float>();
                     foreach (var p in _this.paramsRaw)
-                        _this.parms.Add(p.key, p.value.value);
+                        _this.parms[p.key] = p.value.value;
                     break;
 
                 case "accuracies":
@@ -187,7 +186,7 @@ namespace TweaksAndFixes
                     _this.aiAdmiralsRaw = LoadCSV(text, _this.aiAdmiralsRaw);
                     break;
                 case "relationMatrix":
-                    _this.relationMatrix = LoadCSV(text, _this.relationMatrix);
+                    _this.relationMatrix = LoadCSV(text, _this.relationMatrix, true);
                     break;
                 case "canals":
                     _this.canals = LoadCSV(text, _this.canals);
