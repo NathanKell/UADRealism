@@ -11,7 +11,130 @@ namespace TweaksAndFixes
 {
     public class CampaignControllerM
     {
-        public List<CampaignController.TaskForce> GetTaskForceInsideRadius(CampaignController _this, Vector3 coord, float radiusKm, CampaignController.TaskForce except, Func<CampaignController.TaskForce, bool> predicate)
+        private static readonly List<Ship> _TempShipList = new List<Ship>();
+        private static readonly List<Ship> _TempShipListMB = new List<Ship>();
+        private static readonly Dictionary<ShipType, float> _TempShipTypeToWeight = new Dictionary<ShipType, float>();
+        private static readonly Dictionary<ShipType, float> _TempShipTypeToWeightMB = new Dictionary<ShipType, float>();
+        private static readonly Dictionary<ShipType, float> _TempShipTypeToRemaining = new Dictionary<ShipType, float>();
+        private static void ClearScrapData()
+        {
+            _TempShipList.Clear();
+            _TempShipListMB.Clear();
+            _TempShipTypeToWeight.Clear();
+            _TempShipTypeToWeightMB.Clear();
+            _TempShipTypeToRemaining.Clear();
+        }
+        public static void HandleScrapping(CampaignController _this, Player player)
+        {
+            float totalTonnage = 0f;
+            float totalTonnageMB = 0f;
+
+            foreach (var s in player.GetFleetAll())
+            {
+                if (s.isScrapped || s.isSunk)
+                    continue;
+
+                float weight = s.Weight();
+                if (s.isMothballed || s.isLowCrew)
+                {
+                    _TempShipListMB.Add(s);
+                    _TempShipTypeToWeightMB.ChangeValueFor(s.shipType, weight);
+                    totalTonnageMB += weight;
+                }
+                else
+                {
+                    _TempShipList.Add(s);
+                    _TempShipTypeToWeight.ChangeValueFor(s.shipType, weight);
+                    totalTonnage += weight;
+                }
+            }
+            
+            float maxTonnageParam = MonoBehaviourExt.Param("min_fleet_tonnage_for_scrap", 1f);
+            if (totalTonnage + totalTonnageMB < maxTonnageParam)
+            {
+                ClearScrapData();
+                return;
+            }
+
+            // We will iterate backwards so we sort so newest ships are first.
+            _TempShipList.Sort((a, b) => b.dateFinished.CompareTo(a.dateFinished));
+            _TempShipListMB.Sort((a, b) => b.dateFinished.CompareTo(a.dateFinished));
+
+            bool strictAge = MonoBehaviourExt.Param("taf_scrap_useOnlyShipAge", 0) > 0;
+
+            float capTerm = Mathf.Pow(player.ShipbuildingCapacity(), MonoBehaviourExt.Param("taf_scrap_capacityExponent", 1f));
+            float hystMult = MonoBehaviourExt.Param("taf_scrap_hysteresisMult", 1.05f);
+
+            // Scrap mothballed first
+            ScrapLoop(_this, _TempShipTypeToWeightMB, _TempShipListMB,
+                MonoBehaviourExt.Param("taf_scrap_scrapTargetBaseMothball", float.MaxValue) + MonoBehaviourExt.Param("taf_scrap_capacityCoeffMothball", 0f) * capTerm,
+                totalTonnageMB, strictAge, hystMult);
+
+            // Then scrap main fleet if needed
+            ScrapLoop(_this, _TempShipTypeToWeight, _TempShipList,
+                MonoBehaviourExt.Param("taf_scrap_scrapTargetBaseMain", float.MaxValue) + MonoBehaviourExt.Param("taf_scrap_capacityCoeffMain", 0f) * capTerm,
+                totalTonnage, strictAge, hystMult);
+
+            // Finally, scrap everything down to target, taking mothballed first
+            for (int i = 0; i < _TempShipListMB.Count; ++i)
+                _TempShipList.Add(_TempShipListMB[i]);
+            _TempShipTypeToWeight.Clear();
+            totalTonnage = 0f;
+            foreach (var s in _TempShipList)
+            {
+                float weight = s.Weight();
+                totalTonnage += weight;
+                _TempShipTypeToWeight.ChangeValueFor(s.shipType, weight);
+            }
+            ScrapLoop(_this, _TempShipTypeToWeight, _TempShipList,
+                MonoBehaviourExt.Param("taf_scrap_scrapTargetBaseTotal", float.MaxValue) + MonoBehaviourExt.Param("taf_scrap_capacityCoeffTotal", 0f) * capTerm,
+                totalTonnage, strictAge, hystMult);
+
+            ClearScrapData();
+        }
+
+        private static void ScrapLoop(CampaignController _this, Dictionary<ShipType, float> tngDict, List<Ship> ships, float targetTonnage, float totalTonnage, bool strictAge, float hystMult)
+        {
+            if (totalTonnage <= targetTonnage * hystMult)
+                return;
+
+            bool didScrap = false;
+            float tonnageDelta = totalTonnage - targetTonnage;
+            float tngLeft = tonnageDelta;
+            float tMult = 1f / totalTonnage * tonnageDelta;
+            float maxScrapTngMult = MonoBehaviourExt.Param("taf_scrap_multToScrapRequiredVsShipTng", 2f);
+
+            foreach (var kvp in tngDict)
+                _TempShipTypeToRemaining[kvp.Key] = kvp.Value * tMult;
+            do
+            {
+                for (int i = ships.Count; i-- > 0 && tngLeft > 0;)
+                {
+                    var s = ships[i];
+                    float testTng = strictAge ? tngLeft : _TempShipTypeToRemaining.GetValueOrDefault(s.shipType);
+                    float sWeight = s.Weight();
+                    if (sWeight < testTng * maxScrapTngMult)
+                    {
+                        ships.RemoveAt(i);
+                        tngLeft -= sWeight;
+                        _TempShipTypeToRemaining.ChangeValueFor(s.shipType, -sWeight);
+                        _this.ScrapShip(s, true);
+                        didScrap = true;
+                    }
+                }
+                // If we failed to find anything with tight constraints, try
+                // with the looser constraint (ignore ship type)
+                if (!strictAge && !didScrap)
+                {
+                    strictAge = true;
+                    didScrap = true;
+                }
+            } while (didScrap && tngLeft > 0);
+
+            _TempShipTypeToRemaining.Clear();
+        }
+
+        public static List<CampaignController.TaskForce> GetTaskForceInsideRadius(CampaignController _this, Vector3 coord, float radiusKm, CampaignController.TaskForce except, Func<CampaignController.TaskForce, bool> predicate)
         {
             List<CampaignController.TaskForce> ret = null;
             foreach (var tf in _this.CampaignData.TaskForces)

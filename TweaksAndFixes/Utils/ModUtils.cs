@@ -501,7 +501,7 @@ namespace TweaksAndFixes
 
         public static int ChangeValueFor<TKey>(this Dictionary<TKey, int> dict, TKey key, int delta)
         {
-            int val = dict.GetValueOrDefault(key);
+            dict.TryGetValue(key, out int val);
             val += delta;
             dict[key] = val;
             return val;
@@ -513,6 +513,22 @@ namespace TweaksAndFixes
         public static int ChangeValueFor<TKey>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, int> dict, TKey key, int delta)
         {
             dict.TryGetValue(key, out int val);
+            val += delta;
+            dict[key] = val;
+            return val;
+        }
+
+        public static float ChangeValueFor<TKey>(this Dictionary<TKey, float> dict, TKey key, float delta)
+        {
+            dict.TryGetValue(key, out float val);
+            val += delta;
+            dict[key] = val;
+            return val;
+        }
+
+        public static float ChangeValueFor<TKey>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, float> dict, TKey key, float delta)
+        {
+            dict.TryGetValue(key, out float val);
             val += delta;
             dict[key] = val;
             return val;

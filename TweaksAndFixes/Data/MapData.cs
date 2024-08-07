@@ -147,7 +147,7 @@ namespace TweaksAndFixes
 
         public static void LoadMapData()
         {
-            if (MonoBehaviourExt.Param("taf_override_map", 0) == 2)
+            if (Config.DumpMap)
                 WriteData();
             else
                 LoadData();

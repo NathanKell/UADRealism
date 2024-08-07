@@ -95,7 +95,8 @@ namespace TweaksAndFixes
         {
             yield return new WaitForEndOfFrame();
             Database.FillDatabase();
-            Melon<TweaksAndFixes>.Logger.Msg("Loaded database");
+            Config.LoadConfig();
+            Melon<TweaksAndFixes>.Logger.Msg("Loaded database and config");
 
             //foreach (var hull in G.GameData.parts.Values)
             //    if (hull.isHull)

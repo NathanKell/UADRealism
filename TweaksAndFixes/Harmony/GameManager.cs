@@ -49,7 +49,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static void Prefix_MoveNext(GameManager._LoadCampaign_d__102 __instance)
         {
-            if (__instance.__1__state == 6 && MonoBehaviourExt.Param("taf_override_map", 0) > 0)
+            if (__instance.__1__state == 6 && Config.Patch_override_map)
                 MapData.LoadMapData();
             Patch_CampaignMap._SkipNextMapPatch = true;
         }

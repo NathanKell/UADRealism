@@ -23,7 +23,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static void Prefix_PreInit(CampaignMap __instance)
         {
-            if (!_SkipNextMapPatch && MonoBehaviourExt.Param("taf_override_map", 0) > 0)
+            if (!_SkipNextMapPatch && Config.Patch_override_map)
                 MapData.LoadMapData();
 
             _SkipNextMapPatch = false;
