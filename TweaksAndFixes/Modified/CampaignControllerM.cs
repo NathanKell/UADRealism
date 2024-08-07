@@ -57,8 +57,8 @@ namespace TweaksAndFixes
             }
 
             // We will iterate backwards so we sort so newest ships are first.
-            _TempShipList.Sort((a, b) => b.dateFinished.CompareTo(a.dateFinished));
-            _TempShipListMB.Sort((a, b) => b.dateFinished.CompareTo(a.dateFinished));
+            _TempShipList.Sort((a, b) => a.dateFinished.CompareTo(b.dateFinished));
+            _TempShipListMB.Sort((a, b) => a.dateFinished.CompareTo(b.dateFinished));
 
             bool strictAge = MonoBehaviourExt.Param("taf_scrap_useOnlyShipAge", 0) > 0;
 
