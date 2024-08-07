@@ -67,10 +67,33 @@ namespace TweaksAndFixes
                     break;
 
                 case "params":
-                    _this.paramsRaw = LoadCSV(text, _this.paramsRaw);
-                    _this.parms = new Il2CppSystem.Collections.Generic.Dictionary<string, float>();
-                    foreach (var p in _this.paramsRaw)
-                        _this.parms[p.key] = p.value.value;
+                    // Weird special handling for this one.
+                    // Was getting issues doing this entirely in managed code.
+                    l.process.Invoke(l);
+                    var newParams = Serializer.CSV.ProcessCSV<ParamData>(text, false);
+                    foreach (var np in newParams)
+                    {
+                        if (!_this.paramsRaw.TryGetValue(np.Key, out var pd))
+                        {
+                            //Debug.Log($"Found new param: {np.Key} has value {np.Value.value} and str `{np.Value.str}`");
+                            _this.paramsRaw[np.key] = np.Value;
+                        }
+                        else
+                        {
+                            pd.str = np.Value.str;
+                            pd.value = np.Value.value;
+                        }
+                        if (!_this.parms.ContainsKey(np.key))
+                        {
+                            //Debug.Log($"Adding new parm {np.Key} with value {np.Value.value}");
+                            _this.parms[np.Key] = np.Value.value;
+                        }
+                        else if (_this.parms[np.Key] != np.Value.value)
+                        {
+                            //Debug.Log($"Parm {np.Key}: old value {_this.parms[np.Key]}, new value {np.Value.value}");
+                            _this.parms[np.Key] = np.Value.value;
+                        }
+                    }
                     break;
 
                 case "accuracies":
