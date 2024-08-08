@@ -87,7 +87,8 @@ namespace TweaksAndFixes
                     return nextObj;
             }
 
-            Melon<TweaksAndFixes>.Logger.Error("Could not find Armaments components list!");
+            if (GameManager.IsConstructor)
+                Melon<TweaksAndFixes>.Logger.Error("Could not find Armaments components list!");
             return null;
         }
 

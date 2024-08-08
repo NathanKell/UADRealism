@@ -35,7 +35,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_ScrapShip(CampaignController __instance, Ship ship, bool addCashAndCrew)
         {
-            if (!Config.Patch_scrap_enable || _PassthroughScrap || !_IsInManageFleet)
+            if (!Config.ScrappingChange || _PassthroughScrap || !_IsInManageFleet)
                 return true;
 
             _PassthroughScrap = true;
@@ -71,7 +71,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix__AiManageFleet_b__3(CampaignController.__c__DisplayClass169_0 __instance, Ship s, ref bool __result)
         {
-            if (!Config.Patch_scrap_enable)
+            if (!Config.ScrappingChange)
                 return true;
 
             if (Patch_CampaignController._ManageFleetScrapShipsHit++ == 0)

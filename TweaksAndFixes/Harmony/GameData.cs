@@ -77,6 +77,7 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Postfix_PostProcessAll(GameData __instance)
         {
+            Debug.Log("Finished internal PostProcessAll");
             foreach (var rp in __instance.randParts.Values)
             {
                 FixRandPart(rp);

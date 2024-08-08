@@ -167,8 +167,8 @@ namespace TweaksAndFixes
         private static void LoadData()
         {
             bool success = true;
-            success &= Load<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
-            success &= Load<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
+            success &= Load<PortElementDTO, PortElement>("portsDump", CampaignMap.Instance.Ports.Ports);
+            success &= Load<ProvinceDTO, Province>("provincesDump", CampaignMap.Instance.Provinces.Provinces);
             if (success)
                 Melon<TweaksAndFixes>.Logger.Msg($"Loaded map data successfully`");
             else
@@ -196,7 +196,7 @@ namespace TweaksAndFixes
             return success;
         }
 
-        private static bool Write<T, U>(string typeName, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
+        private static bool Write<T, U>(string fileBase, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
         {
             string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             if (!Directory.Exists(basePath))
@@ -204,7 +204,7 @@ namespace TweaksAndFixes
                 Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + basePath);
                 return false;
             }
-            string filePath = Path.Combine(basePath, typeName + ".csv");
+            string filePath = Path.Combine(basePath, fileBase + ".csv");
 
             List<T> list = new List<T>();
             foreach (var old in oldList)

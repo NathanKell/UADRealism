@@ -23,7 +23,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static void Prefix_PreInit(CampaignMap __instance)
         {
-            if (!_SkipNextMapPatch && Config.Patch_override_map)
+            if (!_SkipNextMapPatch && (Config.OverrideMap || Config.DumpMap))
                 MapData.LoadMapData();
 
             _SkipNextMapPatch = false;
