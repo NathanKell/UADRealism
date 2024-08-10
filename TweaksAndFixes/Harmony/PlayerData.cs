@@ -18,29 +18,19 @@ namespace TweaksAndFixes
 
         internal static void PatchPlayerMaterials()
         {
-            var gameData = G.GameData;
-            if (!gameData.players.TryGetValue("britain", out var refData) || refData.type != "major")
+            foreach (var pd in G.GameData.players.Values)
             {
-                foreach (var pd in gameData.players.Values)
+                if (pd.type == "major" && pd.PlayerMaterial == null)
                 {
-                    if (pd.type == "major" && pd.PlayerMaterial != null)
-                    {
-                        refData = pd;
-                        break;
-                    }
-                }
-            }
-            if (refData != null)
-            {
-                foreach (var pd in gameData.players.Values)
-                {
-                    if (pd.type == "major" && pd.PlayerMaterial == null)
-                    {
-                        Melon<TweaksAndFixes>.Logger.Msg($"Applying major-player material to {pd.name}");
-                        pd.PlayerMaterial = new Material(refData.PlayerMaterial);
-                        var col = pd.highlightColor.ChangeA(0.25f);
-                        pd.PlayerMaterial.color = col;
-                    }
+                    var newMat = UnityEngine.Resources.Load<Material>(@"Campaign UI\Materials\PlayerMaterials\player-britain");
+                    if (newMat == null)
+                        continue;
+                    pd.PlayerMaterial = Material.Instantiate(newMat);
+                    if (pd.PlayerMaterial == null)
+                        continue;
+                    var col = pd.highlightColor.ChangeA(0.25f);
+                    pd.PlayerMaterial.color = col;
+                    Melon<TweaksAndFixes>.Logger.Msg($"Applying major-player material to {pd.name}, color = {col}");
                 }
             }
         }
