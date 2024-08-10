@@ -156,8 +156,8 @@ namespace TweaksAndFixes
         private static void WriteData()
         {
             bool success = true;
-            success &= Write<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
-            success &= Write<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
+            success &= Write<PortElementDTO, PortElement>("portsDump", CampaignMap.Instance.Ports.Ports);
+            success &= Write<ProvinceDTO, Province>("provincesDump", CampaignMap.Instance.Provinces.Provinces);
             if (success)
                 Melon<TweaksAndFixes>.Logger.Msg($"Wrote original map data successfully`");
             else
@@ -167,8 +167,8 @@ namespace TweaksAndFixes
         private static void LoadData()
         {
             bool success = true;
-            success &= Load<PortElementDTO, PortElement>("portsDump", CampaignMap.Instance.Ports.Ports);
-            success &= Load<ProvinceDTO, Province>("provincesDump", CampaignMap.Instance.Provinces.Provinces);
+            success &= Load<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
+            success &= Load<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
             if (success)
                 Melon<TweaksAndFixes>.Logger.Msg($"Loaded map data successfully`");
             else
