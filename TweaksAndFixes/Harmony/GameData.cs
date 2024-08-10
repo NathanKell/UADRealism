@@ -32,6 +32,7 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameData.PostProcessAll))]
         internal static void Prefix_PostProcessAll(GameData __instance)
         {
+            Patch_PlayerData.PatchPlayerMaterials();
             //Serializer.CSV.TestNative();
 
             GradeExtensions.LoadData();

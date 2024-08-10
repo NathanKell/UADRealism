@@ -323,6 +323,10 @@ namespace TweaksAndFixes
         {
             _flagStore = new FlagDataStore();
             _flagStore.Load();
+
+            // FIXME this may not be needed, but in case our
+            // materials are collected:
+            Patch_PlayerData.PatchPlayerMaterials();
         }
 
         public Sprite GetFlag(PlayerData data, bool naval = false, Player player = null, int newYear = 0)
