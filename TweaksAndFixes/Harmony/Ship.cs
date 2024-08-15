@@ -30,8 +30,8 @@ namespace TweaksAndFixes
         // * shipType can't be found in GameData
         // * tech not in GameData.
         // * part hull not in GameData
-        // But we will patch the regular case and the "can't find design" case
-        // (see Patch_LoadSaveFromStore below)
+        // * can't find design
+        // But we will patch the regular case
         internal static void Postfix_FromStore(Ship __instance)
         {
             if (__instance != null && _StoreForLoading != null)
@@ -138,8 +138,6 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(Ship))]
     internal class Patch_Ship_IsComponentAvailable
     {
-        private static string _VesselName = string.Empty;
-
         internal static MethodBase TargetMethod()
         {
             return AccessTools.Method(typeof(Ship), nameof(Ship.IsComponentAvailable), new Type[] { typeof(ComponentData), typeof(string).MakeByRefType() });
@@ -243,21 +241,6 @@ namespace TweaksAndFixes
             Patch_Ship._ShipForLoading = ship;
             Patch_Ship._StoreForLoading = sStore;
             ship.TAFData().FromStore(sStore);
-        }
-    }
-
-    // This is an early-out condition in Ship.FromStore
-    [HarmonyPatch(typeof(LoadSave))]
-    internal class Patch_LoadSaveFromStore
-    {
-        [HarmonyPostfix]
-        [HarmonyPatch(nameof(LoadSave.GetShip), new Type[] { typeof(Il2CppSystem.Guid) })]
-        internal static void Postfix(Ship __result)
-        {
-            if (Patch_Ship._IsLoading && __result == null)
-            {
-                Patch_Ship.Postfix_FromStore(null);
-            }
         }
     }
 }

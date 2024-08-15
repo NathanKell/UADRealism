@@ -20,17 +20,14 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(Ui.ConstructorUI))]
         internal static void Postfix_ConstructorUI(Ui __instance)
         {
-            Debug.Log("ConstructorUI start");
             ClearAllButtons(__instance);
             EnsureAllButtons(__instance);
-            Debug.Log("ConstructorUI end");
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(nameof(Ui.RefreshConstructorInfo))]
         internal static void Prefix_RefreshConstructorInfo(Ui __instance)
         {
-            Debug.Log("RefreshUI start");
             ClearAllButtons(__instance);
         }
 
@@ -39,7 +36,6 @@ namespace TweaksAndFixes
         internal static void Postfix_RefreshConstructorInfo(Ui __instance)
         {
             EnsureAllButtons(__instance);
-            Debug.Log("RefreshUI end");
         }
 
         private static void ClearAllButtons(Ui ui)

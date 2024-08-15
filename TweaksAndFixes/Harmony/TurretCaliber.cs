@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace TweaksAndFixes
 {
-    [HarmonyPatch(typeof(Ship.TurretCaliber))]
+    //[HarmonyPatch(typeof(Ship.TurretCaliber))]
     internal class Patch_TurretCaliber
     {
         // Might have to patch this eventually

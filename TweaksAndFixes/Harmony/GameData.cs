@@ -12,20 +12,11 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(GameData))]
     internal class Patch_GameData
     {
-        [HarmonyPrefix]
-        [HarmonyPatch(nameof(GameData.Update))]
-        internal static bool Prefix_Update(GameData __instance)
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(GameData.LoadVersionAndData))]
+        internal static void Postfix_LoadVersionAndData(GameData __instance)
         {
-            if (__instance.state == GameData.State.LoadData)
-            {
-                GameDataM.LoadData(__instance);
-
-                // Let the game itself move on afterwards, if we succeeded
-                if (__instance.loaders.Count > 0)
-                    return false;
-            }
-
-            return true;
+            GameDataM.LoadData(__instance);
         }        
 
         [HarmonyPrefix]
