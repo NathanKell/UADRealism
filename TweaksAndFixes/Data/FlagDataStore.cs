@@ -61,7 +61,7 @@ namespace TweaksAndFixes
                     {
                         Melon<TweaksAndFixes>.Logger.Msg("Reading flag from disk: " + file);
 
-                        string basePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Flags");
+                        string basePath = Path.Combine(Config._BasePath, "Flags");
                         if (!Directory.Exists(basePath))
                         {
                             Melon<TweaksAndFixes>.Logger.Error("Failed to find Flags directory: " + basePath);
@@ -158,18 +158,9 @@ namespace TweaksAndFixes
 
             public void Load()
             {
-                string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                if (!Directory.Exists(basePath))
-                {
-                    Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + basePath);
-                    return;
-                }
-                string filePath = Path.Combine(basePath, "flags.csv");
+                string filePath = Path.Combine(Config._BasePath, Config._FlagFile);
                 if (!File.Exists(filePath))
-                {
-                    Melon<TweaksAndFixes>.Logger.Error("Failed to find Flags file " + filePath);
                     return;
-                }
 
                 Melon<TweaksAndFixes>.Logger.Msg("Loading flags database");
                 Serializer.CSV.Read<Dictionary<string, NationalFlag>, string, NationalFlag>(_flagsByCountry, filePath, "name", true);

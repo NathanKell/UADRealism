@@ -99,6 +99,19 @@ namespace TweaksAndFixes
             Config.LoadConfig();
             Melon<TweaksAndFixes>.Logger.Msg("Loaded database and config");
 
+            if (!Directory.Exists(Config._BasePath))
+            {
+                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + Config._BasePath);
+            }
+            else
+            {
+                string filePath = Path.Combine(Config._BasePath, Config._FlagFile);
+                if (!File.Exists(filePath))
+                {
+                    Melon<TweaksAndFixes>.Logger.Warning("Failed to find Flags file " + filePath);
+                }
+            }
+
             //foreach (var hull in G.GameData.parts.Values)
             //    if (hull.isHull)
             //        hull.nameUi = Patch_Ship.GetHullModelKey(hull);

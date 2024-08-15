@@ -402,11 +402,10 @@ namespace TweaksAndFixes
 
             public static string? GetTextFromFile(string assetName)
             {
-                string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                if (!Directory.Exists(basePath))
+                if (!Directory.Exists(Config._BasePath))
                     return null;
 
-                string filePath = Path.Combine(basePath, assetName + ".csv");
+                string filePath = Path.Combine(Config._BasePath, assetName + ".csv");
                 if (!File.Exists(filePath))
                     return null;
 
@@ -1178,7 +1177,7 @@ namespace TweaksAndFixes
 
             internal static string Test()
             {
-                string basePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Tests");
+                string basePath = Path.Combine(Config._BasePath, "Tests");
                 if (!Directory.Exists(basePath))
                     Directory.CreateDirectory(basePath);
 
@@ -1240,8 +1239,8 @@ namespace TweaksAndFixes
             }
             public static void TestNative()
             {
-                var dictA = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Tests", "test1.csv"));
-                var dictB = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Tests", "test2.csv"));
+                var dictA = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Config._BasePath, "Tests", "test1.csv"));
+                var dictB = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Config._BasePath, "Tests", "test2.csv"));
                 foreach (var v in dictA.Values)
                     Debug.Log($"{v.name}: {v.Id} / {v.order}");
                 foreach (var v in dictB.Values)

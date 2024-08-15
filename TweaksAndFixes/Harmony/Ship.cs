@@ -172,9 +172,9 @@ namespace TweaksAndFixes
         // the weighted-random dictionary. So we need to patch it too. But
         // it doesn't know the ship in question. So we have to patch the calling
         // method to pass that on.
-        [HarmonyPatch(nameof(Ship.__c._GenerateRandomShip_b__566_13))]
+        [HarmonyPatch(nameof(Ship.__c._GenerateRandomShip_b__562_13))]
         [HarmonyPrefix]
-        internal static bool Prefix_GenerateRandomShip_b__566_13(ComponentData c, ref float __result)
+        internal static bool Prefix_GenerateRandomShip_b__562_13(ComponentData c, ref float __result)
         {
             var ship = Patch_Ship._ShipForGenerateRandom;
             if (ship == null)
@@ -185,12 +185,12 @@ namespace TweaksAndFixes
         }
     }
 
-    [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__566))]
+    [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__562))]
     internal class Patch_ShipGenRandom
     {
-        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
+        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, out int __state, ref bool __result)
+        internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
             Patch_Ship._IsGenerating = true;
             Patch_Ship._ShipForGenerateRandom = __instance.__4__this;
@@ -202,9 +202,9 @@ namespace TweaksAndFixes
                 __instance.__4__this.TAFData().ResetAllGrades();
         }
 
-        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__566.MoveNext))]
+        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__566 __instance, int __state)
+        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, int __state)
         {
             // For now, we're going to reset all grades regardless.
             //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))

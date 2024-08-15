@@ -198,13 +198,12 @@ namespace TweaksAndFixes
 
         private static bool Write<T, U>(string fileBase, Il2CppSystem.Collections.Generic.List<U> oldList) where U : MapElement2D where T : MapDataLoader<U>, new()
         {
-            string basePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            if (!Directory.Exists(basePath))
+            if (!Directory.Exists(Config._BasePath))
             {
-                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + basePath);
+                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + Config._BasePath);
                 return false;
             }
-            string filePath = Path.Combine(basePath, fileBase + ".csv");
+            string filePath = Path.Combine(Config._BasePath, fileBase + ".csv");
 
             List<T> list = new List<T>();
             foreach (var old in oldList)

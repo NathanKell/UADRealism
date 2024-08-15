@@ -40,6 +40,9 @@ namespace TweaksAndFixes
 
         public static int MaxGunGrade = 5;
 
+        internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        internal static readonly string _FlagFile = "flags.csv";
+
         [ConfigParse("New Scrapping behavior", "scrap_enable")]
         public static bool ScrappingChange = false;
         [ConfigParse("Ports/Provinces overriding", "override_map", _exceptVal = 2f) ]
