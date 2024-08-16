@@ -229,7 +229,7 @@ namespace TweaksAndFixes
             if (!ship.TAFData().IsTorpGradeOverridden())
                 return;
 
-            Melon<TweaksAndFixes>.Logger.Msg("Adding torp upgrade button");
+            //Melon<TweaksAndFixes>.Logger.Msg("Adding torp upgrade button");
 
             var buttonOld = ui.gameObject.FindDeepChild("ShipNew")?.GetChild("Button", true);
             if (buttonOld == null)

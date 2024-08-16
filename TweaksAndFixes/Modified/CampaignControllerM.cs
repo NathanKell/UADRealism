@@ -160,7 +160,7 @@ namespace TweaksAndFixes
 
         public static Ship GetSharedDesign(CampaignController _this, Player player, ShipType shipType, int year, bool checkTech = true, bool isEarlySavedShip = false)
         {
-            Melon<TweaksAndFixes>.Logger.Msg($"Getting shared design for {shipType.name} of {player.data.name}");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Getting shared design for {shipType.name} of {player.data.name}");
 
             if (!G.GameData.sharedDesignsPerNation.TryGetValue(player.data.name, out var designs))
                 return null;
@@ -195,7 +195,7 @@ namespace TweaksAndFixes
                         oldestNew = store.YearCreated;
                 }
             }
-            Melon<TweaksAndFixes>.Logger.Msg($"Found {newerShips.Count} / {olderShips.Count} ships");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Found {newerShips.Count} / {olderShips.Count} ships");
             if (newerShips.Count == 0 && olderShips.Count == 0)
                 return null;
 
@@ -216,7 +216,7 @@ namespace TweaksAndFixes
                     }
                 }
             }
-            Melon<TweaksAndFixes>.Logger.Msg($"Counts now {newerShips.Count} / {olderShips.Count} ships");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Counts now {newerShips.Count} / {olderShips.Count} ships");
 
             for (int i = 0; i < newerShips.Count; ++i)
             {
@@ -256,7 +256,7 @@ namespace TweaksAndFixes
                     yearDelta *= yearDelta;
                     techVal = 1f / (1f + yearDelta * 0.018f);
                 }
-                Melon<TweaksAndFixes>.Logger.Msg($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
+                //Melon<TweaksAndFixes>.Logger.Msg($"Tech Val for {newerShips[i].vesselName} ({newerShips[i].hullName}, {newerShips[i].YearCreated}) is {techVal:F3}");
                 if (techVal < 0f)
                 {
                     ship.Erase();
@@ -290,7 +290,7 @@ namespace TweaksAndFixes
             if (indices.Count == 0)
                 return null;
 
-            Melon<TweaksAndFixes>.Logger.Msg($"Choosing from {indices.Count} choices");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Choosing from {indices.Count} choices");
             int idx = indices[ModUtils.Range(0, indices.Count - 1)];
             var shipRet = Ship.Create(null, null, false, false, false);
             var guidRet = new Il2CppSystem.Nullable<Il2CppSystem.Guid>();
@@ -438,7 +438,7 @@ namespace TweaksAndFixes
                 if (p.data.isTorpedo && torpedoTubes < bar)
                     torpedoTubes = bar;
             }
-            Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: torps {torpedoTubes}");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: torps {torpedoTubes}");
             // Kinda slow, but eh.
             foreach (var c in G.GameData.components.Values)
                 if (design.IsComponentAvailable(c))
@@ -456,12 +456,12 @@ namespace TweaksAndFixes
                     ++_TechRelevanceCountsPlayer[(int)rel];
                 }
             }
-            Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: Found {_TechsPlayer.Count} player techs, {design.techs.Count} ship techs");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: Found {_TechsPlayer.Count} player techs, {design.techs.Count} ship techs");
 
             foreach (var tech in design.techs)
             {
                 var rel = GetTechRelevance(design, tech, true, _CompTypes, torpedoTubes);
-                Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: tech {tech.name} has relevance {rel}");
+                //Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: tech {tech.name} has relevance {rel}");
                 ++_TechRelevanceCountsShip[(int)rel];
                 if (rel == TechRelevance.Required && !_TechsPlayer.Contains(tech))
                     return -1f;

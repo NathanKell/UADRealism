@@ -98,7 +98,7 @@ namespace TweaksAndFixes
                 if (G.GameData.parts.TryGetValue(tcs.turretPartDataName, out var turretPartData))
                     ggd.caliber = turretPartData.caliber;
 
-                Melon<TweaksAndFixes>.Logger.Msg($"Loaded TC grade for caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, loaded grade {ggd.grade}");
+                //Melon<TweaksAndFixes>.Logger.Msg($"Loaded TC grade for caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, loaded grade {ggd.grade}");
                 return ggd;
             }
         }
@@ -119,21 +119,21 @@ namespace TweaksAndFixes
             // it'll have lost all this data.
             if (isPostFromStore)
             {
-                Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: FromStore Post. Updating store for ship {_ship?.name ?? "<NULL>"}");
+                //Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: FromStore Post. Updating store for ship {_ship?.name ?? "<NULL>"}");
                 SaveTCs(store);
                 SaveTorpGrade(store);
 
                 return;
             }
 
-            Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: ToStore for ship {_ship?.name ?? "<NULL>"}");
+            //Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: ToStore for ship {_ship?.name ?? "<NULL>"}");
             SaveTCs(store);
             SaveTorpGrade(store);
         }
 
         public void FromStore(Ship.Store store)
         {
-            Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: FromStore for ship {_ship?.name ?? "<NULL>"}");
+            //Melon<TweaksAndFixes>.Logger.Msg($"TAFShipData: FromStore for ship {_ship?.name ?? "<NULL>"}");
             LoadTCs(store);
             LoadTorpGrade(store);
         }
@@ -303,7 +303,7 @@ namespace TweaksAndFixes
         [HideFromIl2Cpp]
         private void ResetGunGrade(GunGradeData ggd)
         {
-            Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
+            //Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
             ggd.grade = -1; // will be updated next call to TechGunGrade.
 
             Ship.TurretCaliber tc = ShipM.FindMatchingTurretCaliber(_ship, ggd.caliber, ggd.isCasemateGun);
@@ -358,7 +358,7 @@ namespace TweaksAndFixes
 
         public void ResetTorpGrade()
         {
-            Melon<TweaksAndFixes>.Logger.Msg($"For torps, reset grade (was {_torpedoGrade})");
+            //Melon<TweaksAndFixes>.Logger.Msg($"For torps, reset grade (was {_torpedoGrade})");
             _torpedoGrade = -1; // will be updated next call to TechTorpedoGrade.
 
             // We need to now replace all parts that are torpedoes. Otherwise
@@ -417,7 +417,7 @@ namespace TweaksAndFixes
                 else if (ggd.grade < 0)
                     ggd.grade = _ship.TechGunGrade(data);
 
-                Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, saved grade {ggd.grade}");
+                //Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, saved grade {ggd.grade}");
                 tcs.turretPartDataName = pName + ";" + ggd.grade.ToString();
             }
         }
@@ -431,7 +431,7 @@ namespace TweaksAndFixes
                 if (split.Length > 1 && int.TryParse(split[1], out var g))
                     _torpedoGrade = g;
             }
-            Melon<TweaksAndFixes>.Logger.Msg($"Loaded torpedo grade {_torpedoGrade}");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Loaded torpedo grade {_torpedoGrade}");
         }
 
         private void SaveTorpGrade(Ship.Store store)
@@ -456,7 +456,7 @@ namespace TweaksAndFixes
             if (_torpedoGrade < 0)
                 _torpedoGrade = _ship.TechTorpedoGrade(torpData);
 
-            Melon<TweaksAndFixes>.Logger.Msg($"Saved torpedo grade {_torpedoGrade}");
+            //Melon<TweaksAndFixes>.Logger.Msg($"Saved torpedo grade {_torpedoGrade}");
             store.hullName = hName + ";" + _torpedoGrade;
         }
     }

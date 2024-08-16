@@ -60,12 +60,13 @@ namespace TweaksAndFixes
             // is that we can't patch the cache if we want to use it at all,
             // because we need to preserve the _real_ grade but we also
             // don't want to cache-bust every time.
-            int newGrade = __instance.TAFData().GunGrade(gun, __result);
-            if (newGrade != __result)
-            {
-                Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced gun grade for part {gun.name} with {newGrade} (was {__result})");
-                __result = newGrade;
-            }
+            //int newGrade = __instance.TAFData().GunGrade(gun, __result);
+            //if (newGrade != __result)
+            //{
+            //    Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced gun grade for part {gun.name} with {newGrade} (was {__result})");
+            //    __result = newGrade;
+            //}
+            __result = __instance.TAFData().GunGrade(gun, __result);
         }
 
         [HarmonyPostfix]
@@ -77,12 +78,13 @@ namespace TweaksAndFixes
             // is that we can't patch the cache if we want to use it at all,
             // because we need to preserve the _real_ grade but we also
             // don't want to cache-bust every time.
-            int newGrade = __instance.TAFData().TorpedoGrade(__result);
-            if (newGrade != __result)
-            {
-                Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced torpedo grade for part {torpedo.name} with {newGrade} (was {__result})");
-                __result = newGrade;
-            }
+            //int newGrade = __instance.TAFData().TorpedoGrade(__result);
+            //if (newGrade != __result)
+            //{
+            //    Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced torpedo grade for part {torpedo.name} with {newGrade} (was {__result})");
+            //    __result = newGrade;
+            //}
+            __result = __instance.TAFData().TorpedoGrade(__result);
         }
 
         // I'm sure more will get patched later.

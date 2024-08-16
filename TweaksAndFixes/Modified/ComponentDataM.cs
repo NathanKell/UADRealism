@@ -12,8 +12,6 @@ namespace TweaksAndFixes
     {
         public static float GetWeight(ComponentData c, string sType)
         {
-            if(c.name.Contains("engine_engine")) Melon<TweaksAndFixes>.Logger.Msg($"Component {c.nameUi}: weight {c.weight}");
-
             if (!c.paramx.TryGetValue("weight_per", out var list))
                 return c.weight;
 
