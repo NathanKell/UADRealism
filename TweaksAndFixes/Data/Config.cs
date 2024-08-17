@@ -39,6 +39,7 @@ namespace TweaksAndFixes
         }
 
         public static int MaxGunGrade = 5;
+        public static int StartingYear = 1890;
 
         internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         internal static readonly string _FlagFile = "flags.csv";

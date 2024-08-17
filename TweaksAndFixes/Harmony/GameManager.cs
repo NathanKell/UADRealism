@@ -30,7 +30,7 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameManager.GetTechYear))]
         internal static bool Prefix_GetTechYear(TechnologyData t, ref int __result)
         {
-            if (_IsRefreshSharedDesign && G.ui.sharedDesignYear == 1890 && !t.effects.ContainsKey("start"))
+            if (_IsRefreshSharedDesign && G.ui.sharedDesignYear == Config.StartingYear && !t.effects.ContainsKey("start"))
             {
                 __result = 9999;
                 return false;
