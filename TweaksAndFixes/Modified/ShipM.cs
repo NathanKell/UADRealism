@@ -412,7 +412,6 @@ namespace TweaksAndFixes
             maxSpeed = Mathf.Min(maxSpeed, _this.shipType.speedMax * KnotsToMS);
 
             float armorLimit = limitArmor > 0f ? limitArmor : _this.shipType.armorMax * 3f * 25.4f;
-
             bool canMakeTarget;
             if (delta < 0)
             {
@@ -441,18 +440,21 @@ namespace TweaksAndFixes
                 _this.CurrentCrewQuarters = Ship.CrewQuarters.Spacious;
                 _this.SetOpRange(VesselEntity.OpRange.VeryHigh);
 
-                for (int i = (int)Ship.A.Belt; i <= (int)Ship.A.Barbette; ++i)
-                {
-                    var area = (Ship.A)i;
+                for (Ship.A area = Ship.A.Belt; area <= Ship.A.Barbette; area += 1)
                     newArmor[area] = Mathf.Min(armorLimit, _this.MaxArmorForZone(area, null));
-                }
 
                 _this.SetArmor(newArmor); // have to set before doing citadel armor
+                // because citadel armor depends on base belt/deck armor.
                 var citA = _this.GetCitadelArmor();
-                foreach (var key in citA)
-                    newArmor[key] = Mathf.Min(armorLimit, _this.MaxArmorForZone(key, null));
+                if (citA != null)
+                {
+                    // We also have to set each one directly,
+                    // since the next area depends on the previous.
+                    foreach (var key in citA)
+                        _this.SetArmor(key, Mathf.Min(armorLimit, _this.MaxArmorForZone(key, null)));
 
-                _this.SetArmor(newArmor);
+                    _this.RefreshHullStats();
+                }
 
                 canMakeTarget = targetWeightRatio * 0.997f <= _this.Weight() / _this.Tonnage();
             }
