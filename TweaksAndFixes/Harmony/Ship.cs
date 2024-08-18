@@ -103,6 +103,14 @@ namespace TweaksAndFixes
             return false;
         }
 
+        [HarmonyPatch(nameof(Ship.GenerateArmor))]
+        [HarmonyPrefix]
+        internal static bool Prefix_GenerateArmor(float armorMaximal, Ship shipHint, ref Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> __result)
+        {
+            __result = ShipM.GenerateArmor(armorMaximal, shipHint);
+            return false;
+        }
+
         internal static bool _IsInChangeHullWithHuman = false;
         // Work around difficulty in patching AdjustHullStats
         [HarmonyPatch(nameof(Ship.ChangeHull))]
