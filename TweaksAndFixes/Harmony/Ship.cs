@@ -87,51 +87,60 @@ namespace TweaksAndFixes
             __result = __instance.TAFData().TorpedoGrade(__result);
         }
 
-        // I'm sure more will get patched later.
-        //[HarmonyPatch(nameof(Ship.IsPartAvailable), new Type[] { typeof(PartData), typeof(Player), typeof(ShipType), typeof(Ship) })]
-        //[HarmonyPrefix]
-        //internal static bool Prefix_IsPartAvailable(PartData part, ref bool __result)
-        //{
-        //    var year = Database.GetYear(part);
-        //    if (year < 1860 || year > 1920)
-        //        return true;
+        [HarmonyPatch(nameof(Ship.AddedAdditionalTonnageUsage))]
+        [HarmonyPrefix]
+        internal static bool Prefix_AddedAdditionalTonnageUsage(Ship __instance)
+        {
+            ShipM.AddedAdditionalTonnageUsage(__instance);
+            return false;
+        }
 
-        //    if (part.isHull)
-        //    {
-        //        string hmk = GetHullModelKey(part);
-        //        foreach (var p in G.GameData.parts.Values)
-        //        {
-        //            if (!p.isHull || Database.GetYear(p) > 1920)
-        //                continue;
-        //            if (p == part)
-        //            {
-        //                __result = true;
-        //                return false;
-        //            }
-        //            if (hmk == GetHullModelKey(p))
-        //            {
-        //                __result = false;
-        //                return false;
-        //            }
-        //        }
-        //    }
+        [HarmonyPatch(nameof(Ship.ReduceWeightByReducingCharacteristics))]
+        [HarmonyPrefix]
+        internal static bool Prefix_ReduceWeightByReducingCharacteristics(Ship __instance, Il2CppSystem.Random rnd, float tryN, float triesTotal, float randArmorRatio = 0, float speedLimit = 0)
+        {
+            ShipM.ReduceWeightByReducingCharacteristics(__instance, rnd, tryN, triesTotal, randArmorRatio, speedLimit);
+            return false;
+        }
 
-        //    //var set = Database.GetHullNamesForPart(part);
-        //    //if (set == null)
-        //    //    return true;
-
-        //    //foreach (var s in set)
-        //    //{
-        //    //    if (G.GameData.parts.TryGetValue(s, out var hull) && (hull.shipType.name == "cl" || hull.shipType.name == "ca"))
-        //    //    {
-        //    //        __result = true;
-        //    //        return false;
-        //    //    }
-        //    //}
-
-        //    return true;
-        //}
-
+        internal static bool _IsInChangeHullWithHuman = false;
+        // Work around difficulty in patching AdjustHullStats
+        [HarmonyPatch(nameof(Ship.ChangeHull))]
+        [HarmonyPrefix]
+        internal static void Prefix_ChangeHull(ref bool byHuman)
+        {
+            if (byHuman)
+            {
+                byHuman = false;
+                _IsInChangeHullWithHuman = true;
+            }
+        }
+        [HarmonyPatch(nameof(Ship.ChangeHull))]
+        [HarmonyPostfix]
+        internal static void Postfix_ChangeHull()
+        {
+            _IsInChangeHullWithHuman = false;
+        }
+        [HarmonyPatch(nameof(Ship.SetDraught))]
+        [HarmonyPostfix]
+        internal static void Postfix_SetDraught(Ship __instance)
+        {
+            // Do what ChangeHull would do in the byHuman block
+            if (_IsInChangeHullWithHuman)
+            {
+                float tonnageLimit = Mathf.Min(__instance.tonnage, __instance.TonnageMax());
+                float tonnageToSet = Mathf.Lerp(__instance.TonnageMin(), tonnageLimit, UnityEngine.Random.Range(0f, 1f));
+                __instance.SetTonnage(tonnageToSet);
+                var designYear = __instance.GetYear(__instance);
+                var origTargetWeightRatio = 1f - Mathf.Clamp(Util.Remap(designYear, 1890f, 1940f, 0.65f, 0.525f, true), 0.45f, 0.65f);
+                var stopFunc = new System.Func<bool>(() =>
+                {
+                    float yearRemap = Util.Remap(designYear, 1890f, 1940f, 0.6515f, 0.55f, true);
+                    return (1f - Mathf.Clamp(yearRemap, 0.45f, 0.75f)) >= (__instance.Weight() / __instance.Tonnage());
+                });
+                ShipM.AdjustHullStats(__instance, -1, origTargetWeightRatio, stopFunc, true, true, true, true, null, -1f, -1f);
+            }
+        }
     }
 
     // We can't target ref arguments in an attribute, so
@@ -192,7 +201,7 @@ namespace TweaksAndFixes
     {
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
+        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
             Patch_Ship._IsGenerating = true;
             Patch_Ship._ShipForGenerateRandom = __instance.__4__this;
@@ -200,8 +209,77 @@ namespace TweaksAndFixes
 
             // So we know what state we started in.
             __state = __instance.__1__state;
-            if(__state == 0)
-                __instance.__4__this.TAFData().ResetAllGrades();
+            var ship = __instance.__4__this;
+            switch (__state)
+            {
+                case 0:
+                    __instance.__4__this.TAFData().ResetAllGrades();
+                    break;
+
+                case 6:
+                    float weightTargetRand = Util.Range(0.875f, 1.075f, __instance.__8__1.rnd);
+                    var designYear = ship.GetYear(ship);
+                    float yearRemap = Util.Remap(designYear, 1890f, 1940f, 0.8f, 0.6f, true);
+                    float weightTargetRatio = 1f - Mathf.Clamp(weightTargetRand * yearRemap, 0.45f, 0.65f);
+                    var stopFunc = new System.Func<bool>(() =>
+                    {
+                        float targetRand = Util.Range(0.875f, 1.075f, __instance.__8__1.rnd);
+                        return (1.0f - Mathf.Clamp(targetRand * yearRemap, 0.45f, 0.75f)) >= (ship.Weight() / ship.Tonnage());
+                    });
+
+                    // We can't access the nullable floats on this object
+                    // so we cache off their values at the callsite (the
+                    // only one that sets them).
+
+                    ShipM.AdjustHullStats(
+                      ship,
+                      -1,
+                      weightTargetRatio,
+                      stopFunc,
+                      Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
+                      Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                      true,
+                      true,
+                      __instance.__8__1.rnd,
+                      Patch_BattleManager_d114._ShipGenInfo.limitArmor,
+                      __instance._savedSpeedMinValue_5__3);
+
+                    // We can't do the frame-wait thing easily, let's just advance straight-away
+                    __instance.__1__state = 7;
+                    break;
+
+                case 10:
+
+                    // We can't access the nullable floats on this object
+                    // so we cache off their values at the callsite (the
+                    // only one that sets them).
+
+                    ShipM.AdjustHullStats(
+                      ship,
+                      1,
+                      1f,
+                      null,
+                      Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
+                      Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                      true,
+                      true,
+                      __instance.__8__1.rnd,
+                      Patch_BattleManager_d114._ShipGenInfo.limitArmor,
+                      __instance._savedSpeedMinValue_5__3);
+
+                    ship.UpdateHullStats();
+
+                    foreach (var p in ship.parts)
+                        p.UpdateCollidersSize(ship);
+
+                    foreach (var p in ship.parts)
+                        Part.GunBarrelLength(p.data, ship, true);
+
+                    // We can't do the frame-wait thing easily, let's just advance straight-away
+                    __instance.__1__state = 11;
+                    break;
+            }
+            return true;
         }
 
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
