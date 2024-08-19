@@ -391,7 +391,7 @@ namespace TweaksAndFixes
             return minOpRange;
         }
 
-        public static void AdjustHullStats(Ship _this, int delta, float targetWeightRatio, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, Il2CppSystem.Random nativeRnd = null, float limitArmor = -1f, float limitSpeed = -1f)
+        public static void AdjustHullStats(Ship _this, int delta, float targetWeightRatio, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, Il2CppSystem.Random rnd = null, float limitArmor = -1f, float limitSpeed = -1f)
         {
             float year = _this.GetYear(_this);
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
@@ -415,7 +415,7 @@ namespace TweaksAndFixes
             }
             else
             {
-                armorInches = armorMin * Util.Range(1f, 1.2f, nativeRnd);
+                armorInches = armorMin * Util.Range(1f, 1.2f, rnd);
             }
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armorMinHint;
             if (gaInfo == null)
@@ -448,26 +448,35 @@ namespace TweaksAndFixes
                 oldArmor[kvp.Key] = kvp.Value;
 
             float minSpeed;
-            if (limitSpeed > 0f)
+            float maxSpeed;
+            if (Config.ShipGenTweaks)
             {
-                minSpeed = limitSpeed;
+                minSpeed = GetMinSpeed(_this, limitSpeed, rnd);
+                maxSpeed = GetMaxSpeed(_this, rnd);
             }
             else
             {
-                float mult;
-                if (isLightCraft)
-                    mult = 0.92f;
-                else if (isCL)
-                    mult = 0.86f;
+                if (limitSpeed > 0f)
+                {
+                    minSpeed = limitSpeed;
+                }
                 else
-                    mult = 0.79f;
-                minSpeed = hullSpeedMS * Util.Remap(year, 1890f, 1940f, 1.0f, 0.85f, true) * mult;
-            }
-            float maxMult = cldd ? 1.05f : 1.1f;
-            float maxSpeed = hullSpeedMS * maxMult * Util.Remap(year, 1890f, 1940f, 1.05f, 1.0f, true);
+                {
+                    float mult;
+                    if (isLightCraft)
+                        mult = 0.92f;
+                    else if (isCL)
+                        mult = 0.86f;
+                    else
+                        mult = 0.79f;
+                    minSpeed = hullSpeedMS * Util.Remap(year, 1890f, 1940f, 1.0f, 0.9f, true) * mult;
+                }
+                float maxMult = cldd ? 1.05f : 1.1f;
+                maxSpeed = hullSpeedMS * maxMult * Util.Remap(year, 1890f, 1940f, 1.05f, 1.0f, true);
 
-            minSpeed = Mathf.Max(minSpeed, _this.shipType.speedMin * KnotsToMS);
-            maxSpeed = Mathf.Min(maxSpeed, _this.shipType.speedMax * KnotsToMS);
+                minSpeed = Mathf.Max(minSpeed, _this.shipType.speedMin * KnotsToMS);
+                maxSpeed = Mathf.Min(maxSpeed, _this.shipType.speedMax * KnotsToMS);
+            }
 
             float armorLimit = limitArmor > 0f ? limitArmor : _this.shipType.armorMax * 3f * 25.4f;
             bool canMakeTarget;
@@ -653,7 +662,7 @@ namespace TweaksAndFixes
                 // so that we don't screw with our weights. (If we just removed items,
                 // like stock, then quarters and range would be overrepresented.)
                 AdjustHullStatsItem thingToChange = AdjustHullStatsItem.Empty;
-                while ((thingToChange = ModUtils.RandomByWeights(_AdjustHullStatsOptions, null, nativeRnd)) != AdjustHullStatsItem.Empty)
+                while ((thingToChange = ModUtils.RandomByWeights(_AdjustHullStatsOptions, null, rnd)) != AdjustHullStatsItem.Empty)
                 {
                     float weight = _AdjustHullStatsOptions[thingToChange];
                     _AdjustHullStatsOptions.Remove(thingToChange);
@@ -866,7 +875,7 @@ namespace TweaksAndFixes
             while (underweight && _this.limiter-- > 0)
             {
                 float oldSpeed = _this.speedMax;
-                float newSpeed = RoundSpeedToStep(step + oldSpeed);
+                float newSpeed = RoundSpeedToStep(oldSpeed + step);
                 _this.SetSpeedMax(newSpeed);
                 weight = _this.Weight();
                 if (weight > _this.tempGoodWeight)
@@ -1059,57 +1068,64 @@ namespace TweaksAndFixes
 
             if (overweight)
             {
-                float lowerClamp = speedLimit;
-                float remap, range;
+                float minMS;
                 float speedLimiter = _this.hull.data.speedLimiter;
                 float year = _this.GetYear(_this);
-                if (_this.shipType.name == "dd")
+
+                if (Config.ShipGenTweaks)
                 {
-                    range = Util.Range(0.925f, 1f, rnd);
-                    remap = Util.Remap(year, 1890f, 1940f, 0.7f, range, true);
-                    if (speedLimit <= 0f)
-                        lowerClamp = speedLimiter * 1.15f;
+                    minMS = GetMinSpeed(_this, speedLimit, rnd);
                 }
                 else
                 {
-                    switch (_this.hull.data.Generation)
+                    float lowerClamp = speedLimit;
+                    float remap, range;
+
+                    if (_this.shipType.name == "dd")
                     {
-                        case 1:
-                            range = Util.Range(0.8f, 0.89f, rnd);
-                            remap = Util.Remap(year, 1890f, 1940f, 0.85f, range, true);
-                            if (speedLimit <= 0f)
-                                lowerClamp = speedLimiter * 0.9f;
-                            break;
-                        case 2:
-                            range = Util.Range(0.85f, 0.95f, rnd);
-                            remap = Util.Remap(year, 1890f, 1940f, 0.75f, range, true);
-                            if (speedLimit <= 0f)
-                                lowerClamp = speedLimiter * 0.96f;
-                            break;
-                        case 3:
-                            range = Util.Range(0.81f, 0.92f, rnd);
-                            remap = Util.Remap(year, 1890f, 1940f, 0.75f, range, true);
-                            if (speedLimit <= 0f)
-                                lowerClamp = speedLimiter;
-                            break;
-                        default:
-                        case 4:
-                            range = Util.Range(0.8f, 0.92f, rnd);
-                            remap = Util.Remap(year, 1890f, 1940f, 0.7f, range, true);
-                            if (speedLimit <= 0f)
-                                lowerClamp = speedLimiter;
-                            break;
+                        range = Util.Range(0.925f, 1f, rnd);
+                        remap = Util.Remap(year, 1890f, 1940f, 0.7f, range, true);
+                        if (speedLimit <= 0f)
+                            lowerClamp = speedLimiter * 1.15f;
                     }
+                    else
+                    {
+                        switch (_this.hull.data.Generation)
+                        {
+                            case 1:
+                                range = Util.Range(0.8f, 0.89f, rnd);
+                                remap = Util.Remap(year, 1890f, 1940f, 0.85f, range, true);
+                                if (speedLimit <= 0f)
+                                    lowerClamp = speedLimiter * 0.9f;
+                                break;
+                            case 2:
+                                range = Util.Range(0.85f, 0.95f, rnd);
+                                remap = Util.Remap(year, 1890f, 1940f, 0.75f, range, true);
+                                if (speedLimit <= 0f)
+                                    lowerClamp = speedLimiter * 0.96f;
+                                break;
+                            case 3:
+                                range = Util.Range(0.81f, 0.92f, rnd);
+                                remap = Util.Remap(year, 1890f, 1940f, 0.75f, range, true);
+                                if (speedLimit <= 0f)
+                                    lowerClamp = speedLimiter;
+                                break;
+                            default:
+                            case 4:
+                                range = Util.Range(0.8f, 0.92f, rnd);
+                                remap = Util.Remap(year, 1890f, 1940f, 0.7f, range, true);
+                                if (speedLimit <= 0f)
+                                    lowerClamp = speedLimiter;
+                                break;
+                        }
+                    }
+
+                    // The code is bugged here, it uses lowerClamp as the lower end of the clamp, so the range/remap
+                    // are never used!
+                    minMS = Mathf.Clamp(remap * speedLimiter, Mathf.Max(_this.shipType.speedMin, lowerClamp), _this.shipType.speedMax) * KnotsToMS;
                 }
 
-                // The code is bugged here, it uses lowerClamp as the lower end of the clamp, so the range/remap
-                // are never used!
-                //float clampedSpeedMS = Mathf.Clamp(remap, lowerClamp, _this.shipType.speedMax) * KnotsToMS;
-
-                float maxMS = Mathf.Min(lowerClamp, _this.shipType.speedMax) * KnotsToMS;
-                float minMS = Mathf.Max(remap, _this.shipType.speedMin) * KnotsToMS;
-
-                if (maxMS > minMS && _this.speedMax > minMS)
+                if (_this.speedMax > minMS)
                 {
                     float step = MonoBehaviourExt.Param("speed_step", 0.1f);
 
@@ -1170,6 +1186,60 @@ namespace TweaksAndFixes
                         break;
                 }
             }
+        }
+
+        public static float GetMinSpeed(Ship _this, float speedLimit, Il2CppSystem.Random rnd)
+        {
+            float year = _this.GetYear(_this);
+            float spdLimitMult, minMS;
+
+            if (speedLimit > 0f)
+                minMS = speedLimit;
+            else
+            {
+                if (_this.shipType.name == "dd" || _this.shipType.name == "tb")
+                {
+                    spdLimitMult = Util.Range(0.9f, 0.925f, rnd);
+                }
+                else
+                {
+                    switch (_this.hull.data.Generation)
+                    {
+                        case 1:
+                            spdLimitMult = Util.Range(0.9f, 1f, rnd)
+                                * Util.Remap(year, 1890f, 1940f, 0.89f, 0.85f, true);
+                            break;
+                        case 2:
+                            spdLimitMult = Util.Range(0.895f, 1f, rnd)
+                                * Util.Remap(year, 1890f, 1940f, 0.836f, 0.855f, true);
+                            break;
+                        case 3:
+                            spdLimitMult = Util.Range(0.88f, 1f, rnd)
+                                * Util.Remap(year, 1890f, 1940f, 0.77f, 0.84f, true);
+                            break;
+                        default:
+                        case 4:
+                            spdLimitMult = Util.Range(0.87f, 1f, rnd)
+                                * Util.Remap(year, 1890f, 1940f, 0.76f, 0.85f, true);
+                            break;
+                    }
+                }
+
+                minMS = Mathf.Clamp(spdLimitMult * _this.hull.data.speedLimiter, _this.shipType.speedMin, _this.shipType.speedMax) * KnotsToMS;
+            }
+
+            return minMS;
+        }
+
+        public static float GetMaxSpeed(Ship _this, Il2CppSystem.Random rnd)
+        {
+            float year = _this.GetYear(_this);
+            bool isCL = _this.shipType.name == "cl";
+            bool isLight = _this.shipType.name == "dd" || _this.shipType.name == "tb";
+            float maxMult = (isCL || isLight) ? 1.05f : 1.1f;
+            float maxMS = Mathf.Min(_this.shipType.speedMax, _this.hull.data.speedLimiter * maxMult * Util.Remap(year, 1890f, 1940f, 1.05f, 1.0f, true))
+                * KnotsToMS;
+            return maxMS;
         }
 
         public static float GetCitadelMultFromBase(Ship.A a)

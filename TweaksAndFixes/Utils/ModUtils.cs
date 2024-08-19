@@ -497,6 +497,12 @@ namespace TweaksAndFixes
             return value;
         }
 
+        public static TValue GetValueOrDefault<TKey, TValue>(this Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue> dict, TKey key)
+        {
+            dict.TryGetValue(key, out var value);
+            return value;
+        }
+
         public static int IncrementValueFor<TKey>(this Dictionary<TKey, int> dict, TKey key)
             => ChangeValueFor(dict, key, 1);
 

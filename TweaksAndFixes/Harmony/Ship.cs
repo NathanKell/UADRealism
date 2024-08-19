@@ -298,6 +298,24 @@ namespace TweaksAndFixes
             //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))
             //    __instance.__4__this.TAFData().ResetAllGrades();
 
+            switch (__state)
+            {
+                case 0:
+                    if (Config.ShipGenTweaks)
+                    {
+                        if (!G.ui.isConstructorRefitMode)
+                        {
+                            //__instance._savedSpeedMinValue_5__3 = Mathf.Max(__instance.__4__this.shipType.speedMin,
+                            //    Mathf.Min(__instance.__4__this.hull.data.speedLimiter - 2f, __instance.__4__this.hull.data.speedLimiter * G.GameData.parms.GetValueOrDefault("taf_genship_minspeed_mult")))
+                            //    * ShipM.KnotsToMS;
+
+                            // For now, let each method handle it.
+                            __instance._savedSpeedMinValue_5__3 = -1f;
+                        }
+                    }
+                    break;
+            }
+
             Patch_Ship._GenerateShipState = -1;
             Patch_Ship._ShipForGenerateRandom = null;
             //Melon<TweaksAndFixes>.Logger.Msg($"Iteration for state {__state} ended, new state {__instance.__1__state}");

@@ -50,6 +50,8 @@ namespace TweaksAndFixes
         public static bool OverrideMap = false;
         [ConfigParse("Map dumping", "override_map", _checkValue = 2f, _invertCheck = false)]
         public static bool DumpMap = false;
+        [ConfigParse("Ship Autodesign Tweaks", "shipgen_tweaks")]
+        public static bool ShipGenTweaks = true;
 
         public static void LoadConfig()
         {
