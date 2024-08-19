@@ -47,7 +47,7 @@ namespace TweaksAndFixes
 
         private static void ProcessLoadInfo(GameData _this, GameData.LoadInfo l)
         {
-            string? text = Serializer.CSV.GetTextFromFile(l.name);
+            string? text = Serializer.CSV.GetTextFromFile(l.name + ".csv");
             if (text == null)
             {
                 l.process.Invoke(l);

@@ -384,7 +384,7 @@ namespace TweaksAndFixes
 
             public static string? GetTextFromFileOrAsset(string assetName)
             {
-                string text = GetTextFromFile(assetName);
+                string text = GetTextFromFile(assetName + ".csv");
                 if (text == null)
                 {
                     var textA = Util.ResourcesLoad<TextAsset>(assetName, false);
@@ -400,12 +400,12 @@ namespace TweaksAndFixes
                 return text;
             }
 
-            public static string? GetTextFromFile(string assetName)
+            public static string? GetTextFromFile(string filename)
             {
                 if (!Directory.Exists(Config._BasePath))
                     return null;
 
-                string filePath = Path.Combine(Config._BasePath, assetName + ".csv");
+                string filePath = Path.Combine(Config._BasePath, filename);
                 if (!File.Exists(filePath))
                     return null;
 
