@@ -733,7 +733,7 @@ namespace TweaksAndFixes
                             {
                                 string[] enumNames = fieldType.GetEnumNames();
                                 string defaultName = enumNames.Length > 0 ? enumNames[0] : string.Empty;
-                                Debug.LogWarning($"[TweaksAndFixes] CSV: Couldn't parse value '{value}' for enum '{fieldType.Name}', default value '{defaultName}' will be used.\nValid values are {string.Join(", ", enumNames)}");
+                                Melon<TweaksAndFixes>.Logger.Warning($"[TweaksAndFixes] CSV: Couldn't parse value '{value}' for enum '{fieldType.Name}', default value '{defaultName}' will be used.\nValid values are {string.Join(", ", enumNames)}");
                                 return null;
                             }
                         case DataType.ValueVector2:
@@ -1252,9 +1252,9 @@ namespace TweaksAndFixes
                 var dictA = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Config._BasePath, "Tests", "test1.csv"));
                 var dictB = Serializer.CSV.ProcessCSV<PartData>(false, Path.Combine(Config._BasePath, "Tests", "test2.csv"));
                 foreach (var v in dictA.Values)
-                    Debug.Log($"{v.name}: {v.Id} / {v.order}");
+                    Melon<TweaksAndFixes>.Logger.Msg($"{v.name}: {v.Id} / {v.order}");
                 foreach (var v in dictB.Values)
-                    Debug.Log($"{v.name}: {v.Id} / {v.order}");
+                    Melon<TweaksAndFixes>.Logger.Msg($"{v.name}: {v.Id} / {v.order}");
 
                 int id = 0;
                 foreach (var v in G.GameData.parts.Values)
@@ -1281,7 +1281,7 @@ namespace TweaksAndFixes
                         foreach (var kvp in v.paramx)
                             t.Add(kvp.Key + "(" + Il2CppSystem.String.Join(";", kvp.Value.ToArray()) + ")");
 
-                        Debug.Log($"Found {v.name}: {v.Id}. Params {v.param}: {string.Join("/", t)}");
+                        Melon<TweaksAndFixes>.Logger.Msg($"Found {v.name}: {v.Id}. Params {v.param}: {string.Join("/", t)}");
                         break;
                     }
                 }

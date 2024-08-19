@@ -611,7 +611,7 @@ namespace TweaksAndFixes
 
         public void OnDestroy()
         {
-            Debug.Log($"$$$$ Destroying {gameObject.name}. Stack trace:\n{Environment.StackTrace}");
+            Melon<TweaksAndFixes>.Logger.Msg($"$$$$ Destroying {gameObject.name}. Stack trace:\n{Environment.StackTrace}");
         }
     }
 }

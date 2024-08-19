@@ -115,7 +115,7 @@ namespace TweaksAndFixes
         // Work around difficulty in patching AdjustHullStats
         [HarmonyPatch(nameof(Ship.ChangeHull))]
         [HarmonyPrefix]
-        internal static void Prefix_ChangeHull(ref bool byHuman)
+        internal static void Prefix_ChangeHull(Ship __instance, ref bool byHuman)
         {
             if (byHuman)
             {

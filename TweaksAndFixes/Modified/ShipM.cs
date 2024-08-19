@@ -689,7 +689,10 @@ namespace TweaksAndFixes
                     // so we would never meet it unless we were overweight
                     // (or so precisely on-target as to be impossible
                     // with floats).
-                    if (_this.Weight() > _this.Tonnage() || (GameManager.IsMission && _this.player.isMain && BattleManager.Instance != null && BattleManager.Instance.MissionMainShip == _this && _this.Cost() > _this.player.cash))
+                    if (delta > 0 &&
+                        (_this.Weight() > _this.Tonnage()
+                        || (GameManager.IsMission && _this.player.isMain && BattleManager.Instance != null
+                            && BattleManager.Instance.MissionMainShip == _this && _this.Cost() > _this.player.cash)))
                     {
                         switch (thingToChange)
                         {
