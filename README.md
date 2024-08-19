@@ -59,6 +59,15 @@ Assuming you put a 256x128 png called `britain.png` in the Flags folder under Mo
 ### Map overriding
 While the ports, provinces, etc. TextAssets aren't actually loaded by the game (oddly canals is), TAF allows overriding some port and province data. Add the param `taf_override_map` to params and set it to 2, and TAF will dump the game's built in data for ports and provinces. Make a backup of these dumps, then edit them as desired. Paste the entirety of ports.csv into the ports TextAsset (and same for provinces). Then set `taf_override_map` to 1 in params. This will override port and province data with the data in those assets. This can be combined with editing players, AI admirals, relations matrix, etc, and adding flags (see above) to make other nations playable.
 
+### Replacement armor generation behavior
+TAF supports replacing the game's existing armor generating, both the defaults when switching to a new hull and the armor the auto designer creates for ships. It works by constraining armor based on a set of rules which are per-shiptype and vary by year. If the design year is between two rules, the values are interpolated between the rules that exist. If the year lies outside the rules, the nearest rule is used. For example, consider a ruleset with a battleship rule for year 1900 and a battleship rule for 1920. Any battleship designed before 1900 would use the 1900 rule, any battleship designed after 1920 would use the 1920 rule, and a battleship designed in 1915 would use numbers 3/4 of the way from the 1900 rule to the 1920 rule. The rules are placed in genarmordata.csv in the Mods folder. The file format is as follows (thicknesses are in inches):
+```
+shipType,year,beltMin,beltMax,beltExtendedMult,turretSideMult,barbetteMult,deckMin,deckMax,deckExtendedMult,turretTopMult,ctMin,ctMax,superMin,superMax,foreAftVariation,citadelMult
+bb,1890,9,14,0.5,1.1,1,2,2.5,0.5,1.2,10,15,2,4,0.1,1
+bb,1940,10,15,0.5,1.2,1,5,8,0.5,1.2,10,15,2,4,0,1
+```
+turretSideMult is the multiplier to belt armor used as the default for turrets. barbetteMult also uses belt as its base value, but turretTopMult uses deck. The belt/deckExtendedMult values are multipliers to belt and deck used by fore/aft belt and deck areas respectively. citadelMult is the portion of maximum possible citadel armor used. foreAftVariation is the maximum multiplier to fore/aft armor by which that armor can vary, so a value of 0.02 means the fore armor can be up to +/-2% as thick as default, and aft armor can be up to -/+2% as thick as default.
+
 ### Replacement scrapping behavior
 The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships in order of mothballed ships first (to that target), then active ships (to that target), and finally all ships to the all-ships target tonnage. The target tonnage is determined with a minimum base tonnage and then a coefficient times (shipyard capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params (you will likely also want to set `min_fleet_tonnage_for_scrap` to 1 or something so that doesn't block scrapping), then tune using the following values:
 ```
