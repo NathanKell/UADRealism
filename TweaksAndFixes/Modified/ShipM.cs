@@ -232,6 +232,64 @@ namespace TweaksAndFixes
             return dict;
         }
 
+        public static Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> GenerateArmorNew(float armorMaximal, Ship shipHint)
+        {
+            if (shipHint == null)
+                return GenerateArmor(armorMaximal, shipHint);
+
+            float year;
+            if (GameManager.IsMission && BattleManager.Instance.CurrentAcademyMission != null)
+            {
+                if (shipHint.player.isMain)
+                    year = BattleManager.Instance.CurrentAcademyMission.year;
+                else
+                    year = BattleManager.Instance.CurrentAcademyMission.enemyYear;
+            }
+            else if (GameManager.IsCustomBattle)
+            {
+                if (shipHint.player.isMain)
+                {
+                    if (BattleManager.Instance.CurrentCustomBattle != null)
+                        year = BattleManager.Instance.CurrentCustomBattle.player1.year;
+                    else
+                        year = CampaignController.Instance.StartYear;
+                }
+                else
+                {
+                    year = BattleManager.Instance.CurrentCustomBattle.player2.year;
+                }
+            }
+            else
+            {
+                year = CampaignController.Instance.CurrentDate.AsDate().Year;
+            }
+
+            var info = GenArmorData.GetInfoFor(shipHint, Patch_Ship._GenerateShipState >= 0 ? -1f : year);
+            if (info == null)
+                return GenerateArmor(armorMaximal, shipHint);
+
+            // Divide out the scaling done by GenerateRandomShip, since we scale by year ourselves.
+            if (Patch_Ship._GenerateShipState == 5)
+                armorMaximal /= Util.Remap(shipHint.GetYear(shipHint), 1890f, 1940f, 1.0f, 0.85f, true);
+
+            var dict = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+            var citArmor = shipHint.GetCitadelArmor();
+
+            float maxBelt = info.GetMaxArmorValue(shipHint, Ship.A.Belt, null);
+            float portion = Mathf.Min(1f, armorMaximal / maxBelt); // estimate what lerp value to use
+            for (Ship.A a = Ship.A.Belt; a < Ship.A.InnerBelt_1st; a += 1)
+                dict[a] = info.GetArmorValue(shipHint, a, portion);
+
+            var oldDict = shipHint.armor;
+            shipHint.armor = dict;
+            if (citArmor != null)
+                foreach (var a in citArmor)
+                    dict[a] = info.GetArmorValue(shipHint, a, portion);
+
+            shipHint.armor = oldDict;
+            return dict;
+        }
+
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorReduce = GenerateAdjustArmorPriorities(false);
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorIncrease = GenerateAdjustArmorPriorities(true);
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorLocal = new Dictionary<Ship.A, float>();
@@ -344,6 +402,8 @@ namespace TweaksAndFixes
 
             var minOpRange = MinOpRange(_this, VesselEntity.OpRange.Low);
 
+            var gaInfo = GenArmorData.GetInfoFor(_this);
+
             var armorMin = _this.shipType.armorMin;
             if (armorMin <= 0)
                 armorMin = _this.shipType.armor;
@@ -357,22 +417,20 @@ namespace TweaksAndFixes
             {
                 armorInches = armorMin * Util.Range(1f, 1.2f, nativeRnd);
             }
-            var armorMinHint = GenerateArmor(armorInches * 25.4f, _this);
-            // TB/DD only armor CT and turrets
-            if (isLightCraft)
+            Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armorMinHint;
+            if (gaInfo == null)
             {
-                foreach (var key in _AdjustPriorityArmorReduce.Keys)
-                {
-                    switch (key)
-                    {
-                        case Ship.A.ConningTower:
-                        case Ship.A.Barbette:
-                        case Ship.A.TurretSide:
-                        case Ship.A.TurretTop:
-                            continue;
-                    }
-                    armorMinHint[key] = 0f;
-                }
+                armorMinHint = GenerateArmorNew(armorInches * 25.4f, _this);
+            }
+            else
+            {
+                armorMinHint = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                for (Ship.A a = Ship.A.Belt; a < Ship.A.InnerBelt_1st; a += 1)
+                    armorMinHint[a] = gaInfo.MinArmorValue(a);
+                var citA = _this.GetCitadelArmor();
+                if (citA != null)
+                    foreach(var a in citA)
+                        armorMinHint[a] = gaInfo.MinArmorValue(a);
             }
 
             float hullSpeedMS = _this.hull.data.speedLimiter * KnotsToMS;
@@ -419,8 +477,8 @@ namespace TweaksAndFixes
                 _this.CurrentCrewQuarters = Ship.CrewQuarters.Cramped;
                 _this.SetOpRange(minOpRange);
 
-                foreach (var kvp in _this.armor)
-                    newArmor[kvp.Key] = Mathf.Max(armorMinHint[kvp.Key], _this.MinArmorForZone(kvp.Key));
+                foreach (var key in _this.armor.Keys)
+                    newArmor[key] = Mathf.Max(armorMinHint[key], _this.MinArmorForZone(key));
 
                 _this.SetArmor(newArmor);
 
@@ -477,6 +535,21 @@ namespace TweaksAndFixes
             if (stopCondition != null && stopCondition())
                 return;
 
+            float curArmorLerp = 0.5f;
+            bool useInfo = false;
+            if (gaInfo != null)
+            {
+                useInfo = true;
+
+                float sum = 0f;
+                float sumTotal = 0f;
+                foreach (var kvp in _this.armor)
+                {
+                    sum += Mathf.InverseLerp(gaInfo.MinArmorValue(kvp.Key), gaInfo.MaxArmorValue(kvp.Key), kvp.Value);
+                    ++sumTotal;
+                }
+                curArmorLerp = sumTotal > 0 ? sum / sumTotal : 0f;
+            }
             for (int j = 0; j < 699; ++j)
             {
                 // Recreate, since we might have touched citadel armor
@@ -502,45 +575,63 @@ namespace TweaksAndFixes
                 bool armorFound = false;
                 if (allowEditArmor)
                 {
-                    // We need to find a valid armor zone. Note
-                    // due to citadel armor weirdness, we have
-                    // to do this fresh each time.
-                    foreach (var kvp in armorPriority)
+                    if (useInfo)
                     {
-                        float maxZone = _this.MaxArmorForZone(kvp.Key, null);
-                        if (maxZone > 0f)
+                        float inc = delta * gaInfo.lerpStep;
+                        while (delta > 0 ? curArmorLerp < 1f : curArmorLerp > 0f)
                         {
-                            armorMinHint.TryGetValue(kvp.Key, out var minHint);
-                            float minArmor = Mathf.Max(minHint, _this.MinArmorForZone(kvp.Key));
-                            float maxArmor = Mathf.Min(armorLimit, maxZone);
-                            _this.armor.TryGetValue(kvp.Key, out float oldLevel);
-                            if ((delta > 0) ? (oldLevel < maxArmor) : (oldLevel > minArmor))
-                                _AdjustPriorityArmorLocal.Add(kvp.Key, kvp.Value);
+                            curArmorLerp = Mathf.Clamp(curArmorLerp + inc, 0f, 1f);
+                            foreach (var a in armorMinHint.Keys)
+                                newArmor[a] = gaInfo.GetArmorValue(_this, a, curArmorLerp);
+                            if (!ModUtils.DictsEqual(newArmor, oldArmor))
+                            {
+                                armorFound = true;
+                                break;
+                            }
                         }
                     }
-                    if (_AdjustPriorityArmorLocal.Count > 0)
+                    else
                     {
-                        var randomA = ModUtils.RandomByWeights(_AdjustPriorityArmorLocal);
-                        armorMinHint.TryGetValue(randomA, out var minHint);
-                        float minArmor = Mathf.Max(minHint, _this.MinArmorForZone(randomA));
-                        float maxArmor = Mathf.Min(armorLimit, _this.MaxArmorForZone(randomA, null));
-                        _this.armor.TryGetValue(randomA, out float oldLevel);
-                        float newArmorLevel = delta * 2.54f + oldLevel;
-                        if (delta < 0)
-                            newArmorLevel = Mathf.Floor(newArmorLevel);
-                        else
-                            newArmorLevel = Mathf.Ceil(newArmorLevel);
-                        newArmorLevel = Mathf.Clamp(newArmorLevel, minArmor, maxArmor);
-
-                        // by definition this check should be true because
-                        // we shouldn't have added the zone otherwise. But just in case.
-                        if (newArmorLevel != oldLevel)
+                        // We need to find a valid armor zone. Note
+                        // due to citadel armor weirdness, we have
+                        // to do this fresh each time.
+                        foreach (var kvp in armorPriority)
                         {
-                            armorFound = true;
-                            newArmor[randomA] = newArmorLevel;
+                            float maxZone = _this.MaxArmorForZone(kvp.Key, null);
+                            if (maxZone > 0f)
+                            {
+                                armorMinHint.TryGetValue(kvp.Key, out var minHint);
+                                float minArmor = Mathf.Max(minHint, _this.MinArmorForZone(kvp.Key));
+                                float maxArmor = Mathf.Min(armorLimit, maxZone);
+                                _this.armor.TryGetValue(kvp.Key, out float oldLevel);
+                                if ((delta > 0) ? (oldLevel < maxArmor) : (oldLevel > minArmor))
+                                    _AdjustPriorityArmorLocal.Add(kvp.Key, kvp.Value);
+                            }
                         }
+                        if (_AdjustPriorityArmorLocal.Count > 0)
+                        {
+                            var randomA = ModUtils.RandomByWeights(_AdjustPriorityArmorLocal);
+                            armorMinHint.TryGetValue(randomA, out var minHint);
+                            float minArmor = Mathf.Max(minHint, _this.MinArmorForZone(randomA));
+                            float maxArmor = Mathf.Min(armorLimit, _this.MaxArmorForZone(randomA, null));
+                            _this.armor.TryGetValue(randomA, out float oldLevel);
+                            float newArmorLevel = delta * 2.54f + oldLevel;
+                            if (delta < 0)
+                                newArmorLevel = Mathf.Floor(newArmorLevel);
+                            else
+                                newArmorLevel = Mathf.Ceil(newArmorLevel);
+                            newArmorLevel = Mathf.Clamp(newArmorLevel, minArmor, maxArmor);
 
-                        _AdjustPriorityArmorLocal.Clear();
+                            // by definition this check should be true because
+                            // we shouldn't have added the zone otherwise. But just in case.
+                            if (newArmorLevel != oldLevel)
+                            {
+                                armorFound = true;
+                                newArmor[randomA] = newArmorLevel;
+                            }
+
+                            _AdjustPriorityArmorLocal.Clear();
+                        }
                     }
                 }
 
@@ -638,75 +729,131 @@ namespace TweaksAndFixes
             bool underweight = weight < _this.tempGoodWeight;
             if (!_this.IsShipWhitoutArmor())
             {
-                Il2CppSystem.Collections.Generic.List<int> armorQueue;
-                switch (_this.shipType.name)
+                var gaInfo = GenArmorData.GetInfoFor(_this);
+                if (gaInfo != null)
                 {
-                    case "bb":
-                        armorQueue = _this.armorAddedQueueBB;
-                        break;
-                    case "bc":
-                        armorQueue = _this.armorAddedQueueBC;
-                        break;
-                    case "ca":
-                        armorQueue = _this.armorAddedQueueCA;
-                        break;
-                    case "cl":
-                        armorQueue = _this.armorAddedQueueCL;
-                        break;
-                    case "dd":
-                        armorQueue = _this.armorAddedQueueDD;
-                        break;
-                    default:
-                        armorQueue = new Il2CppSystem.Collections.Generic.List<int>();
-                        armorQueue.Add((int)Ship.A.TurretSide);
-                        armorQueue.Add((int)Ship.A.Barbette);
-                        armorQueue.Add((int)Ship.A.Belt);
-                        armorQueue.Add((int)Ship.A.Deck);
-                        armorQueue.Add((int)Ship.A.BeltBow);
-                        armorQueue.Add((int)Ship.A.DeckBow);
-                        armorQueue.Add((int)Ship.A.TurretTop);
-                        armorQueue.Add((int)Ship.A.BeltStern);
-                        armorQueue.Add((int)Ship.A.DeckStern);
-                        armorQueue.Add((int)Ship.A.ConningTower);
-                        armorQueue.Add((int)Ship.A.InnerBelt_1st);
-                        armorQueue.Add((int)Ship.A.InnerDeck_1st);
-                        armorQueue.Add((int)Ship.A.InnerBelt_2nd);
-                        armorQueue.Add((int)Ship.A.InnerDeck_2nd);
-                        armorQueue.Add((int)Ship.A.InnerBelt_3rd);
-                        armorQueue.Add((int)Ship.A.InnerDeck_3rd);
-                        armorQueue.Add((int)Ship.A.Superstructure);
-                        break;
-                }
-
-                _this.limiter = 699;
-                while (underweight && _this.limiter-- > 0)
-                {
-                    foreach (var i in armorQueue)
+                    float curArmorLerp;
+                    float sum = 0f;
+                    float sumTotal = 0f;
+                    foreach (var kvp in _this.armor)
                     {
-                        Ship.A a = (Ship.A)i;
-                        float max = _this.MaxArmorForZone(a);
-                        if (!_this.armor.TryGetValue(a, out var curAmt) || curAmt >= max)
-                            continue;
+                        sum += Mathf.InverseLerp(gaInfo.MinArmorValue(kvp.Key), gaInfo.MaxArmorValue(kvp.Key), kvp.Value);
+                        ++sumTotal;
+                    }
+                    curArmorLerp = sumTotal > 0 ? sum / sumTotal : 0f;
 
-                        // This function is bugged. It's supposed to return
-                        // a value based on how near max tonnage the ship is,
-                        // but instead just returns 2 for armor and 1 for
-                        // everything else
-                        float stepMult = 2f; // _this.GetAdditionalWeightStepMult(true);
-                        float armorStep = G.settings.armorStep;
-                        float newAmt = G.settings.RoundToArmorStep(armorStep * stepMult + curAmt);
-                        newAmt = Mathf.Clamp(newAmt, _this.MinArmorForZone(a), max);
-                        if (newAmt == curAmt)
-                            continue;
+                    _this.limiter = 699;
+                    Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                    // we could probably just copy a ref to _this.armor before calling SetArmor since that sets it to a new dict
+                    // but I don't quite trust interop GC to not screw that up.
+                    Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> oldArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                    while (underweight && _this.limiter-- > 0)
+                    {
+                        bool stopLoop = true;
+                        while (curArmorLerp < 1f)
+                        {
+                            curArmorLerp = Mathf.Clamp(curArmorLerp + gaInfo.lerpStep, 0f, 1f);
+                            foreach (var a in _this.armor.Keys)
+                            {
+                                oldArmor[a] = _this.armor[a];
+                                newArmor[a] = gaInfo.GetArmorValue(_this, a, curArmorLerp);
+                            }
+                            if (!ModUtils.DictsEqual(newArmor, _this.armor))
+                            {
+                                stopLoop = false;
+                                break;
+                            }
+                        }
 
-                        _this.SetArmor(a, newAmt, true);
+                        if (stopLoop)
+                            break;
+
+                        _this.SetArmor(newArmor);
                         weight = _this.Weight();
                         if (weight > _this.tempGoodWeight)
                         {
-                            _this.SetArmor(a, curAmt, true);
+                            _this.SetArmor(oldArmor);
                             weight = _this.Weight();
                             underweight = false;
                             break;
+                        }
+                    }
+                }
+                else
+                {
+                    Il2CppSystem.Collections.Generic.List<int> armorQueue;
+                    switch (_this.shipType.name)
+                    {
+                        case "bb":
+                            armorQueue = _this.armorAddedQueueBB;
+                            break;
+                        case "bc":
+                            armorQueue = _this.armorAddedQueueBC;
+                            break;
+                        case "ca":
+                            armorQueue = _this.armorAddedQueueCA;
+                            break;
+                        case "cl":
+                            armorQueue = _this.armorAddedQueueCL;
+                            break;
+                        case "dd":
+                            armorQueue = _this.armorAddedQueueDD;
+                            break;
+                        default:
+                            armorQueue = new Il2CppSystem.Collections.Generic.List<int>();
+                            armorQueue.Add((int)Ship.A.TurretSide);
+                            armorQueue.Add((int)Ship.A.Barbette);
+                            armorQueue.Add((int)Ship.A.Belt);
+                            armorQueue.Add((int)Ship.A.Deck);
+                            armorQueue.Add((int)Ship.A.BeltBow);
+                            armorQueue.Add((int)Ship.A.DeckBow);
+                            armorQueue.Add((int)Ship.A.TurretTop);
+                            armorQueue.Add((int)Ship.A.BeltStern);
+                            armorQueue.Add((int)Ship.A.DeckStern);
+                            armorQueue.Add((int)Ship.A.ConningTower);
+                            armorQueue.Add((int)Ship.A.InnerBelt_1st);
+                            armorQueue.Add((int)Ship.A.InnerDeck_1st);
+                            armorQueue.Add((int)Ship.A.InnerBelt_2nd);
+                            armorQueue.Add((int)Ship.A.InnerDeck_2nd);
+                            armorQueue.Add((int)Ship.A.InnerBelt_3rd);
+                            armorQueue.Add((int)Ship.A.InnerDeck_3rd);
+                            armorQueue.Add((int)Ship.A.Superstructure);
+                            break;
+                    }
+
+                    _this.limiter = 699;
+                    bool changedArmor = true;
+                    while (underweight && _this.limiter-- > 0 && changedArmor)
+                    {
+                        changedArmor = false;
+                        foreach (var i in armorQueue)
+                        {
+                            Ship.A a = (Ship.A)i;
+                            float max = _this.MaxArmorForZone(a);
+                            if (!_this.armor.TryGetValue(a, out var curAmt) || curAmt >= max)
+                                continue;
+
+                            // This function is bugged. It's supposed to return
+                            // a value based on how near max tonnage the ship is,
+                            // but instead just returns 2 for armor and 1 for
+                            // everything else
+                            float stepMult = 2f; // _this.GetAdditionalWeightStepMult(true);
+                            float armorStep = G.settings.armorStep;
+                            float newAmt = G.settings.RoundToArmorStep(armorStep * stepMult + curAmt);
+                            newAmt = Mathf.Clamp(newAmt, _this.MinArmorForZone(a), max);
+                            if (newAmt == curAmt)
+                                continue;
+
+                            changedArmor = true;
+                            _this.SetArmor(a, newAmt, true);
+                            weight = _this.Weight();
+                            if (weight > _this.tempGoodWeight)
+                            {
+                                _this.SetArmor(a, curAmt, true);
+                                weight = _this.Weight();
+                                underweight = false;
+                                break;
+                            }
                         }
                     }
                 }
@@ -785,69 +932,40 @@ namespace TweaksAndFixes
             bool overweight = weight > _this.tempGoodWeight;
             if (!_this.IsShipWhitoutArmor())
             {
-                Il2CppSystem.Collections.Generic.List<int> armorQueue;
-                switch (_this.shipType.name)
+                var gaInfo = GenArmorData.GetInfoFor(_this);
+                if (gaInfo != null)
                 {
-                    case "bb":
-                        armorQueue = _this.armorReduceQueueBB;
-                        break;
-                    case "bc":
-                        armorQueue = _this.armorReduceQueueBC;
-                        break;
-                    case "ca":
-                        armorQueue = _this.armorReduceQueueCA;
-                        break;
-                    case "cl":
-                        armorQueue = _this.armorReduceQueueCL;
-                        break;
-                    case "dd":
-                        armorQueue = _this.armorReduceQueueDD;
-                        break;
-                    default:
-                        armorQueue = new Il2CppSystem.Collections.Generic.List<int>();
-                        armorQueue.Add((int)Ship.A.BeltBow);
-                        armorQueue.Add((int)Ship.A.BeltStern);
-                        armorQueue.Add((int)Ship.A.DeckBow);
-                        armorQueue.Add((int)Ship.A.ConningTower);
-                        armorQueue.Add((int)Ship.A.DeckStern);
-                        armorQueue.Add((int)Ship.A.Deck);
-                        armorQueue.Add((int)Ship.A.Belt); // Typo: the game uses BeltBow here
-                        armorQueue.Add((int)Ship.A.InnerBelt_1st);
-                        armorQueue.Add((int)Ship.A.InnerBelt_2nd);
-                        armorQueue.Add((int)Ship.A.InnerBelt_3rd);
-                        armorQueue.Add((int)Ship.A.InnerDeck_1st);
-                        armorQueue.Add((int)Ship.A.InnerDeck_2nd);
-                        armorQueue.Add((int)Ship.A.InnerDeck_3rd);
-                        armorQueue.Add((int)Ship.A.TurretSide);
-                        armorQueue.Add((int)Ship.A.TurretTop);
-                        armorQueue.Add((int)Ship.A.Barbette);
-                        armorQueue.Add((int)Ship.A.Superstructure);
-                        break;
-                }
-
-                _this.limiter = 699;
-                while (overweight && _this.limiter-- > 0)
-                {
-                    foreach (var i in armorQueue)
+                    float curArmorLerp;
+                    float sum = 0f;
+                    float sumTotal = 0f;
+                    foreach (var kvp in _this.armor)
                     {
-                        Ship.A a = (Ship.A)i;
-                        float min = _this.MinArmorForZone(a);
-                        if (!_this.armor.TryGetValue(a, out var curAmt) || curAmt == min)
-                            continue;
+                        sum += Mathf.InverseLerp(gaInfo.MinArmorValue(kvp.Key), gaInfo.MaxArmorValue(kvp.Key), kvp.Value);
+                        ++sumTotal;
+                    }
+                    curArmorLerp = sumTotal > 0 ? sum / sumTotal : 0f;
 
-                        // This function is bugged. It's supposed to return
-                        // a value based on how near max tonnage the ship is,
-                        // but instead just returns 28 for armor and 7 for
-                        // everything else. But we're going to use 2, like the
-                        // add case.
-                        float stepMult = 2f;
-                        float armorStep = G.settings.armorStep;
-                        float newAmt = G.settings.RoundToArmorStep(curAmt - armorStep * stepMult);
-                        newAmt = Mathf.Clamp(newAmt, min, _this.MaxArmorForZone(a));
-                        if (newAmt == curAmt)
-                            continue;
+                    _this.limiter = 699;
+                    Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                    while (overweight && _this.limiter-- > 0)
+                    {
+                        bool stopLoop = true;
+                        while (curArmorLerp > 0f)
+                        {
+                            curArmorLerp = Mathf.Clamp(curArmorLerp - gaInfo.lerpStep, 0f, 1f);
+                            foreach (var a in _this.armor.Keys)
+                                newArmor[a] = gaInfo.GetArmorValue(_this, a, curArmorLerp);
+                            if (!ModUtils.DictsEqual(newArmor, _this.armor))
+                            {
+                                stopLoop = false;
+                                break;
+                            }
+                        }
 
-                        _this.SetArmor(a, newAmt, true);
+                        if (stopLoop)
+                            break;
+
+                        _this.SetArmor(newArmor);
                         weight = _this.Weight();
                         if (weight < _this.tempGoodWeight)
                         {
@@ -855,6 +973,85 @@ namespace TweaksAndFixes
                             //weight = _this.Weight();
                             overweight = false;
                             break;
+                        }
+                    }
+                }
+                else
+                {
+                    Il2CppSystem.Collections.Generic.List<int> armorQueue;
+                    switch (_this.shipType.name)
+                    {
+                        case "bb":
+                            armorQueue = _this.armorReduceQueueBB;
+                            break;
+                        case "bc":
+                            armorQueue = _this.armorReduceQueueBC;
+                            break;
+                        case "ca":
+                            armorQueue = _this.armorReduceQueueCA;
+                            break;
+                        case "cl":
+                            armorQueue = _this.armorReduceQueueCL;
+                            break;
+                        case "dd":
+                            armorQueue = _this.armorReduceQueueDD;
+                            break;
+                        default:
+                            armorQueue = new Il2CppSystem.Collections.Generic.List<int>();
+                            armorQueue.Add((int)Ship.A.BeltBow);
+                            armorQueue.Add((int)Ship.A.BeltStern);
+                            armorQueue.Add((int)Ship.A.DeckBow);
+                            armorQueue.Add((int)Ship.A.ConningTower);
+                            armorQueue.Add((int)Ship.A.DeckStern);
+                            armorQueue.Add((int)Ship.A.Deck);
+                            armorQueue.Add((int)Ship.A.Belt); // Typo: the game uses BeltBow here
+                            armorQueue.Add((int)Ship.A.InnerBelt_1st);
+                            armorQueue.Add((int)Ship.A.InnerBelt_2nd);
+                            armorQueue.Add((int)Ship.A.InnerBelt_3rd);
+                            armorQueue.Add((int)Ship.A.InnerDeck_1st);
+                            armorQueue.Add((int)Ship.A.InnerDeck_2nd);
+                            armorQueue.Add((int)Ship.A.InnerDeck_3rd);
+                            armorQueue.Add((int)Ship.A.TurretSide);
+                            armorQueue.Add((int)Ship.A.TurretTop);
+                            armorQueue.Add((int)Ship.A.Barbette);
+                            armorQueue.Add((int)Ship.A.Superstructure);
+                            break;
+                    }
+
+                    _this.limiter = 699;
+                    bool changedArmor = true;
+                    while (overweight && _this.limiter-- > 0 && changedArmor)
+                    {
+                        changedArmor = false;
+                        foreach (var i in armorQueue)
+                        {
+                            Ship.A a = (Ship.A)i;
+                            float min = _this.MinArmorForZone(a);
+                            if (!_this.armor.TryGetValue(a, out var curAmt) || curAmt == min)
+                                continue;
+
+                            // This function is bugged. It's supposed to return
+                            // a value based on how near max tonnage the ship is,
+                            // but instead just returns 28 for armor and 7 for
+                            // everything else. But we're going to use 2, like the
+                            // add case.
+                            float stepMult = 2f;
+                            float armorStep = G.settings.armorStep;
+                            float newAmt = G.settings.RoundToArmorStep(curAmt - armorStep * stepMult);
+                            newAmt = Mathf.Clamp(newAmt, min, _this.MaxArmorForZone(a));
+                            if (newAmt == curAmt)
+                                continue;
+
+                            changedArmor = true;
+                            _this.SetArmor(a, newAmt, true);
+                            weight = _this.Weight();
+                            if (weight < _this.tempGoodWeight)
+                            {
+                                // we'll take the reduction - _this.SetArmor(a, curAmt, true);
+                                //weight = _this.Weight();
+                                overweight = false;
+                                break;
+                            }
                         }
                     }
                 }
@@ -973,6 +1170,32 @@ namespace TweaksAndFixes
                         break;
                 }
             }
+        }
+
+        public static float GetCitadelMultFromBase(Ship.A a)
+        {
+            float mult = 1f;
+            switch (a)
+            {
+                case Ship.A.InnerBelt_3rd: mult *= 0.8f; goto case Ship.A.InnerBelt_2nd;
+                case Ship.A.InnerBelt_2nd: mult *= 0.8f; goto case Ship.A.InnerBelt_1st;
+                case Ship.A.InnerBelt_1st: return mult * 0.5f;
+
+                case Ship.A.InnerDeck_3rd: mult *= 0.8f; goto case Ship.A.InnerDeck_2nd;
+                case Ship.A.InnerDeck_2nd: mult *= 0.8f; goto case Ship.A.InnerDeck_1st;
+                case Ship.A.InnerDeck_1st: return mult * 0.6f;
+
+                default: return 0f;
+            }
+        }
+
+        public static float GetCitadelArmorMax(Ship.A a, float belt, float deck)
+        {
+            if (a < Ship.A.InnerBelt_1st)
+                return 0f;
+
+            float val = a > Ship.A.InnerBelt_3rd ? deck : belt;
+            return val * GetCitadelMultFromBase(a);
         }
     }
 }

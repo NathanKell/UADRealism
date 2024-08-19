@@ -372,12 +372,22 @@ namespace TweaksAndFixes
 
             public static bool Read<TList, TItem>(TList output, string path, bool useComments = true) where TList : IList<TItem>
             {
+                if (!File.Exists(path))
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Could not open file `{path}`");
+                    return false;
+                }
                 var text = File.ReadAllText(path);
                 return Read<TList, TItem>(text, output, useComments);
             }
 
             public static bool Read<TDict, TKey, TValue>(TDict output, string path, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
             {
+                if (!File.Exists(path))
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Could not open file `{path}`");
+                    return false;
+                }
                 var text = File.ReadAllText(path);
                 return Read<TDict, TKey, TValue>(text, output, keyName, useComments);
             }

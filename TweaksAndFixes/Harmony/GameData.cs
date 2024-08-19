@@ -27,6 +27,7 @@ namespace TweaksAndFixes
             //Serializer.CSV.TestNative();
 
             GradeExtensions.LoadData();
+            GenArmorData.LoadData();
         }
 
         private static readonly List<string> _FixKeys = new List<string>();

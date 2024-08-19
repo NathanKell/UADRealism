@@ -12,7 +12,7 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(Ship))]
     internal class Patch_Ship
     {
-        internal static bool _IsGenerating = false;
+        internal static int _GenerateShipState = -1;
         internal static Ship _ShipForGenerateRandom = null;
         internal static bool _IsLoading = false;
         internal static Ship _ShipForLoading = null;
@@ -107,7 +107,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_GenerateArmor(float armorMaximal, Ship shipHint, ref Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> __result)
         {
-            __result = ShipM.GenerateArmor(armorMaximal, shipHint);
+            __result = ShipM.GenerateArmorNew(armorMaximal, shipHint);
             return false;
         }
 
@@ -211,12 +211,12 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
-            Patch_Ship._IsGenerating = true;
             Patch_Ship._ShipForGenerateRandom = __instance.__4__this;
             //Melon<TweaksAndFixes>.Logger.Msg($"In ship generation for {__instance.__4__this.vesselName}, state {__instance.__1__state}");
 
             // So we know what state we started in.
             __state = __instance.__1__state;
+            Patch_Ship._GenerateShipState = __state;
             var ship = __instance.__4__this;
             switch (__state)
             {
@@ -298,7 +298,7 @@ namespace TweaksAndFixes
             //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))
             //    __instance.__4__this.TAFData().ResetAllGrades();
 
-            Patch_Ship._IsGenerating = false;
+            Patch_Ship._GenerateShipState = -1;
             Patch_Ship._ShipForGenerateRandom = null;
             //Melon<TweaksAndFixes>.Logger.Msg($"Iteration for state {__state} ended, new state {__instance.__1__state}");
         }

@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Reflection;
 
 #pragma warning disable CS8601
+#pragma warning disable CS8602
 #pragma warning disable CS8603
 #pragma warning disable CS8604
 #pragma warning disable CS8625
@@ -532,6 +533,40 @@ namespace TweaksAndFixes
             val += delta;
             dict[key] = val;
             return val;
+        }
+
+        public static bool DictsEqual<TKey, TValue>(Dictionary<TKey, TValue> a, Dictionary<TKey, TValue> b)
+        {
+            if (a.Count != b.Count)
+                return false;
+
+            foreach (var kvp in a)
+            {
+                if (!b.TryGetValue(kvp.Key, out var bVal))
+                    return false;
+
+                if (kvp.Value == null ? bVal != null : !kvp.Value.Equals(bVal))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static bool DictsEqual<TKey, TValue>(Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue> a, Il2CppSystem.Collections.Generic.Dictionary<TKey, TValue> b)
+        {
+            if (a.Count != b.Count)
+                return false;
+
+            foreach (var kvp in a)
+            {
+                if (!b.TryGetValue(kvp.Key, out var bVal))
+                    return false;
+
+                if (kvp.Value == null ? bVal != null : !kvp.Value.Equals(bVal))
+                    return false;
+            }
+
+            return true;
         }
 
         public static void FillGradeData<T>(Il2CppSystem.Collections.Generic.Dictionary<int, T> dict, int max)
