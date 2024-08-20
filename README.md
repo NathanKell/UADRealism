@@ -37,6 +37,9 @@ TAF will look in the Mods folder (where its dll lives) for any csv files named t
 ### Mark 6+ guns
 Both the guns and partModels TextAssets can have a `param` column added. For a given gun, any of the mark-based values can be added to the param value with a list of mark followed by value. For example the 5in gun could have a param of `firerate(6;30;7;40), shellV(6;800;7;810)`. This would make it so that the Mark 6 5in gun would have a base fire rate of 30 and shell velocity of 800, and the mark 7 would have 40 and 810 respectively. The mark 5 values are extended for all other mark-based stats if no new value is specified (so mark 5 barrel weight, accuracy, etc would be used for marks 6 and 7. This also holds true for partModels, for example param for a gun could have `model(6;hood_gun_140_x2)` and all other mark 5 parameters would be extended to mark 6 (and 7, if there is a mark 7 of that gun). These new marks can be enabled in the technologies TextAsset just like any other mark.
 
+### Barbettes mount freely
+If a barbette part has `free` in its mountPoints, then it can mount freely (like guns) rather than snapping to mount points.
+
 ### Per-shiptype component selection weights
 The `param` value of a component now supports `weight_per`. This takes a set of ship types and weights. For example, `weight_per(bb;20;dd;0)` means that for BB ship types, the component's selection weight will be 20, for DD types it will be 0, and for all other types it will be the regular selection weight.
 
