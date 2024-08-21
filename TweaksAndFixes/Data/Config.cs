@@ -64,7 +64,7 @@ namespace TweaksAndFixes
                     continue;
 
                 // Do this to suppress warning message
-                Il2Cpp.G.GameData.parms.TryGetValue(attrib._param, out var param);
+                float param = Param(attrib._param);
                 bool isEnabled;
                 if (attrib._invertCheck)
                     isEnabled = param != attrib._checkValue && (attrib._checkValue == attrib._exceptVal || param != attrib._exceptVal);
@@ -74,6 +74,20 @@ namespace TweaksAndFixes
 
                 Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {((bool)(f.GetValue(null)) ? "Enabled" : "Disabled")}");
             }
+        }
+
+        public static float Param(string name, float defValue = 0f)
+        {
+            if (!Il2Cpp.G.GameData.parms.TryGetValue(name, out var param))
+                return defValue;
+            return param;
+        }
+
+        public static string? ParamS(string name, string? defValue = null)
+        {
+            if (!Il2Cpp.G.GameData.paramsRaw.TryGetValue(name, out var param))
+                return defValue;
+            return param.str;
         }
     }
 }

@@ -29,7 +29,7 @@ namespace TweaksAndFixes
                 return 0f;
             }
 
-            var ratioLerped = Mathf.Lerp(MonoBehaviourExt.Param("taf_conquest_event_chance_mult_starting_duration", 0.01f), MonoBehaviourExt.Param("taf_conquest_event_chance_mult_full_duration", 0.5f), _this.DurationTotal / (float)_this.maxDuration)
+            var ratioLerped = Mathf.Lerp(Config.Param("taf_conquest_event_chance_mult_starting_duration", 0.01f), Config.Param("taf_conquest_event_chance_mult_full_duration", 0.5f), _this.DurationTotal / (float)_this.maxDuration)
                 * _this.CurrentTonnage / totalReq;
 
             float killFactor;
@@ -46,7 +46,7 @@ namespace TweaksAndFixes
             }
             else
             {
-                ratioLerped += MonoBehaviourExt.Param("taf_conquest_event_add_chance", 0.66f);
+                ratioLerped += Config.Param("taf_conquest_event_add_chance", 0.66f);
                 // Game is bugged and has this ratio flipped
                 var killRatio = (_this.AttackerKillsTotal + 1f) / (_this.DefenderKillsTotal + 1f);
                 if (totalReq != -1f)
@@ -54,7 +54,7 @@ namespace TweaksAndFixes
                 killFactor = Mathf.Clamp01(killRatio * 0.5f);
             }
 
-            _this.cachedConquestChance = Mathf.Clamp01(Mathf.LerpUnclamped(1f, killFactor, MonoBehaviourExt.Param("taf_conquest_event_kill_factor", 1f)) * ratioLerped);
+            _this.cachedConquestChance = Mathf.Clamp01(Mathf.LerpUnclamped(1f, killFactor, Config.Param("taf_conquest_event_kill_factor", 1f)) * ratioLerped);
             return _this.cachedConquestChance;
         }
     }

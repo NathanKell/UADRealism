@@ -37,15 +37,15 @@ namespace TweaksAndFixes
         {
             CheckTurn();
 
-            var maxTF = MonoBehaviourExt.Param("taf_mines_max_tf_per_player", -1);
+            var maxTF = Config.Param("taf_mines_max_tf_per_player", -1);
             if (maxTF >= 0 && _attackedTFs.ValueOrNew(tf.Controller.data) is HashSet<CampaignController.TaskForce> set && set.Count >= maxTF && !set.Contains(tf))
                 return false;
 
-            var maxTFAttacks = MonoBehaviourExt.Param("taf_mines_max_tf_attacks_per_player", -1);
+            var maxTFAttacks = Config.Param("taf_mines_max_tf_attacks_per_player", -1);
             if (maxTFAttacks >= 0 && _numTFAttacks.GetValueOrDefault(tf.Controller.data) >= maxTFAttacks)
                 return false;
 
-            var maxShip = MonoBehaviourExt.Param("taf_mines_max_ships_per_player", -1);
+            var maxShip = Config.Param("taf_mines_max_ships_per_player", -1);
             if (maxShip >= 0 && _numShips.GetValueOrDefault(tf.Controller.data) >= maxShip)
                 return false;
 
@@ -70,11 +70,11 @@ namespace TweaksAndFixes
         {
             CheckTurn();
 
-            var maxShip = MonoBehaviourExt.Param("taf_mines_max_ships_per_player", -1);
+            var maxShip = Config.Param("taf_mines_max_ships_per_player", -1);
             if (maxShip >= 0 && _numShips.GetValueOrDefault(tf.Controller.data) >= maxShip)
                 return false;
 
-            var maxAttack = MonoBehaviourExt.Param("taf_mines_max_ships_per_tf", -1);
+            var maxAttack = Config.Param("taf_mines_max_ships_per_tf", -1);
             if (maxAttack >= 0 && _numAttacksPerTF.GetValueOrDefault(tf) >= maxAttack)
                 return false;
 
@@ -87,12 +87,13 @@ namespace TweaksAndFixes
         public static float DamageTaskForce(MinesFieldManager _this, CampaignController.TaskForce taskForce, Player mineFieldOwner, float minefieldRadiusKm, float damageMultiplier = 1f)
         {
             var rel = RelationExt.Between(CampaignController.Instance.CampaignData.Relations, mineFieldOwner, taskForce.Controller);
+            bool isWar = rel == null ? true : rel.isWar;
             var sweepPrevent = (MonoBehaviourExt.Param("mine_sweep_prevention", 0.1f) * taskForce.AverageMinesweepingValue()) + 1f;
             var detectVal = taskForce.AverageMineDetectValue();
             var fleetFactor = MonoBehaviourExt.Param("minefield_fleet_factor", 100000f);
 
-            float factor = fleetFactor * -(rel.isWar ? MonoBehaviourExt.Param("taf_mines_fleetfactor_mult_war", 2f) : MonoBehaviourExt.Param("taf_mines_fleetfactor_mult_peace", 2800f));
-            float tonnage = taskForce.BattleTonnage() * (rel.isWar ? MonoBehaviourExt.Param("taf_mines_tonnagefactor_war", 5f) : MonoBehaviourExt.Param("taf_mines_tonnagefactor_peace", 0.04f));
+            float factor = fleetFactor * -(isWar ? Config.Param("taf_mines_fleetfactor_mult_war", 2f) : Config.Param("taf_mines_fleetfactor_mult_peace", 2800f));
+            float tonnage = taskForce.BattleTonnage() * (isWar ? Config.Param("taf_mines_tonnagefactor_war", 5f) : Config.Param("taf_mines_tonnagefactor_peace", 0.04f));
 
             float randomDamageFactor = ModUtils.Range(factor, tonnage * minefieldRadiusKm / detectVal);
             if (MonoBehaviourExt.Param("minefield_chance_factor", 150000f) >= randomDamageFactor)
@@ -100,7 +101,7 @@ namespace TweaksAndFixes
             if (!CanAttackTF(taskForce))
                 return 0f;
 
-            float remappedRand = Util.Remap(randomDamageFactor, 0f, MonoBehaviourExt.Param("taf_mines_max_randomdamagefactor", 300000f), 0f, MonoBehaviourExt.Param("taf_mines_default_max_ships_per_tf", 10f), false);
+            float remappedRand = Util.Remap(randomDamageFactor, 0f, Config.Param("taf_mines_max_randomdamagefactor", 300000f), 0f, Config.Param("taf_mines_default_max_ships_per_tf", 10f), false);
             int shipsDamaged = Mathf.RoundToInt(remappedRand);
             taskForce.DamagedWithMinesTurn = CampaignController.Instance.CurrentDate.turn;
 
@@ -113,12 +114,12 @@ namespace TweaksAndFixes
                 _TempVessels.Add(v);
             _TempVessels.Shuffle();
 
-            var antimineMin = MonoBehaviourExt.Param("taf_mines_antimine_min", 0.05f);
-            var antimineMax = MonoBehaviourExt.Param("taf_mines_antimine_max", 10f);
-            var shipDamagePctMin = MonoBehaviourExt.Param("taf_mines_ship_damage_percent_min", 1f);
-            var shipDamagePctMax = MonoBehaviourExt.Param("taf_mines_ship_damage_percent_max", 200f);
-            var crewDamagePctMin = MonoBehaviourExt.Param("taf_mines_crew_damage_percent_min", 5f);
-            var crewDamagePctMax = MonoBehaviourExt.Param("taf_mines_crew_damage_percent_max", 35f);
+            var antimineMin = Config.Param("taf_mines_antimine_min", 0.05f);
+            var antimineMax = Config.Param("taf_mines_antimine_max", 10f);
+            var shipDamagePctMin = Config.Param("taf_mines_ship_damage_percent_min", 1f);
+            var shipDamagePctMax = Config.Param("taf_mines_ship_damage_percent_max", 200f);
+            var crewDamagePctMin = Config.Param("taf_mines_crew_damage_percent_min", 5f);
+            var crewDamagePctMax = Config.Param("taf_mines_crew_damage_percent_max", 35f);
 
             shipsDamaged = Math.Min(shipsDamaged, _TempVessels.Count);
             for (int i = 0; i < shipsDamaged && CanAttackInTF(taskForce); ++i)
@@ -147,8 +148,9 @@ namespace TweaksAndFixes
                     damageCrew = 1f;
                 }
 
-                _this.AddInfo(rel.isWar ? _this.enemyMineFieldDamage : _this.friendlyMineFieldDamage, curV, damageShip, damageCrew);
+                _this.AddInfo(isWar ? _this.enemyMineFieldDamage : _this.friendlyMineFieldDamage, curV, damageShip, damageCrew);
             }
+            _TempVessels.Clear();
             return totalDisp;
         }
 

@@ -60,19 +60,19 @@ namespace TweaksAndFixes
             _TempShipList.Sort((a, b) => a.dateFinished.CompareTo(b.dateFinished));
             _TempShipListMB.Sort((a, b) => a.dateFinished.CompareTo(b.dateFinished));
 
-            bool strictAge = MonoBehaviourExt.Param("taf_scrap_useOnlyShipAge", 0) > 0;
+            bool strictAge = Config.Param("taf_scrap_useOnlyShipAge", 0) > 0;
 
-            float capTerm = Mathf.Pow(player.ShipbuildingCapacity(), MonoBehaviourExt.Param("taf_scrap_capacityExponent", 1f));
-            float hystMult = MonoBehaviourExt.Param("taf_scrap_hysteresisMult", 1.05f);
+            float capTerm = Mathf.Pow(player.ShipbuildingCapacity(), Config.Param("taf_scrap_capacityExponent", 1f));
+            float hystMult = Config.Param("taf_scrap_hysteresisMult", 1.05f);
 
             // Scrap mothballed first
             ScrapLoop(_this, _TempShipTypeToWeightMB, _TempShipListMB,
-                MonoBehaviourExt.Param("taf_scrap_scrapTargetBaseMothball", float.MaxValue) + MonoBehaviourExt.Param("taf_scrap_capacityCoeffMothball", 0f) * capTerm,
+                Config.Param("taf_scrap_scrapTargetBaseMothball", float.MaxValue) + Config.Param("taf_scrap_capacityCoeffMothball", 0f) * capTerm,
                 totalTonnageMB, strictAge, hystMult);
 
             // Then scrap main fleet if needed
             ScrapLoop(_this, _TempShipTypeToWeight, _TempShipList,
-                MonoBehaviourExt.Param("taf_scrap_scrapTargetBaseMain", float.MaxValue) + MonoBehaviourExt.Param("taf_scrap_capacityCoeffMain", 0f) * capTerm,
+                Config.Param("taf_scrap_scrapTargetBaseMain", float.MaxValue) + Config.Param("taf_scrap_capacityCoeffMain", 0f) * capTerm,
                 totalTonnage, strictAge, hystMult);
 
             // Finally, scrap everything down to target, taking mothballed first
@@ -87,7 +87,7 @@ namespace TweaksAndFixes
                 _TempShipTypeToWeight.ChangeValueFor(s.shipType, weight);
             }
             ScrapLoop(_this, _TempShipTypeToWeight, _TempShipList,
-                MonoBehaviourExt.Param("taf_scrap_scrapTargetBaseTotal", float.MaxValue) + MonoBehaviourExt.Param("taf_scrap_capacityCoeffTotal", 0f) * capTerm,
+                Config.Param("taf_scrap_scrapTargetBaseTotal", float.MaxValue) + Config.Param("taf_scrap_capacityCoeffTotal", 0f) * capTerm,
                 totalTonnage, strictAge, hystMult);
 
             ClearScrapData();
@@ -102,7 +102,7 @@ namespace TweaksAndFixes
             float tonnageDelta = totalTonnage - targetTonnage;
             float tngLeft = tonnageDelta;
             float tMult = 1f / totalTonnage * tonnageDelta;
-            float maxScrapTngMult = MonoBehaviourExt.Param("taf_scrap_multToScrapRequiredVsShipTng", 2f);
+            float maxScrapTngMult = Config.Param("taf_scrap_multToScrapRequiredVsShipTng", 2f);
 
             foreach (var kvp in tngDict)
                 _TempShipTypeToRemaining[kvp.Key] = kvp.Value * tMult;
@@ -170,8 +170,8 @@ namespace TweaksAndFixes
             int oldestNew = int.MaxValue;
             int newestOld = int.MinValue;
             List<float> techCoverage = new List<float>();
-            int maxYearUp = Mathf.RoundToInt(MonoBehaviourExt.Param("taf_shareddesign_maxYearsIntoFuture", 10f));
-            int maxYearDpwnForSplit = Mathf.RoundToInt(MonoBehaviourExt.Param("taf_shareddesign_yearsInPastForSplit", 5f));
+            int maxYearUp = Mathf.RoundToInt(Config.Param("taf_shareddesign_maxYearsIntoFuture", 10f));
+            int maxYearDpwnForSplit = Mathf.RoundToInt(Config.Param("taf_shareddesign_yearsInPastForSplit", 5f));
             foreach (var tuple in designs)
             {
                 var store = tuple.Item1;
@@ -203,7 +203,7 @@ namespace TweaksAndFixes
                 oldestNew = newestOld - 5;
 
             // If some ships are borderline, grab them too.
-            int yearBorder = Mathf.RoundToInt(MonoBehaviourExt.Param("taf_shareddesign_yearClosenessAroundSplit", 3f));
+            int yearBorder = Mathf.RoundToInt(Config.Param("taf_shareddesign_yearClosenessAroundSplit", 3f));
             if (newestOld + yearBorder > oldestNew)
             {
                 for (int i = olderShips.Count - 1; i >= 0; --i)
@@ -270,9 +270,9 @@ namespace TweaksAndFixes
             List<int> indices = new List<int>();
             List<int> indicesMed = new List<int>();
             List<int> indicesLow = new List<int>();
-            float bestVal = MonoBehaviourExt.Param("taf_shareddesign_bestTechValue", 0.9f);
-            float okVal = MonoBehaviourExt.Param("taf_shareddesign_okTechValue", 0.75f);
-            float minVal = MonoBehaviourExt.Param("taf_shareddesign_minTechValue", 0.5f);
+            float bestVal = Config.Param("taf_shareddesign_bestTechValue", 0.9f);
+            float okVal = Config.Param("taf_shareddesign_okTechValue", 0.75f);
+            float minVal = Config.Param("taf_shareddesign_minTechValue", 0.5f);
             for (int i = 0; i < techCoverage.Count; ++i)
                 if (techCoverage[i] > bestVal)
                     indices.Add(i);
