@@ -16,6 +16,22 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(Ui))]
     internal class Patch_Ui
     {
+        internal static bool _InUpdateConstructor = false;
+
+        [HarmonyPrefix]
+        [HarmonyPatch(nameof(Ui.UpdateConstructor))]
+        internal static void Prefix_UpdateConstructor()
+        {
+            _InUpdateConstructor = true;
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ui.UpdateConstructor))]
+        internal static void Postfix_UpdateConstructor()
+        {
+            _InUpdateConstructor = false;
+        }
+
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ui.ConstructorUI))]
         internal static void Postfix_ConstructorUI(Ui __instance)
@@ -265,6 +281,41 @@ namespace TweaksAndFixes
             }));
 
             buttonNew.SetActive(true);
+        }
+    }
+
+    [HarmonyPatch(typeof(Ui.__c))]
+    internal class Patch_Ui_c
+    {
+        internal static bool _SetBackToBarbette = false;
+
+        internal static void FixBarbette()
+        {
+            if (_SetBackToBarbette)
+            {
+                _SetBackToBarbette = false;
+                if (G.ui.currentPart != null)
+                    G.ui.currentPart.isBarbette = true;
+            }
+        }
+
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__521_17))]
+        [HarmonyPostfix]
+        internal static void Postfix_17()
+        {
+            if (Patch_Ui._InUpdateConstructor && Patch_Ship._GenerateShipState < 0 && G.ui.currentPart != null && G.ui.currentPart.isBarbette
+                && G.ui.placingPart != null && !G.ui.placingPart.data.paramx.ContainsKey("center"))
+            {
+                _SetBackToBarbette = true;
+                G.ui.currentPart.isBarbette = false;
+            }
+        }
+
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__521_18))]
+        [HarmonyPostfix]
+        internal static void Postfix_18()
+        {
+            FixBarbette();
         }
     }
 }

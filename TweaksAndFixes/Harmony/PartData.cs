@@ -7,20 +7,18 @@ using Il2Cpp;
 
 namespace TweaksAndFixes
 {
-    [HarmonyPatch(typeof(PartData))]
-    internal class Patch_PartData
-    {
-        [HarmonyPrefix]
-        [HarmonyPatch("get_isFreeMountAllow")]
-        internal static bool Prefix_get_isFreeMountAllow(PartData __instance, ref bool __result)
-        {
-            if (Patch_Ship._GenerateShipState < 0 && __instance.isBarbette && !__instance.needsMount)
-            {
-                __result = false;
-                return false;
-            }
+    // Hilariously, this causes the game to crash (!) when run on a funnel.
 
-            return true;
-        }
-    }
+    //[HarmonyPatch(typeof(PartData))]
+    //internal class Patch_PartData
+    //{
+    //    [HarmonyPostfix]
+    //    [HarmonyPatch(nameof(PartData.isFreeMountAllow), MethodType.Getter)]
+    //    internal static void Postfix_get_isFreeMountAllow()
+    //    {
+    //        //if (Patch_Ui._InUpdateConstructor && Patch_Ship._GenerateShipState < 0 && __result && __instance != null && !__instance.needsMount)
+    //        //    __result = false;
+    //        //Melon<TweaksAndFixes>.Logger.Msg("In isFreeMountAllow");
+    //    }
+    //}
 }
