@@ -14,10 +14,10 @@ namespace TweaksAndFixes
     //{
     //    [HarmonyPostfix]
     //    [HarmonyPatch(nameof(PartData.isFreeMountAllow), MethodType.Getter)]
-    //    internal static void Postfix_get_isFreeMountAllow()
+    //    internal static void Postfix_get_isFreeMountAllow(PartData __instance, ref bool __result)
     //    {
-    //        //if (Patch_Ui._InUpdateConstructor && Patch_Ship._GenerateShipState < 0 && __result && __instance != null && !__instance.needsMount)
-    //        //    __result = false;
+    //        if (Patch_Ui._InUpdateConstructor && Patch_Ship._GenerateShipState < 0 && __result && __instance != null && !__instance.needsMount)
+    //            __result = false;
     //        //Melon<TweaksAndFixes>.Logger.Msg("In isFreeMountAllow");
     //    }
     //}
