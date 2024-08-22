@@ -307,7 +307,7 @@ namespace TweaksAndFixes
             }
         }
 
-        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__521_17))]
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_15))]
         [HarmonyPostfix]
         internal static void Postfix_17()
         {
@@ -321,7 +321,7 @@ namespace TweaksAndFixes
             }
         }
 
-        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__521_18))]
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_16))]
         [HarmonyPostfix]
         internal static void Postfix_18()
         {
