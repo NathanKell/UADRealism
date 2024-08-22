@@ -23,6 +23,7 @@ namespace TweaksAndFixes
         internal static void Prefix_UpdateConstructor()
         {
             _InUpdateConstructor = true;
+            Patch_Ui_c.RestoreBarbette(); // just in case
         }
 
         [HarmonyPostfix]
@@ -288,14 +289,21 @@ namespace TweaksAndFixes
     internal class Patch_Ui_c
     {
         internal static bool _SetBackToBarbette = false;
+        internal static PartData _BarbetteData = null;
 
-        internal static void FixBarbette()
+        internal static void RestoreBarbette()
         {
             if (_SetBackToBarbette)
             {
+                if (!Patch_Ui._InUpdateConstructor)
+                    Melon<TweaksAndFixes>.Logger.Warning("Made it to end of UpdateConstructor with unrestored Barbette");
+
                 _SetBackToBarbette = false;
-                if (G.ui.currentPart != null)
-                    G.ui.currentPart.isBarbette = true;
+                if (_BarbetteData != null)
+                {
+                    _BarbetteData.isBarbette = true;
+                    _BarbetteData = null;
+                }
             }
         }
 
@@ -307,7 +315,9 @@ namespace TweaksAndFixes
                 && G.ui.placingPart != null && !G.ui.placingPart.data.paramx.ContainsKey("center"))
             {
                 _SetBackToBarbette = true;
-                G.ui.currentPart.isBarbette = false;
+                _BarbetteData = G.ui.currentPart;
+                _BarbetteData.isBarbette = false;
+                Patch_Part._IgnoreNextActiveBad = true;
             }
         }
 
@@ -315,7 +325,7 @@ namespace TweaksAndFixes
         [HarmonyPostfix]
         internal static void Postfix_18()
         {
-            FixBarbette();
+            RestoreBarbette();
         }
     }
 }

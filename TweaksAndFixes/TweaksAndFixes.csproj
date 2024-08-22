@@ -49,6 +49,14 @@
       <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputModule">
+      <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.InputModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>False</Private>
