@@ -156,13 +156,13 @@ namespace TweaksAndFixes
             {
                 case "bb":
                     beltMult = 1.5f;
-                    turSideMult = 0.065f;
-                    barbetteMult = 0.135f;
+                    turSideMult = 1.6f; // seems just wrong - 0.065f;
+                    barbetteMult = 1.5f; // ditto 0.135f;
                     break;
                 case "bc":
                     beltMult = 1.385f;
-                    turSideMult = 0.08f;
-                    barbetteMult = 0.04f;
+                    turSideMult = 1.42f; // stock 0.08f;
+                    barbetteMult = 1.385f; // stock 0.04f;
                     break;
                 case "ca":
                     beltMult = 1.05f;
@@ -197,7 +197,7 @@ namespace TweaksAndFixes
             SetArmor(shipHint, dict, Ship.A.ConningTower, ArmorFunc(shipHint, Util.Remap(year, 1900f, 1940f, 14f, 16f, true), armorMaximal, isLight));
 
             float super = Util.Remap(year, 1900f, 1940f, 1f, UnityEngine.Random.Range(0.5f, 1.5f), true);
-            turSideMult *= Util.Remap(year, 1900f, 1940f, 1f, 1.7f, true) * armorMaximal;
+            turSideMult *= Util.Remap(year, 1900f, 1940f, 0.7f, 1.1f, true) * armorMaximal;
             if (GameManager.IsMission && BattleManager.Instance.CurrentAcademyMission.paramx.ContainsKey("crutch_ironclad")
                 && (shipHint.hull.name.Contains("monitor") || shipHint.hull.name.Contains("virginia")))
             {
@@ -411,7 +411,7 @@ namespace TweaksAndFixes
             // All ships are expected to have a hint
             if (_this.shipType.paramx.TryGetValue("armor_min_hint", out var minArmorParam) && minArmorParam.Count > 0 && float.TryParse(minArmorParam[0], out var armorParam))
             {
-                armorInches = _this.shipType.armor * armorParam;
+                armorInches = armorMin * armorParam;
             }
             else
             {

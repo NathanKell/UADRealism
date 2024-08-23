@@ -140,11 +140,10 @@ namespace TweaksAndFixes
                 float tonnageToSet = Mathf.Lerp(__instance.TonnageMin(), tonnageLimit, UnityEngine.Random.Range(0f, 1f));
                 __instance.SetTonnage(tonnageToSet);
                 var designYear = __instance.GetYear(__instance);
-                var origTargetWeightRatio = 1f - Mathf.Clamp(Util.Remap(designYear, 1890f, 1940f, 0.65f, 0.525f, true), 0.45f, 0.65f);
+                var origTargetWeightRatio = 1f - Util.Remap(designYear, 1890f, 1940f, 0.63f, 0.52f, true);
                 var stopFunc = new System.Func<bool>(() =>
                 {
-                    float yearRemap = Util.Remap(designYear, 1890f, 1940f, 0.6515f, 0.55f, true);
-                    return (1f - Mathf.Clamp(yearRemap, 0.45f, 0.75f)) >= (__instance.Weight() / __instance.Tonnage());
+                    return (__instance.Weight() / __instance.Tonnage()) <= (1f - Util.Remap(designYear, 1890f, 1940f, 0.63f, 0.52f, true));
                 });
                 ShipM.AdjustHullStats(__instance, -1, origTargetWeightRatio, stopFunc, true, true, true, true, null, -1f, -1f);
             }
@@ -227,12 +226,12 @@ namespace TweaksAndFixes
                 case 6:
                     float weightTargetRand = Util.Range(0.875f, 1.075f, __instance.__8__1.rnd);
                     var designYear = ship.GetYear(ship);
-                    float yearRemap = Util.Remap(designYear, 1890f, 1940f, 0.8f, 0.6f, true);
-                    float weightTargetRatio = 1f - Mathf.Clamp(weightTargetRand * yearRemap, 0.45f, 0.65f);
+                    float yearRemapToFreeTng = Util.Remap(designYear, 1890f, 1940f, 0.6f, 0.4f, true);
+                    float weightTargetRatio = 1f - Mathf.Clamp(weightTargetRand * yearRemapToFreeTng, 0.45f, 0.65f);
                     var stopFunc = new System.Func<bool>(() =>
                     {
                         float targetRand = Util.Range(0.875f, 1.075f, __instance.__8__1.rnd);
-                        return (1.0f - Mathf.Clamp(targetRand * yearRemap, 0.45f, 0.75f)) >= (ship.Weight() / ship.Tonnage());
+                        return (ship.Weight() / ship.Tonnage()) <= (1.0f - Mathf.Clamp(targetRand * yearRemapToFreeTng, 0.45f, 0.65f));
                     });
 
                     // We can't access the nullable floats on this object
