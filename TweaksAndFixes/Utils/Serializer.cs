@@ -27,7 +27,9 @@ namespace TweaksAndFixes
                 var curLine = new List<string>();
                 int len = input.Length;
                 bool inQuote = false;
+#if USE_ESCAPE
                 bool escaped = false;
+#endif
                 int bufIdx = 0;
                 fixed (char* pInput = input)
                 {
@@ -36,11 +38,13 @@ namespace TweaksAndFixes
                         char c = pInput[i];
                         if (c == '\n' || c == '\r')
                         {
+#if USE_ESCAPE
                             if (escaped)
                             {
                                 escaped = false;
                                 _Buf[bufIdx++] = '\\';
                             }
+#endif
 
                             if (!inQuote)
                             {
@@ -54,6 +58,7 @@ namespace TweaksAndFixes
                                 continue;
                             }
                         }
+#if USE_ESCAPE
                         if (escaped)
                         {
                             escaped = false;
@@ -72,14 +77,24 @@ namespace TweaksAndFixes
                             };
                         }
                         else
+#endif
                         {
                             switch (c)
                             {
+#if USE_ESCAPE
                                 case '\\':
                                     escaped = true;
                                     continue;
+#endif
 
                                 case '"':
+                                    if (i + 1 < len && pInput[i + 1] == '"')
+                                    {
+                                        // just output the "
+                                        // (stock uses "" as an escaped quote)
+                                        ++i;
+                                        break;
+                                    }
                                     inQuote = !inQuote;
                                     if (!inQuote) // i.e. we were quoted before
                                     {
