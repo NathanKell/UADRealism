@@ -4,6 +4,7 @@ using System.Text;
 using Il2Cpp;
 using System.Collections;
 using MelonLoader;
+using Il2CppInterop.Runtime;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -137,6 +138,91 @@ namespace TweaksAndFixes
                 }
 
                 return allLines;
+            }
+
+            private string MergeCSV(string inputOrig, string inputOverride)
+            {
+                // It would be nice to not parse all of both files.
+                // But this is simpler, and parsing override shouldn't
+                // be that expensive. Hopefully parsing input won't be
+                // either.
+                var input = ParseLines(inputOrig);
+                var over = ParseLines(inputOverride);
+                if (input.Count == 0)
+                    return inputOverride;
+                if (over.Count == 0)
+                    return inputOrig;
+
+                int iHeader = 0;
+                for (; iHeader < input.Count; ++iHeader)
+                    if (input[iHeader].Count > 0 && input[iHeader][0].StartsWith('@'))
+                        break;
+                if (iHeader == input.Count)
+                    return inputOrig;
+
+                int oHeader = 0;
+                for (; oHeader < over.Count; ++oHeader)
+                    if (over[iHeader].Count > 0 && over[oHeader][0].StartsWith('@'))
+                        break;
+
+                if (oHeader == over.Count)
+                    return inputOrig;
+
+                // Create a lookup for all the table rows
+                Dictionary<string, int> iLines = new Dictionary<string, int>();
+                for (int i = iHeader + 1; i < input.Count; ++i)
+                    if (input[i].Count > 0)
+                        iLines[input[i][0]] = i;
+
+                // Replace existing lines of the same key, add if
+                // existing not found.
+                for (int i = oHeader + 1; i < over.Count; ++i)
+                {
+                    var line = over[i];
+                    if (line.Count == 0 || line[0].StartsWith('#'))
+                        continue;
+
+                    if (iLines.TryGetValue(line[0], out var idx))
+                        input[idx] = line;
+                    else
+                        input.Add(line);
+                }
+
+                // We're going to skip comment lines
+                int iC = input.Count;
+                int iLast = iC - 1;
+                for (int i = iHeader; i < iC; ++i)
+                {
+                    var line = input[i];
+                    if (line.Count == 0 || line[0].StartsWith('#'))
+                        continue;
+
+                    int jC = line.Count;
+                    int jLast = jC - 1;
+                    for (int j = 0; j < line.Count; ++j)
+                    {
+                        var str = line[j];
+                        str = str.Replace("\"", "\"\"");
+                        if (str.Contains('\n') || str.Contains(','))
+                        {
+                            _StringBuilder.Append('\"');
+                            _StringBuilder.Append(str);
+                            _StringBuilder.Append('\"');
+                        }
+                        else
+                        {
+                            _StringBuilder.Append(str);
+                        }
+                        if (j != jLast)
+                            _StringBuilder.Append(',');
+                    }
+                    if (i != iLast)
+                        _StringBuilder.Append('\n');
+                }
+
+                string result = _StringBuilder.ToString();
+                _StringBuilder.Clear();
+                return result;
             }
 
             public static bool Write<TColl, TItem>(TColl coll, List<string> output, string keyName = null, bool markKey = true) where TColl : ICollection<TItem>
@@ -468,8 +554,11 @@ namespace TweaksAndFixes
                 }
             }
 
-            private static List<FieldInfo> GetCopyFields(Type type, string text)
+            private static List<Il2CppSystem.Reflection.FieldInfo> GetCopyFields(Il2CppSystem.Type type, string text)
             {
+                // Expensive, but we can't just stop at the first line
+                // because of comments, and I'd rather not do comment
+                // detection that low in the parser.
                 var allLines = ParseLines(text);
                 List<string> header = null;
                 for (int i = 0; i < allLines.Count; ++i)
@@ -495,8 +584,8 @@ namespace TweaksAndFixes
                         okNames.Add(s2);
                 }
 
-                var ret = new List<FieldInfo>();
-                var fields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                var ret = new List<Il2CppSystem.Reflection.FieldInfo>();
+                var fields = type.GetFields(Il2CppSystem.Reflection.BindingFlags.Instance | Il2CppSystem.Reflection.BindingFlags.NonPublic | Il2CppSystem.Reflection.BindingFlags.Public | Il2CppSystem.Reflection.BindingFlags.FlattenHierarchy);
                 foreach (var fi in fields)
                 {
                     if (okNames.Contains(fi.Name))
@@ -516,12 +605,15 @@ namespace TweaksAndFixes
 
                 // Lazy-fill this, because if we don't need to update
                 // existing records, no point in doing this.
-                List<FieldInfo> fieldsToCopy = null;
+                List<Il2CppSystem.Reflection.FieldInfo> fieldsToCopy = null;
 
                 int lastID = 0;
                 float lastOrder = 0f;
+                T example = null;
                 foreach (var item in existing.Values)
                 {
+                    example = item;
+
                     if (item.Id > lastID)
                         lastID = item.Id;
                     if (item.order > lastOrder)
@@ -533,7 +625,7 @@ namespace TweaksAndFixes
                     if (existing.TryGetValue(kvp.Key, out var oldData))
                     {
                         if (fieldsToCopy == null)
-                            fieldsToCopy = GetCopyFields(typeof(T), text);
+                            fieldsToCopy = GetCopyFields(example.GetIl2CppType(), text);
                         foreach (var fi in fieldsToCopy)
                             fi.SetValue(oldData, fi.GetValue(kvp.Value));
 
@@ -566,14 +658,16 @@ namespace TweaksAndFixes
 
                 // Lazy-fill this, because if we don't need to update
                 // existing records, no point in doing this.
-                List<FieldInfo> fieldsToCopy = null;
+                List<Il2CppSystem.Reflection.FieldInfo> fieldsToCopy = null;
 
                 // Find last ID and cache indices
                 int lastID = 0;
                 float lastOrder = 0f;
+                T example = null;
                 for (int i = existing.Count; i-- > 0;)
                 {
                     var item = existing[i];
+                    example = item;
                     _IndexCache[item.name] = i;
                     if (item.Id > lastID)
                         lastID = item.Id;
@@ -587,7 +681,7 @@ namespace TweaksAndFixes
                     {
                         var oldData = existing[i];
                         if (fieldsToCopy == null)
-                            fieldsToCopy = GetCopyFields(typeof(T), text.Substring(0, text.IndexOf('\n')));
+                            fieldsToCopy = GetCopyFields(example.GetIl2CppType(), text.Substring(0, text.IndexOf('\n')));
                         foreach (var fi in fieldsToCopy)
                             fi.SetValue(oldData, fi.GetValue(item));
 

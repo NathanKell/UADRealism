@@ -55,7 +55,7 @@ namespace TweaksAndFixes
 
         public static void LoadConfig()
         {
-            Melon<TweaksAndFixes>.Logger.Msg("Loading config:");
+            Melon<TweaksAndFixes>.Logger.Msg("************************************************** Loading config:");
             var fields = typeof(Config).GetFields(HarmonyLib.AccessTools.all);
             foreach (var f in fields)
             {

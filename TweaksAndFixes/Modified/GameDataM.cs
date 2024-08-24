@@ -47,19 +47,39 @@ namespace TweaksAndFixes
 
         private static void ProcessLoadInfo(GameData _this, GameData.LoadInfo l)
         {
-            string? text = Serializer.CSV.GetTextFromFile(l.name + ".csv");
-            if (text == null)
+            string filename = l.name + ".csv";
+            string fileOver = l.name + "_override.csv";
+            string? text = Serializer.CSV.GetTextFromFile(filename);
+            string? textOverride = Serializer.CSV.GetTextFromFile(fileOver);
+            if (text == null && textOverride == null)
             {
                 l.process.Invoke(l);
                 return;
             }
 
-            Melon<TweaksAndFixes>.Logger.Msg($"Overriding built-in asset {l.name} with {l.name}.csv");
+            string oText;
+            if (text != null)
+            {
+                oText = $"Replacing built-in asset {l.name} with {filename}";
+                if (textOverride != null)
+                    oText += $" and overriding with {fileOver}";
+            }
+            else
+                oText = $"Overriding built-in asset {l.name} with {fileOver}";
+
+            Melon<TweaksAndFixes>.Logger.Msg(oText);
+
+            // There's no raw data that events load into
+            // so we have to load even built-in config manually
+            // since we do postprocessing ourselves.
+            // Params, by contrast, we always load this way first.
+            if (l.name == "params" || (text == null && l.name != "events"))
+                l.process.Invoke(l);
 
             switch (l.name)
             {
                 case "loadingScreens":
-                    _this.loadingScreens = LoadCSV(text, _this.loadingScreens);
+                    _this.loadingScreens = LoadCSV(text, textOverride, _this.loadingScreens);
                     _this.loadingScreensByType = new Il2CppSystem.Collections.Generic.Dictionary<string, Il2CppSystem.Collections.Generic.List<LoadingScreenData>>();
                     foreach (var ls in _this.loadingScreens.Values)
                         _this.loadingScreensByType.ValueOrNew(ls.text).Add(ls);
@@ -69,8 +89,22 @@ namespace TweaksAndFixes
                 case "params":
                     // Weird special handling for this one.
                     // Was getting issues doing this entirely in managed code.
-                    l.process.Invoke(l);
-                    var newParams = Serializer.CSV.ProcessCSV<ParamData>(text, false);
+                    Il2CppSystem.Collections.Generic.Dictionary<string, ParamData> newParams;
+                    if (text != null)
+                    {
+                        newParams = Serializer.CSV.ProcessCSV<ParamData>(text, false);
+                    }
+                    else
+                    {
+                        newParams = new Il2CppSystem.Collections.Generic.Dictionary<string, ParamData>();
+                    }
+                    if (textOverride != null)
+                    {
+                        var newPar2 = Serializer.CSV.ProcessCSV<ParamData>(textOverride, false);
+                        foreach (var kvp in newPar2)
+                            newParams[kvp.Key] = kvp.Value;
+                    }
+
                     foreach (var np in newParams)
                     {
                         if (!_this.paramsRaw.TryGetValue(np.Key, out var pd))
@@ -97,7 +131,7 @@ namespace TweaksAndFixes
                     break;
 
                 case "accuracies":
-                    _this.accuracies = LoadCSV(text, _this.accuracies);
+                    _this.accuracies = LoadCSV(text, textOverride, _this.accuracies);
                     _this.accuracyGroups = new Il2CppSystem.Collections.Generic.Dictionary<string, Il2CppSystem.Collections.Generic.Dictionary<string, AccuracyData>>();
                     // Trying to use the native code here rather than entirely reimplementing. Hopefully fine.
                     GameData.__c__DisplayClass199_0 coAcc = new GameData.__c__DisplayClass199_0();
@@ -108,7 +142,13 @@ namespace TweaksAndFixes
                     break;
 
                 case "events":
-                    var evtData = Serializer.CSV.ProcessCSV<EventData>(text, false);
+                    Il2CppSystem.Collections.Generic.Dictionary<string, EventData> evtData;
+                    if (text == null)
+                        evtData = G.GameData.ProcessCsv<EventData>(l, false);
+                    else
+                        evtData = Serializer.CSV.ProcessCSV<EventData>(text, false);
+                    if (textOverride != null)
+                        evtData = Serializer.CSV.ProcessCSV<EventData>(textOverride, false, evtData);
                     List<EventData> processedEvts = new List<EventData>();
                     GameData.__c__DisplayClass199_0 coEvt = new GameData.__c__DisplayClass199_0();
                     coEvt.__4__this = _this;
@@ -125,107 +165,112 @@ namespace TweaksAndFixes
                 // Can't reflect because this needs to be templated.
                 // So instead there needs to be a case for each.
                 case "statEffects":
-                    _this.statEffects = LoadCSV(text, _this.statEffects);
+                    _this.statEffects = LoadCSV(text, textOverride, _this.statEffects);
                     break;
                 case "stats":
-                    _this.stats = LoadCSV(text, _this.stats);
+                    _this.stats = LoadCSV(text, textOverride, _this.stats);
                     break;
                 case "shipTypes":
-                    _this.shipTypes = LoadCSV(text, _this.shipTypes);
+                    _this.shipTypes = LoadCSV(text, textOverride, _this.shipTypes);
                     break;
                 case "guns":
-                    _this.guns = LoadCSV(text, _this.guns);
+                    _this.guns = LoadCSV(text, textOverride, _this.guns);
                     break;
                 case "torpedoTubes":
-                    _this.torpedoTubes = LoadCSV(text, _this.torpedoTubes);
+                    _this.torpedoTubes = LoadCSV(text, textOverride, _this.torpedoTubes);
                     break;
                 case "penetration":
-                    _this.penetrations = LoadCSV(text, _this.penetrations);
+                    _this.penetrations = LoadCSV(text, textOverride, _this.penetrations);
                     break;
                 case "players":
-                    _this.players = LoadCSV(text, _this.players);
+                    _this.players = LoadCSV(text, textOverride, _this.players);
                     break;
                 case "partCategories":
-                    _this.partCategories = LoadCSV(text, _this.partCategories);
+                    _this.partCategories = LoadCSV(text, textOverride, _this.partCategories);
                     break;
                 case "parts":
-                    _this.parts = LoadCSV(text, _this.parts);
+                    _this.parts = LoadCSV(text, textOverride, _this.parts);
                     break;
                 case "submarines":
-                    _this.submarines = LoadCSV(text, _this.submarines);
+                    _this.submarines = LoadCSV(text, textOverride, _this.submarines);
                     break;
                 case "partModels":
-                    _this.partModels = LoadCSV(text, _this.partModels);
+                    _this.partModels = LoadCSV(text, textOverride, _this.partModels);
                     break;
                 case "randParts":
-                    _this.randParts = LoadCSV(text, _this.randParts);
+                    _this.randParts = LoadCSV(text, textOverride, _this.randParts);
                     break;
                 case "randPartsRefit":
-                    _this.randPartsRefit = LoadCSV(text, _this.randPartsRefit);
+                    _this.randPartsRefit = LoadCSV(text, textOverride, _this.randPartsRefit);
                     break;
                 case "compTypes":
-                    _this.compTypes = LoadCSV(text, _this.compTypes);
+                    _this.compTypes = LoadCSV(text, textOverride, _this.compTypes);
                     break;
                 case "components":
-                    _this.components = LoadCSV(text, _this.components);
+                    _this.components = LoadCSV(text, textOverride, _this.components);
                     break;
                 case "techGroups":
-                    _this.techGroups = LoadCSV(text, _this.techGroups);
+                    _this.techGroups = LoadCSV(text, textOverride, _this.techGroups);
                     break;
                 case "techTypes":
-                    _this.techTypes = LoadCSV(text, _this.techTypes);
+                    _this.techTypes = LoadCSV(text, textOverride, _this.techTypes);
                     break;
                 case "techEffects":
-                    _this.techEffects = LoadCSV(text, _this.techEffects);
+                    _this.techEffects = LoadCSV(text, textOverride, _this.techEffects);
                     break;
                 case "technologies":
-                    _this.technologies = LoadCSV(text, _this.technologies);
+                    _this.technologies = LoadCSV(text, textOverride, _this.technologies);
                     break;
                 case "battleTypes":
-                    _this.battleTypes = LoadCSV(text, _this.battleTypes);
+                    _this.battleTypes = LoadCSV(text, textOverride, _this.battleTypes);
                     break;
                 case "missions":
-                    _this.missions = LoadCSV(text, _this.missions);
+                    _this.missions = LoadCSV(text, textOverride, _this.missions);
                     break;
                 case "tooltips":
-                    _this.tooltips = LoadCSV(text, _this.tooltips);
+                    _this.tooltips = LoadCSV(text, textOverride, _this.tooltips);
                     break;
                 case "shipNames":
-                    _this.shipNames = LoadCSV(text, _this.shipNames);
+                    _this.shipNames = LoadCSV(text, textOverride, _this.shipNames);
                     break;
                 case "help":
-                    _this.help = LoadCSV(text, _this.help);
+                    _this.help = LoadCSV(text, textOverride, _this.help);
                     break;
                 case "battleTypeEx":
-                    _this.battleTypesEx = LoadCSV(text, _this.battleTypesEx);
+                    _this.battleTypesEx = LoadCSV(text, textOverride, _this.battleTypesEx);
                     break;
                 case "crewTrainingLevels":
-                    _this.crewTrainingLevels = LoadCSV(text, _this.crewTrainingLevels);
+                    _this.crewTrainingLevels = LoadCSV(text, textOverride, _this.crewTrainingLevels);
                     break;
                 case "aiPersonalities":
-                    _this.aiPersonalities = LoadCSV(text, _this.aiPersonalities);
+                    _this.aiPersonalities = LoadCSV(text, textOverride, _this.aiPersonalities);
                     break;
                 case "aiAdmirals":
-                    _this.aiAdmiralsRaw = LoadCSV(text, _this.aiAdmiralsRaw);
+                    _this.aiAdmiralsRaw = LoadCSV(text, textOverride, _this.aiAdmiralsRaw);
                     break;
                 case "relationMatrix":
-                    _this.relationMatrix = LoadCSV(text, _this.relationMatrix, true);
+                    _this.relationMatrix = LoadCSV(text, textOverride, _this.relationMatrix, true);
                     break;
                 case "canals":
-                    _this.canals = LoadCSV(text, _this.canals);
+                    _this.canals = LoadCSV(text, textOverride, _this.canals);
                     break;
                 case "governmentMod":
-                    _this.governmentModifiers = LoadCSV(text, _this.governmentModifiers);
+                    _this.governmentModifiers = LoadCSV(text, textOverride, _this.governmentModifiers);
                     break;
             }
         }
 
         // A wrapper around ProcessCSV to simplify code.
-        // The dictionary argument is solely so the compiler can infer type, because annoyingly
-        // it can't just from the return value vs the assignment.
-        private static Il2CppSystem.Collections.Generic.Dictionary<string, T> LoadCSV<T>(string text, Il2CppSystem.Collections.Generic.Dictionary<string, T> dict, bool fillCustom = false) where T : Il2Cpp.BaseData
+        // Can be passed either the base input, the override
+        // input, or both. If no base input, use the passed
+        // dictionary.
+        private static Il2CppSystem.Collections.Generic.Dictionary<string, T> LoadCSV<T>(string? text, string? textOverride, Il2CppSystem.Collections.Generic.Dictionary<string, T> dict, bool fillCustom = false) where T : Il2Cpp.BaseData
         {
-            dict = Serializer.CSV.ProcessCSV<T>(text, fillCustom);
+            if (text != null)
+                dict = Serializer.CSV.ProcessCSV<T>(text, fillCustom);
+            if (textOverride != null)
+                dict = Serializer.CSV.ProcessCSV<T>(textOverride, fillCustom, dict);
+
             return dict;
         }
     }

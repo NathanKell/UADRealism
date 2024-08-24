@@ -98,7 +98,7 @@ namespace TweaksAndFixes
             yield return new WaitForEndOfFrame();
             Database.FillDatabase();
             Config.LoadConfig();
-            Melon<TweaksAndFixes>.Logger.Msg("Loaded database and config");
+            Melon<TweaksAndFixes>.Logger.Msg("**************************************** Loaded database and config");
 
             if (!Directory.Exists(Config._BasePath))
             {
