@@ -28,9 +28,6 @@ namespace TweaksAndFixes
                 var curLine = new List<string>();
                 int len = input.Length;
                 bool inQuote = false;
-#if USE_ESCAPE
-                bool escaped = false;
-#endif
                 int bufIdx = 0;
                 fixed (char* pInput = input)
                 {
@@ -39,14 +36,6 @@ namespace TweaksAndFixes
                         char c = pInput[i];
                         if (c == '\n' || c == '\r')
                         {
-#if USE_ESCAPE
-                            if (escaped)
-                            {
-                                escaped = false;
-                                _Buf[bufIdx++] = '\\';
-                            }
-#endif
-
                             if (!inQuote)
                             {
                                 if (curLine.Count > 0 || bufIdx > 0)
@@ -59,63 +48,35 @@ namespace TweaksAndFixes
                                 continue;
                             }
                         }
-#if USE_ESCAPE
-                        if (escaped)
+                        switch (c)
                         {
-                            escaped = false;
-                            // I'm sure there's a real way to do this
-                            // but this will do.
-                            c = c switch
-                            {
-                                'a' => '\a',
-                                'b' => '\b',
-                                'f' => '\f',
-                                'n' => '\n',
-                                'r' => '\r',
-                                't' => '\t',
-                                'v' => '\v',
-                                _ => c
-                            };
-                        }
-                        else
-#endif
-                        {
-                            switch (c)
-                            {
-#if USE_ESCAPE
-                                case '\\':
-                                    escaped = true;
-                                    continue;
-#endif
-
-                                case '"':
-                                    if (i + 1 < len && pInput[i + 1] == '"')
-                                    {
-                                        // just output the "
-                                        // (stock uses "" as an escaped quote)
-                                        ++i;
-                                        break;
-                                    }
-                                    inQuote = !inQuote;
-                                    if (!inQuote) // i.e. we were quoted before
-                                    {
-                                        curLine.Add(new string(_Buf, 0, bufIdx));
-                                        bufIdx = 0;
-                                        ++i; // skip the comma. If this is the end
-                                        // of the line this is still safe because the
-                                        // loop will terminate at len+1 instead of len.
-                                    }
-                                    continue;
-
-                                case ',':
-                                    if (!inQuote)
-                                    {
-                                        curLine.Add(new string(_Buf, 0, bufIdx));
-                                        bufIdx = 0;
-                                        continue;
-                                    }
+                            case '"':
+                                if (i + 1 < len && pInput[i + 1] == '"')
+                                {
+                                    // just output the "
+                                    // (stock uses "" as an escaped quote)
+                                    ++i;
                                     break;
-                            }
+                                }
+                                inQuote = !inQuote;
+                                if (!inQuote) // i.e. we were quoted before
+                                {
+                                    curLine.Add(new string(_Buf, 0, bufIdx));
+                                    bufIdx = 0;
+                                    ++i; // skip the comma. If this is the end
+                                         // of the line this is still safe because the
+                                         // loop will terminate at len+1 instead of len.
+                                }
+                                continue;
+
+                            case ',':
+                                if (!inQuote)
+                                {
+                                    curLine.Add(new string(_Buf, 0, bufIdx));
+                                    bufIdx = 0;
+                                    continue;
+                                }
+                                break;
                         }
                         _Buf[bufIdx++] = c;
                     }
@@ -295,91 +256,6 @@ namespace TweaksAndFixes
                 }
             }
 
-            private static string MergeCSVParsed(string inputOrig, string inputOverride)
-            {
-                // It would be nice to not parse all of both files.
-                // But this is simpler, and parsing override shouldn't
-                // be that expensive. Hopefully parsing input won't be
-                // either.
-                var input = ParseLines(inputOrig);
-                var over = ParseLines(inputOverride);
-                if (input.Count == 0)
-                    return inputOverride;
-                if (over.Count == 0)
-                    return inputOrig;
-
-                int iHeader = 0;
-                for (; iHeader < input.Count; ++iHeader)
-                    if (input[iHeader].Count > 0 && input[iHeader][0].StartsWith('@'))
-                        break;
-                if (iHeader == input.Count)
-                    return inputOrig;
-
-                int oHeader = 0;
-                for (; oHeader < over.Count; ++oHeader)
-                    if (over[iHeader].Count > 0 && over[oHeader][0].StartsWith('@'))
-                        break;
-
-                if (oHeader == over.Count)
-                    return inputOrig;
-
-                // Create a lookup for all the table rows
-                Dictionary<string, int> iLines = new Dictionary<string, int>();
-                for (int i = iHeader + 1; i < input.Count; ++i)
-                    if (input[i].Count > 0)
-                        iLines[input[i][0]] = i;
-
-                // Replace existing lines of the same key, add if
-                // existing not found.
-                for (int i = oHeader + 1; i < over.Count; ++i)
-                {
-                    var line = over[i];
-                    if (line.Count == 0 || line[0].StartsWith('#'))
-                        continue;
-
-                    if (iLines.TryGetValue(line[0], out var idx))
-                        input[idx] = line;
-                    else
-                        input.Add(line);
-                }
-
-                // We're going to skip comment lines
-                int iC = input.Count;
-                int iLast = iC - 1;
-                for (int i = iHeader; i < iC; ++i)
-                {
-                    var line = input[i];
-                    if (line.Count == 0 || line[0].StartsWith('#'))
-                        continue;
-
-                    int jC = line.Count;
-                    int jLast = jC - 1;
-                    for (int j = 0; j < line.Count; ++j)
-                    {
-                        var str = line[j];
-                        str = str.Replace("\"", "\"\"");
-                        if (str.Contains('\n') || str.Contains(','))
-                        {
-                            _StringBuilder.Append('\"');
-                            _StringBuilder.Append(str);
-                            _StringBuilder.Append('\"');
-                        }
-                        else
-                        {
-                            _StringBuilder.Append(str);
-                        }
-                        if (j != jLast)
-                            _StringBuilder.Append(',');
-                    }
-                    if (i != iLast)
-                        _StringBuilder.Append('\n');
-                }
-
-                string result = _StringBuilder.ToString();
-                _StringBuilder.Clear();
-                return result;
-            }
-
             public static bool Write<TColl, TItem>(TColl coll, List<string> output, string keyName = null, bool markKey = true) where TColl : ICollection<TItem>
             {
                 var tc = GetOrCreate(typeof(TItem));
@@ -438,7 +314,7 @@ namespace TweaksAndFixes
                 int lLen = lines.Count;
                 if (lLen < 2)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to read csv for list but line count was less than 2");
+                    Melon<TweaksAndFixes>.Logger.Error("CSV: Tried to read csv for list but line count was less than 2");
                     return false;
                 }
 
@@ -479,7 +355,7 @@ namespace TweaksAndFixes
                     }
                     if (create)
                     {
-                        var item = (TItem)GetNewInstance(typeof(TItem));
+                        var item = (TItem)Activator.CreateInstance(typeof(TItem), true);
                         allSucceeded &= tc.ReadType(item, line, header, defaults, useComments);
                         output.Add(item);
                     }
@@ -500,14 +376,14 @@ namespace TweaksAndFixes
                 int lLen = lines.Count;
                 if (lLen < 2)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to read csv for dictionary but line count was less than 2");
+                    Melon<TweaksAndFixes>.Logger.Error("CSV: Tried to read csv for dictionary but line count was less than 2");
                     return false;
                 }
 
                 var tc = GetOrCreate(typeof(TValue));
                 if (tc == null)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Could not fetch type info for " + (typeof(TValue).Name));
+                    Melon<TweaksAndFixes>.Logger.Error("CSV: Could not fetch type info for " + (typeof(TValue).Name));
                     return false;
                 }
 
@@ -550,13 +426,13 @@ namespace TweaksAndFixes
                 }
                 if (keyIdx < 0)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Could not find key in header");
+                    Melon<TweaksAndFixes>.Logger.Error("CSV: Could not find key in header");
                     return false;
                 }
 
                 if (!tc._nameToField.TryGetValue(keyName, out var keyField))
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Could not find field named {keyName} on {typeof(TValue).Name}");
+                    Melon<TweaksAndFixes>.Logger.Error($"CSV: Could not find field named {keyName} on {typeof(TValue).Name}");
                     return false;
                 }
 
@@ -594,11 +470,11 @@ namespace TweaksAndFixes
                     // so no need to test.
                     if (create && output.ContainsKey(key))
                     {
-                        Melon<TweaksAndFixes>.Logger.Error("[TweaksAndFixes] CSV: Tried to add object to dictionary with duplicate key " + key.ToString());
+                        Melon<TweaksAndFixes>.Logger.Error("CSV: Tried to add object to dictionary with duplicate key " + key.ToString());
                         continue;
                     }
 
-                    var item = (TValue)GetNewInstance(typeof(TValue));
+                    var item = (TValue)Activator.CreateInstance(typeof(TValue), true);
                     allSucceeded &= tc.ReadType(item, line, header, defaults, useComments);
                     output.Add(key, item);
                 }
@@ -902,17 +778,17 @@ namespace TweaksAndFixes
                 public Field _attrib = null;
                 public DataType _dataType = DataType.INVALID;
 
-                public FieldData(MemberInfo memberInfo, Field attrib)
+                public FieldData(FieldInfo fieldInfo, Field attrib)
                 {
                     this._attrib = attrib;
 
                     string pName = attrib.name;
-                    _fieldName = pName != null && pName.Length > 0 ? pName : memberInfo.Name;
+                    _fieldName = pName != null && pName.Length > 0 ? pName : fieldInfo.Name;
 
-                    _fieldInfo = memberInfo.DeclaringType.GetField(memberInfo.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    _fieldInfo = fieldInfo;
                     _fieldType = _fieldInfo.FieldType;
 
-                    SetDataType(true);
+                    _dataType = ValueDataType(_fieldType);
                 }
 
                 public bool Read(string value, object host)
@@ -924,7 +800,7 @@ namespace TweaksAndFixes
 
                     if (val == null)
                     {
-                        Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Failed to parse {value} to type {_dataType} on field type {_fieldType}");
+                        Melon<TweaksAndFixes>.Logger.Error($"CSV: Failed to parse {value} to type {_dataType} on field type {_fieldType}");
                         return false;
                     }
 
@@ -1002,7 +878,7 @@ namespace TweaksAndFixes
                             {
                                 string[] enumNames = fieldType.GetEnumNames();
                                 string defaultName = enumNames.Length > 0 ? enumNames[0] : string.Empty;
-                                Melon<TweaksAndFixes>.Logger.Warning($"[TweaksAndFixes] CSV: Couldn't parse value '{value}' for enum '{fieldType.Name}', default value '{defaultName}' will be used.\nValid values are {string.Join(", ", enumNames)}");
+                                Melon<TweaksAndFixes>.Logger.Warning($"CSV: Couldn't parse value '{value}' for enum '{fieldType.Name}', default value '{defaultName}' will be used.\nValid values are {string.Join(", ", enumNames)}");
                                 return null;
                             }
                         case DataType.ValueVector2:
@@ -1032,77 +908,53 @@ namespace TweaksAndFixes
                     if (_dataType != DataType.ValueString)
                     {
                         if (_dataType >= DataType.ValueVector2 && _dataType <= DataType.ValueColor32)
-                            output = "\"" + output + "\"";
+                            output = '"' + output + '"';
 
                         return true;
                     }
 
-                    int count = 0;
+                    int extraChar = 0;
                     int len = output.Length;
-                    bool hasComma = false;
-                    while (true)
+                    bool needQuote = false;
+                    fixed (char* pOldStr = output)
                     {
-                        fixed (char* pszO = output)
+                        for (int i = len; i-- > 0;)
                         {
-                            for (int i = len; i-- > 0;)
+                            char c = pOldStr[i];
+                            switch (c)
                             {
-                                char c = pszO[i];
-                                switch (c)
-                                {
-
-                                    case '\a':
-                                    case '\b':
-                                    case '\f':
-                                    case '\n':
-                                    case '\r':
-                                    case '\t':
-                                    case '\v':
-                                    case '"':
-                                        ++count;
-                                        break;
-
-                                    case ',':
-                                        hasComma = true;
-                                        break;
-                                }
+                                case '"':
+                                    ++extraChar;
+                                    goto case ',';
+                                case '\n':
+                                case ',':
+                                    needQuote = true;
+                                    break;
                             }
                         }
-                        if (count == 0)
-                            break;
-
+                    }
+                    if (needQuote)
+                    {
                         string oldStr = output;
-                        output = new string('x', count + len + 2);
-                        fixed (char* pszNew = output)
+                        output = new string(' ', len + 2 + extraChar);
+                        fixed (char* pNewStr = output)
                         {
                             fixed (char* pszOld = oldStr)
                             {
                                 int j = 0;
-                                pszNew[j++] = '"';
+                                pNewStr[j++] = '"';
                                 for (int i = 0; i < len; ++i)
                                 {
                                     char c = pszOld[i];
-                                    char c2 = c switch
-                                    {
-                                        '\a' => 'a',
-                                        '\b' => 'b',
-                                        '\f' => 'f',
-                                        '\n' => 'n',
-                                        '\r' => 'r',
-                                        '\t' => 't',
-                                        '\v' => 'v',
-                                        _ => c
-                                    };
-                                    if (c2 != c || c == '"')
-                                        pszNew[j++] = '\\';
-                                    pszNew[j++] = c2;
+                                    if (c == '"')
+                                        pNewStr[j++] = c;
+
+                                    pNewStr[j++] = c;
                                 }
-                                pszNew[j] = '"';
+                                pNewStr[j] = '"';
                             }
                         }
-                        break;
                     }
-                    if (hasComma)
-                        output = '"' + output + '"';
 
                     return true;
                 }
@@ -1217,17 +1069,11 @@ namespace TweaksAndFixes
 
                     return DataType.INVALID;
                 }
-
-                private void SetDataType(bool allowArrays)
-                {
-                    _dataType = ValueDataType(_fieldType);
-                }
             }
 
 
             private static readonly StringBuilder _StringBuilder = new StringBuilder();
             private static readonly Dictionary<Type, CSV> cache = new Dictionary<Type, CSV>();
-            //private static readonly Dictionary<Type, ConstructorInfo> _typeToConstrutor = new Dictionary<Type, ConstructorInfo>();
 
             private List<FieldData> _fields = new List<FieldData>();
             private Dictionary<string, FieldData> _nameToField = new Dictionary<string, FieldData>();
@@ -1235,14 +1081,14 @@ namespace TweaksAndFixes
 
             public CSV(Type t)
             {
-                MemberInfo[] members = t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
-                for (int i = 0, iC = members.Length; i < iC; ++i)
+                FieldInfo[] fields = t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+                for (int i = 0, iC = fields.Length; i < iC; ++i)
                 {
-                    var attrib = (Field)members[i].GetCustomAttribute(typeof(Field), inherit: true);
+                    var attrib = (Field)(fields[i].GetCustomAttribute(typeof(Field), inherit: true));
                     if (attrib == null)
                         continue;
 
-                    var data = new FieldData(members[i], attrib);
+                    var data = new FieldData(fields[i], attrib);
                     if (data._dataType != DataType.INVALID)
                     {
                         _fields.Add(data);
@@ -1270,12 +1116,12 @@ namespace TweaksAndFixes
                 }
                 if (count < hCountTrue)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and line: {count}\n{string.Join(",", header)}\n{string.Join(",", line)}");
+                    Melon<TweaksAndFixes>.Logger.Error($"CSV: Count mismatch between header line: {header.Count} and line: {count}\n{string.Join(",", header)}\n{string.Join(",", line)}");
                     return false;
                 }
                 if (defaults != null && defaults.Count < hCountTrue)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}\n{string.Join(",", header)}\n{string.Join(",", defaults)}");
+                    Melon<TweaksAndFixes>.Logger.Error($"CSV: Count mismatch between header line: {header.Count} and defaults line: {defaults.Count}\n{string.Join(",", header)}\n{string.Join(",", defaults)}");
                     return false;
                 }
                 for (int i = 0; i < hCountTrue; ++i)
@@ -1298,7 +1144,6 @@ namespace TweaksAndFixes
 
             public bool WriteType(object obj, out string output, FieldData key = null)
             {
-                int num = _fields.Count;
                 bool allSucceeded = true;
                 bool isNotFirst = false;
 
@@ -1391,7 +1236,6 @@ namespace TweaksAndFixes
 
             public string WriteHeader(FieldData key = null, bool markKey = false)
             {
-                int num = _fields.Count;
                 bool isNotFirst = false;
 
                 if (key != null)
@@ -1432,26 +1276,12 @@ namespace TweaksAndFixes
                 var tc = new CSV(t);
                 if (tc._fields.Count == 0)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"[TweaksAndFixes] CSV: No serializing fields on object of type {t.Name} that is referenced in persistent field, adding as null to TypeCache.");
+                    Melon<TweaksAndFixes>.Logger.Error($"CSV: No serializing fields on object of type {t.Name} that is referenced in persistent field, adding as null to TypeCache.");
                     tc = null;
                 }
 
                 cache[t] = tc;
                 return tc;
-            }
-
-            public static object GetNewInstance(Type t)
-            {
-                //if (!_typeToConstrutor.TryGetValue(t, out var cons))
-                //{
-                //    cons = t.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
-                //    _typeToConstrutor[t] = cons; // yes this might be null, but we're caching that it's null
-                //}
-                //if (cons == null)
-                //    return null;
-
-                //return cons.Invoke(null);
-                return Activator.CreateInstance(t, true);
             }
 
             internal static string Test()
