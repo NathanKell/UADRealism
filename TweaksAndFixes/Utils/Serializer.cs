@@ -20,7 +20,7 @@ namespace TweaksAndFixes
     {
         public class CSV
         {
-            private static readonly char[] _Buf = new char[1024];
+            private static readonly char[] _Buf = new char[65536];
 
             private static unsafe List<List<string>> ParseLines(string input)
             {
@@ -140,7 +140,162 @@ namespace TweaksAndFixes
                 return allLines;
             }
 
-            private string MergeCSV(string inputOrig, string inputOverride)
+            private static unsafe List<string> GetLinesUnprocessed(string input)
+            {
+                var allLines = new List<string>();
+                int len = input.Length;
+                bool inQuote = false;
+                int bufIdx = 0;
+                fixed (char* pInput = input)
+                {
+                    for (int i = 0; i < len; ++i)
+                    {
+                        char c = pInput[i];
+                        if (c == '\n' || c == '\r')
+                        {
+                            if (!inQuote)
+                            {
+                                if (bufIdx > 0)
+                                {
+                                    allLines.Add(new string(_Buf, 0, bufIdx));
+                                    bufIdx = 0;
+                                }
+                                continue;
+                            }
+                        }
+                        else if (c == '"')
+                        {
+                            // Stock uses "" as an escaped quote, so we don't
+                            // toggle quote state when we hit those, if we're
+                            // already quoted.
+                            if (inQuote && i + 1 < len && pInput[i + 1] == '"')
+                            {
+                                _Buf[bufIdx++] = c;
+                                _Buf[bufIdx++] = c;
+                                ++i;
+                                continue;
+                            }
+                            // Otherwise, toggle quote state.
+                            inQuote = !inQuote;
+                        }
+                        _Buf[bufIdx++] = c;
+                    }
+                    // The last line may not have a \n so we need to store it too.
+                    if (bufIdx > 0)
+                    {
+                        allLines.Add(new string(_Buf, 0, bufIdx));
+                    }
+                }
+                return allLines;
+            }
+
+            public static unsafe string MergeCSV(string baseText, string overrideText)
+            {
+                var baseLines = GetLinesUnprocessed(baseText);
+                var ovLines = GetLinesUnprocessed(overrideText);
+                Dictionary<string, int> lineLookup = new Dictionary<string, int>();
+                int bC = baseLines.Count;
+                int charCount = 0;
+                for (int i = 0; i < bC; ++i)
+                {
+                    var line = baseLines[i];
+                    if (line.Length > 0)
+                        charCount += line.Length + 1; // the extra \n
+                    string key = GetKey(line);
+                    if(key == null)
+                        continue;
+                    lineLookup[key] = i;
+                }
+
+                int oC = ovLines.Count;
+                for (int i = 0; i < oC; ++i)
+                {
+                    var line = ovLines[i];
+                    string key = GetKey(line);
+                    if (key == null)
+                        continue;
+
+                    if (!lineLookup.TryGetValue(key, out var idx))
+                    {
+                        baseLines.Add(line);
+                        charCount += line.Length + 1; // the extra \n
+                    }
+                    else
+                    {
+                        int oLen = baseLines[idx].Length;
+                        if (oLen > 0)
+                            charCount -= oLen;
+                        else
+                            ++charCount; // add the \n, since we skipped this line and thus its \n above.
+                        charCount += line.Length;
+                        baseLines[idx] = line;
+                    }
+                }
+
+                var mergeStr = new string(' ', charCount);
+                fixed (char* pStr = mergeStr)
+                {
+                    bC = baseLines.Count;
+                    int bufIdx = 0;
+                    for (int i = 0; i < bC; ++i)
+                    {
+                        int jC = baseLines[i].Length;
+                        if (jC == 0)
+                            continue;
+                        fixed (char* pLine = baseLines[i])
+                        {
+                            for (int j = 0; j < jC; ++j)
+                                pStr[bufIdx++] = pLine[j];
+                        }
+                        pStr[bufIdx++] = '\n';
+                    }
+                }
+
+                return mergeStr;
+            }
+
+            private static unsafe string GetKey(string line)
+            {
+                int sLen = line.Length;
+                if (sLen == 0)
+                    return null;
+                fixed (char* pLine = line)
+                {
+                    char first = pLine[0];
+                    if (first == '@' || first == '#')
+                        return null;
+
+                    if (first != '"')
+                    {
+                        for (int i = 0; i < sLen; ++i)
+                            if (pLine[i] == ',')
+                                return line.Substring(0, i);
+
+                        return line;
+                    }
+
+                    // Ugly case. We have to handle " parsing.
+
+
+                    for (int i = 1; i < sLen; ++i)
+                    {
+                        char c = pLine[i];
+                        if (c == '"')
+                        {
+                            // Skip escaped quotes
+                            if (i < sLen - 1 && pLine[i + 1] == '"')
+                            {
+                                ++i;
+                                continue;
+                            }
+                            return line.Substring(0, i);
+                        }
+                    }
+                    return line;
+                }
+            }
+
+            private static string MergeCSVParsed(string inputOrig, string inputOverride)
             {
                 // It would be nice to not parse all of both files.
                 // But this is simpler, and parsing override shouldn't
@@ -523,7 +678,12 @@ namespace TweaksAndFixes
                 return File.ReadAllText(filePath);
             }
 
-            private static readonly string _TempTextAssetName = "tafTempTA";
+            public static readonly string _TempTextAssetName = "tafTempTA";
+            public static void SetTempTextAssetText(string? text)
+            {
+                if (text != null)
+                    TextAsset.Internal_CreateInstance(_TempTextAsset, text);
+            }
 
             private static TextAsset __TempTextAsset = null;
             private static TextAsset _TempTextAsset
@@ -598,7 +758,7 @@ namespace TweaksAndFixes
             // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
             public static Il2CppSystem.Collections.Generic.Dictionary<string, T> ProcessCSV<T>(string text, bool fillCustom, Il2CppSystem.Collections.Generic.Dictionary<string, T> existing = null) where T : BaseData
             {
-                TextAsset.Internal_CreateInstance(_TempTextAsset, text);
+                SetTempTextAssetText(text);
                 var newDict = G.GameData.ProcessCsv<T>(_TempLoadInfo, fillCustom);
                 if (existing == null)
                     return newDict;
@@ -650,7 +810,7 @@ namespace TweaksAndFixes
             // If this takes an existing collection, it must be updated BEFORE PostProcess runs.
             public static Il2CppSystem.Collections.Generic.List<T> ProcessCSVToList<T>(string text, bool fillCustom, Il2CppSystem.Collections.Generic.List<T> existing = null) where T : BaseData
             {
-                TextAsset.Internal_CreateInstance(_TempTextAsset, text);
+                SetTempTextAssetText(text);
                 var list = new Il2CppSystem.Collections.Generic.List<T>();
                 G.GameData.ProcessCsv<T>(_TempLoadInfo, list, null, fillCustom);
                 if (existing == null)
