@@ -12,6 +12,7 @@ using Il2Cpp;
 using TweaksAndFixes;
 using Il2CppSystem.Linq;
 using Il2CppDigitalRuby.PyroParticles;
+using System.Globalization;
 
 #pragma warning disable CS8602
 #pragma warning disable CS8603
@@ -409,7 +410,7 @@ namespace TweaksAndFixes
                 armorMin = _this.shipType.armor;
             float armorInches;
             // All ships are expected to have a hint
-            if (_this.shipType.paramx.TryGetValue("armor_min_hint", out var minArmorParam) && minArmorParam.Count > 0 && float.TryParse(minArmorParam[0], out var armorParam))
+            if (_this.shipType.paramx.TryGetValue("armor_min_hint", out var minArmorParam) && minArmorParam.Count > 0 && float.TryParse(minArmorParam[0], NumberStyles.Float | NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var armorParam))
             {
                 armorInches = armorMin * armorParam;
             }

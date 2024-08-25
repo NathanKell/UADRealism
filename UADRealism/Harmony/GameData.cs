@@ -541,7 +541,7 @@ namespace UADRealism
                     {
                         var lst = hullEff[i];
                         // hullweight uses argindex 0
-                        lst[0] = (Mathf.RoundToInt(float.Parse(lst[0]) * 0.75f * 10000f) * 0.0001f).ToString();
+                        lst[0] = (Mathf.RoundToInt(float.Parse(lst[0], ModUtils._InvariantCulture) * 0.75f * 10000f) * 0.0001f).ToString();
                     }
                 }
 

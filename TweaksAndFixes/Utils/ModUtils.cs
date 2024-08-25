@@ -6,6 +6,7 @@ using UnityEngine;
 using Il2Cpp;
 using System.Runtime.CompilerServices;
 using System.Reflection;
+using System.Globalization;
 
 #pragma warning disable CS8601
 #pragma warning disable CS8602
@@ -22,6 +23,8 @@ namespace TweaksAndFixes
         // nullables _with no value_. So we're going to just store a bunch of statics here we can use
         // instead of allocating each time.
         public static Il2CppSystem.Nullable<int>  _NullableEmpty_Int = new Il2CppSystem.Nullable<int>();
+
+        public static readonly CultureInfo _InvariantCulture = CultureInfo.InvariantCulture;
 
         // Reimplementation of stock function
         public static void FindChildrenStartsWith(GameObject obj, string str, List<GameObject> list)

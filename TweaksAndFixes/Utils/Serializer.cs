@@ -770,7 +770,7 @@ namespace TweaksAndFixes
 
             public class FieldData
             {
-                private static readonly System.Globalization.CultureInfo _Invariant = System.Globalization.CultureInfo.InvariantCulture;
+                private static readonly System.Globalization.CultureInfo _Invariant = ModUtils._InvariantCulture;
 
                 public string _fieldName = null;
                 public Type _fieldType = null;
@@ -824,49 +824,49 @@ namespace TweaksAndFixes
                                 return b;
                             return null;
                         case DataType.ValueDouble:
-                            if (double.TryParse(value, out var d))
+                            if (double.TryParse(value, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var d))
                                 return d;
                             return null;
                         case DataType.ValueFloat:
-                            if (float.TryParse(value, out var f))
+                            if (float.TryParse(value, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var f))
                                 return f;
                             return null;
                         case DataType.ValueDecimal:
-                            if (decimal.TryParse(value, out var dc))
+                            if (decimal.TryParse(value, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var dc))
                                 return dc;
                             return null;
                         case DataType.ValueInt:
-                            if (int.TryParse(value, out var i))
+                            if (int.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var i))
                                 return i;
                             return null;
                         case DataType.ValueUInt:
-                            if (uint.TryParse(value, out var ui))
+                            if (uint.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var ui))
                                 return ui;
                             return null;
                         case DataType.ValueChar:
                             return value.Length > 0 ? value[0] : '\0';
                         case DataType.ValueShort:
-                            if (short.TryParse(value, out var s))
+                            if (short.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var s))
                                 return s;
                             return null;
                         case DataType.ValueUShort:
-                            if (ushort.TryParse(value, out var us))
+                            if (ushort.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var us))
                                 return us;
                             return null;
                         case DataType.ValueLong:
-                            if (long.TryParse(value, out var l))
+                            if (long.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var l))
                                 return l;
                             return null;
                         case DataType.ValueULong:
-                            if (ulong.TryParse(value, out var ul))
+                            if (ulong.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var ul))
                                 return ul;
                             return null;
                         case DataType.ValueByte:
-                            if (byte.TryParse(value, out var by))
+                            if (byte.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var by))
                                 return by;
                             return null;
                         case DataType.ValueSByte:
-                            if (sbyte.TryParse(value, out var sb))
+                            if (sbyte.TryParse(value, System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var sb))
                                 return sb;
                             return null;
                         case DataType.ValueEnum:
@@ -1676,6 +1676,19 @@ namespace TweaksAndFixes
             }
         }
 
+        public class JSON
+        {
+            public class JSONObject
+            {
+            }
+
+            public interface ISaveLoad
+            {
+                bool Load(JSONObject obj);
+                bool Save(JSONObject obj);
+            }
+        }
+
         [System.AttributeUsage(System.AttributeTargets.Field | System.AttributeTargets.Property, AllowMultiple = false)]
         public class Field : System.Attribute
         {
@@ -1701,7 +1714,7 @@ namespace TweaksAndFixes
             if (data.Length != 2)
                 return Vector2.zero;
 
-            return new Vector2(float.Parse(data[0], System.Globalization.CultureInfo.InvariantCulture), float.Parse(data[1], System.Globalization.CultureInfo.InvariantCulture));
+            return new Vector2(float.Parse(data[0], ModUtils._InvariantCulture), float.Parse(data[1], ModUtils._InvariantCulture));
         }
 
         public static Vector3 ParseVector3(string val)
@@ -1711,7 +1724,7 @@ namespace TweaksAndFixes
             if (data.Length != 3)
                 return Vector3.zero;
 
-            return new Vector3(float.Parse(data[0], System.Globalization.CultureInfo.InvariantCulture), float.Parse(data[1], System.Globalization.CultureInfo.InvariantCulture), float.Parse(data[2], System.Globalization.CultureInfo.InvariantCulture));
+            return new Vector3(float.Parse(data[0], ModUtils._InvariantCulture), float.Parse(data[1], ModUtils._InvariantCulture), float.Parse(data[2], ModUtils._InvariantCulture));
         }
 
         public static Vector4 ParseVector4(string val)
@@ -1721,7 +1734,7 @@ namespace TweaksAndFixes
             if (data.Length != 4)
                 return Vector4.zero;
 
-            return new Vector4(float.Parse(data[0]), float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]));
+            return new Vector4(float.Parse(data[0], ModUtils._InvariantCulture), float.Parse(data[1], ModUtils._InvariantCulture), float.Parse(data[2], ModUtils._InvariantCulture), float.Parse(data[3], ModUtils._InvariantCulture));
         }
 
         public static Quaternion ParseQuaternion(string val)
@@ -1731,7 +1744,7 @@ namespace TweaksAndFixes
             if (data.Length != 4)
                 return Quaternion.identity;
 
-            return new Quaternion(float.Parse(data[0]), float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]));
+            return new Quaternion(float.Parse(data[0], ModUtils._InvariantCulture), float.Parse(data[1], ModUtils._InvariantCulture), float.Parse(data[2], ModUtils._InvariantCulture), float.Parse(data[3], ModUtils._InvariantCulture));
         }
 
         public static Matrix4x4 ParseMatrix4x4(string val)
@@ -1743,25 +1756,25 @@ namespace TweaksAndFixes
 
             Matrix4x4 matrix = Matrix4x4.identity;
 
-            matrix.m00 = float.Parse(data[0]);
-            matrix.m01 = float.Parse(data[1]);
-            matrix.m02 = float.Parse(data[2]);
-            matrix.m03 = float.Parse(data[3]);
+            matrix.m00 = float.Parse(data[0], ModUtils._InvariantCulture);
+            matrix.m01 = float.Parse(data[1], ModUtils._InvariantCulture);
+            matrix.m02 = float.Parse(data[2], ModUtils._InvariantCulture);
+            matrix.m03 = float.Parse(data[3], ModUtils._InvariantCulture);
 
-            matrix.m10 = float.Parse(data[4]);
-            matrix.m11 = float.Parse(data[5]);
-            matrix.m11 = float.Parse(data[6]);
-            matrix.m12 = float.Parse(data[7]);
+            matrix.m10 = float.Parse(data[4], ModUtils._InvariantCulture);
+            matrix.m11 = float.Parse(data[5], ModUtils._InvariantCulture);
+            matrix.m11 = float.Parse(data[6], ModUtils._InvariantCulture);
+            matrix.m12 = float.Parse(data[7], ModUtils._InvariantCulture);
 
-            matrix.m20 = float.Parse(data[8]);
-            matrix.m21 = float.Parse(data[9]);
-            matrix.m22 = float.Parse(data[10]);
-            matrix.m23 = float.Parse(data[11]);
+            matrix.m20 = float.Parse(data[8], ModUtils._InvariantCulture);
+            matrix.m21 = float.Parse(data[9], ModUtils._InvariantCulture);
+            matrix.m22 = float.Parse(data[10], ModUtils._InvariantCulture);
+            matrix.m23 = float.Parse(data[11], ModUtils._InvariantCulture);
 
-            matrix.m30 = float.Parse(data[12]);
-            matrix.m31 = float.Parse(data[13]);
-            matrix.m32 = float.Parse(data[14]);
-            matrix.m33 = float.Parse(data[15]);
+            matrix.m30 = float.Parse(data[12], ModUtils._InvariantCulture);
+            matrix.m31 = float.Parse(data[13], ModUtils._InvariantCulture);
+            matrix.m32 = float.Parse(data[14], ModUtils._InvariantCulture);
+            matrix.m33 = float.Parse(data[15], ModUtils._InvariantCulture);
 
             return matrix;
         }
@@ -1774,9 +1787,9 @@ namespace TweaksAndFixes
                 return Color.white;
 
             if (data.Length == 3)
-                return new Color(float.Parse(data[0]), float.Parse(data[1]), float.Parse(data[2]));
+                return new Color(float.Parse(data[0], ModUtils._InvariantCulture), float.Parse(data[1], ModUtils._InvariantCulture), float.Parse(data[2], ModUtils._InvariantCulture));
             else
-                return new Color(float.Parse(data[0]), float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]));
+                return new Color(float.Parse(data[0], ModUtils._InvariantCulture), float.Parse(data[1], ModUtils._InvariantCulture), float.Parse(data[2], ModUtils._InvariantCulture), float.Parse(data[3], ModUtils._InvariantCulture));
         }
 
         public static Color32 ParseColor32(string val)
@@ -1787,64 +1800,64 @@ namespace TweaksAndFixes
                 return Color.white;
 
             if (data.Length == 3)
-                return new Color32(byte.Parse(data[0]), byte.Parse(data[1]), byte.Parse(data[2]), 255);
+                return new Color32(byte.Parse(data[0], ModUtils._InvariantCulture), byte.Parse(data[1], ModUtils._InvariantCulture), byte.Parse(data[2], ModUtils._InvariantCulture), 255);
             else
-                return new Color32(byte.Parse(data[0]), byte.Parse(data[1]), byte.Parse(data[2]), byte.Parse(data[3]));
+                return new Color32(byte.Parse(data[0], ModUtils._InvariantCulture), byte.Parse(data[1], ModUtils._InvariantCulture), byte.Parse(data[2], ModUtils._InvariantCulture), byte.Parse(data[3], ModUtils._InvariantCulture));
         }
 
         public static string WriteVector(Vector2 vector)
         {
-            return vector.x.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + vector.y.ToString("G9", System.Globalization.CultureInfo.InvariantCulture);
+            return vector.x.ToString("G9", ModUtils._InvariantCulture) + "," + vector.y.ToString("G9", ModUtils._InvariantCulture);
         }
 
         public static string WriteVector(Vector3 vector)
         {
-            return vector.x.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + vector.y.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + vector.z.ToString("G9", System.Globalization.CultureInfo.InvariantCulture);
+            return vector.x.ToString("G9", ModUtils._InvariantCulture) + "," + vector.y.ToString("G9", ModUtils._InvariantCulture) + "," + vector.z.ToString("G9", ModUtils._InvariantCulture);
         }
 
         public static string WriteVector(Vector4 vector)
         {
             //if (vector == null) return "";
-            return vector.x.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + vector.y.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + vector.z.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + vector.w.ToString("G9", System.Globalization.CultureInfo.InvariantCulture);
+            return vector.x.ToString("G9", ModUtils._InvariantCulture) + "," + vector.y.ToString("G9", ModUtils._InvariantCulture) + "," + vector.z.ToString("G9", ModUtils._InvariantCulture) + "," + vector.w.ToString("G9", ModUtils._InvariantCulture);
         }
 
         public static string WriteQuaternion(Quaternion quaternion)
         {
-            return quaternion.x.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + quaternion.y.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + quaternion.z.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + quaternion.w.ToString("G9", System.Globalization.CultureInfo.InvariantCulture);
+            return quaternion.x.ToString("G9", ModUtils._InvariantCulture) + "," + quaternion.y.ToString("G9", ModUtils._InvariantCulture) + "," + quaternion.z.ToString("G9", ModUtils._InvariantCulture) + "," + quaternion.w.ToString("G9", ModUtils._InvariantCulture);
         }
 
         public static string WriteMatrix4x4(Matrix4x4 matrix)
         {
             return
-                matrix.m00.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m01.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m02.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m03.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
+                matrix.m00.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m01.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m02.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m03.ToString("G9", ModUtils._InvariantCulture) + ","
 
-                + matrix.m10.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m11.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m12.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m13.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
+                + matrix.m10.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m11.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m12.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m13.ToString("G9", ModUtils._InvariantCulture) + ","
 
-                + matrix.m20.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m21.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m22.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m23.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
+                + matrix.m20.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m21.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m22.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m23.ToString("G9", ModUtils._InvariantCulture) + ","
 
-                + matrix.m30.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m31.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m32.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + ","
-                + matrix.m33.ToString("G9", System.Globalization.CultureInfo.InvariantCulture);
+                + matrix.m30.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m31.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m32.ToString("G9", ModUtils._InvariantCulture) + ","
+                + matrix.m33.ToString("G9", ModUtils._InvariantCulture);
         }
 
         public static string WriteColor(Color color)
         {
-            return color.r.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + color.g.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + color.b.ToString("G9", System.Globalization.CultureInfo.InvariantCulture) + "," + color.a.ToString("G9", System.Globalization.CultureInfo.InvariantCulture);
+            return color.r.ToString("G9", ModUtils._InvariantCulture) + "," + color.g.ToString("G9", ModUtils._InvariantCulture) + "," + color.b.ToString("G9", ModUtils._InvariantCulture) + "," + color.a.ToString("G9", ModUtils._InvariantCulture);
         }
 
         public static string WriteColor(Color32 color)
         {
-            return color.r.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + color.g.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + color.b.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + color.a.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return color.r.ToString(ModUtils._InvariantCulture) + "," + color.g.ToString(ModUtils._InvariantCulture) + "," + color.b.ToString(ModUtils._InvariantCulture) + "," + color.a.ToString(ModUtils._InvariantCulture);
         }
     }
 }

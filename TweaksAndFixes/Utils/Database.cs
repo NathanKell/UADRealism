@@ -95,7 +95,7 @@ namespace TweaksAndFixes
                         case "gun":
                             foreach (var effList in kvpE.Value)
                             {
-                                if (effList.Count < 2 || !float.TryParse(effList[0], out var calF))
+                                if (effList.Count < 2 || !float.TryParse(effList[0], System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var calF))
                                     continue;
                                 if (!int.TryParse(effList[1], out var grade))
                                     continue;

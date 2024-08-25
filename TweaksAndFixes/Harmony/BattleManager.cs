@@ -48,12 +48,12 @@ namespace TweaksAndFixes
                         _ShipGenInfo.limitSpeed *= ShipM.KnotsToMS;
 
                     if (cm.paramx.TryGetValue("armor", out var cArm))
-                        _ShipGenInfo.customArmor = float.Parse(cArm[0]);
+                        _ShipGenInfo.customArmor = float.Parse(cArm[0], ModUtils._InvariantCulture);
                     else
                         _ShipGenInfo.customArmor = -1f;
 
                     if (cm.paramx.TryGetValue("speed", out var cSpd))
-                        _ShipGenInfo.customSpeed = float.Parse(cSpd[0]) * ShipM.KnotsToMS;
+                        _ShipGenInfo.customSpeed = float.Parse(cSpd[0], ModUtils._InvariantCulture) * ShipM.KnotsToMS;
                     else
                         _ShipGenInfo.customSpeed = -1f;
                 }

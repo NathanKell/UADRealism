@@ -32,7 +32,7 @@ namespace TweaksAndFixes
                 //Melon<TweaksAndFixes>.Logger.Msg($"Checking {list[i]} vs {sType} (weight would be {list[i + 1]}");
                 if (list[i] == sType)
                 {
-                    var res = float.Parse(list[i + 1]);
+                    var res = float.Parse(list[i + 1], ModUtils._InvariantCulture);
                     //Melon<TweaksAndFixes>.Logger.Msg($"Type {list[i]}: returning {res}");
                     return res;
                 }

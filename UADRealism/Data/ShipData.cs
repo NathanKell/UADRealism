@@ -94,9 +94,9 @@ namespace UADRealism
                 return;
             }
 
-            if (!hull.paramx.TryGetValue("scantlings", out var s) || !float.TryParse(s[0], out _scantlingStrength))
+            if (!hull.paramx.TryGetValue("scantlings", out var s) || !float.TryParse(s[0], System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, TweaksAndFixes.ModUtils._InvariantCulture, out _scantlingStrength))
                 _scantlingStrength = ShipStats.GetScantlingStrength(hull.shipType.name, TweaksAndFixes.Database.GetYear(hull), hull);
-            if (!hull.paramx.TryGetValue("machinery", out var m) || !float.TryParse(m[0], out _machineryMult))
+            if (!hull.paramx.TryGetValue("machinery", out var m) || !float.TryParse(m[0], System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, TweaksAndFixes.ModUtils._InvariantCulture, out _machineryMult))
                 _machineryMult = 1f;
         }
 
