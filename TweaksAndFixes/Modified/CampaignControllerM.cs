@@ -62,7 +62,7 @@ namespace TweaksAndFixes
 
             bool strictAge = Config.Param("taf_scrap_useOnlyShipAge", 0) > 0;
 
-            float capTerm = Mathf.Pow(player.ShipbuildingCapacity(), Config.Param("taf_scrap_capacityExponent", 1f));
+            float capTerm = Mathf.Pow(player.ShipbuildingCapacityLimit(), Config.Param("taf_scrap_capacityExponent", 1f));
             float hystMult = Config.Param("taf_scrap_hysteresisMult", 1.05f);
 
             // Scrap mothballed first

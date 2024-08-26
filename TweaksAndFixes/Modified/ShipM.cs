@@ -14,6 +14,8 @@ using Il2CppSystem.Linq;
 using Il2CppDigitalRuby.PyroParticles;
 using System.Globalization;
 
+#pragma warning disable CS8600
+#pragma warning disable CS8601
 #pragma warning disable CS8602
 #pragma warning disable CS8603
 #pragma warning disable CS8604
@@ -397,6 +399,7 @@ namespace TweaksAndFixes
             float year = _this.GetYear(_this);
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> oldArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+            float oldArmorPortion = 0.5f;
             bool isCL = _this.shipType.name == "cl";
             bool isLightCraft = _this.shipType.name == "tb" || _this.shipType.name == "dd";
             bool cldd = isCL || isLightCraft;
@@ -404,6 +407,7 @@ namespace TweaksAndFixes
             var minOpRange = MinOpRange(_this, VesselEntity.OpRange.Low);
 
             var gaInfo = GenArmorData.GetInfoFor(_this);
+            bool useInfo = gaInfo != null;
 
             var armorMin = _this.shipType.armorMin;
             if (armorMin <= 0)
@@ -418,20 +422,10 @@ namespace TweaksAndFixes
             {
                 armorInches = armorMin * Util.Range(1f, 1.2f, rnd);
             }
-            Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armorMinHint;
-            if (gaInfo == null)
+            Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> armorMinHint = null;
+            if (!useInfo)
             {
                 armorMinHint = GenerateArmorNew(armorInches * 25.4f, _this);
-            }
-            else
-            {
-                armorMinHint = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-                for (Ship.A a = Ship.A.Belt; a < Ship.A.InnerBelt_1st; a += 1)
-                    armorMinHint[a] = gaInfo.MinArmorValue(a);
-                var citA = _this.GetCitadelArmor();
-                if (citA != null)
-                    foreach(var a in citA)
-                        armorMinHint[a] = gaInfo.MinArmorValue(a);
             }
 
             float hullSpeedMS = _this.hull.data.speedLimiter * KnotsToMS;
@@ -442,8 +436,11 @@ namespace TweaksAndFixes
             if (_this.armor == null)
             {
                 _this.armor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-                _this.SetArmor(armorMinHint);
+                _this.SetArmor(armorMinHint == null ? GenerateArmorNew(armorInches * 25.4f, _this) : armorMinHint);
             }
+
+            if (useInfo)
+                oldArmorPortion = gaInfo.EstimateLerp(_this);
 
             foreach (var kvp in _this.armor)
                 oldArmor[kvp.Key] = kvp.Value;
@@ -487,10 +484,17 @@ namespace TweaksAndFixes
                 _this.CurrentCrewQuarters = Ship.CrewQuarters.Cramped;
                 _this.SetOpRange(minOpRange);
 
-                foreach (var key in _this.armor.Keys)
-                    newArmor[key] = Mathf.Max(armorMinHint[key], _this.MinArmorForZone(key));
+                if (gaInfo == null)
+                {
+                    foreach (var key in _this.armor.Keys)
+                        newArmor[key] = Mathf.Max(armorMinHint[key], _this.MinArmorForZone(key));
 
-                _this.SetArmor(newArmor);
+                    _this.SetArmor(newArmor);
+                }
+                else
+                {
+                    gaInfo.SetArmor(_this, 0f);
+                }
 
                 canMakeTarget = _this.Weight() / _this.Tonnage() <= targetWeightRatio;
                 if (!canMakeTarget)
@@ -536,7 +540,10 @@ namespace TweaksAndFixes
             _this.SetSpeedMax(oldSpeed);
             _this.CurrentCrewQuarters = oldQuarters;
             _this.SetOpRange(oldRange);
-            _this.SetArmor(oldArmor);
+            if (gaInfo == null)
+                _this.SetArmor(oldArmor);
+            else
+                gaInfo.SetArmor(_this, oldArmorPortion);
 
             Dictionary<Ship.A, float> armorPriority = delta > 0 ? _AdjustPriorityArmorIncrease : _AdjustPriorityArmorReduce;
             float speedStep = MonoBehaviourExt.Param("speed_step", 0.5f) * delta * KnotsToMS;
@@ -545,21 +552,8 @@ namespace TweaksAndFixes
             if (stopCondition != null && stopCondition())
                 return;
 
-            float curArmorLerp = 0.5f;
-            bool useInfo = false;
-            if (gaInfo != null)
-            {
-                useInfo = true;
-
-                float sum = 0f;
-                float sumTotal = 0f;
-                foreach (var kvp in _this.armor)
-                {
-                    sum += Mathf.InverseLerp(gaInfo.MinArmorValue(kvp.Key), gaInfo.MaxArmorValue(kvp.Key), kvp.Value);
-                    ++sumTotal;
-                }
-                curArmorLerp = sumTotal > 0 ? sum / sumTotal : 0f;
-            }
+            float curArmorPortion = oldArmorPortion;
+            
             for (int j = 0; j < 699; ++j)
             {
                 // Recreate, since we might have touched citadel armor
@@ -574,6 +568,7 @@ namespace TweaksAndFixes
                 oldSpeed = _this.speedMax;
                 oldQuarters = _this.CurrentCrewQuarters;
                 oldRange = _this.opRange;
+                oldArmorPortion = curArmorPortion;
 
                 float newSpeed = speedStep + _this.speedMax;
                 newSpeed = Mathf.Clamp(newSpeed, minSpeed, maxSpeed);
@@ -587,18 +582,21 @@ namespace TweaksAndFixes
                 {
                     if (useInfo)
                     {
+                        // This is kind of dumb--we set the armor twice.
+                        // But it's easier to do this than to carry around
+                        // a bunch of duplicate TurretArmors.
                         float inc = delta * gaInfo.lerpStep;
-                        while (delta > 0 ? curArmorLerp < 1f : curArmorLerp > 0f)
+                        while (delta > 0 ? curArmorPortion < 1f : curArmorPortion > 0f)
                         {
-                            curArmorLerp = Mathf.Clamp(curArmorLerp + inc, 0f, 1f);
-                            foreach (var a in armorMinHint.Keys)
-                                newArmor[a] = gaInfo.GetArmorValue(_this, a, curArmorLerp);
-                            if (!ModUtils.DictsEqual(newArmor, oldArmor))
+                            curArmorPortion = Mathf.Clamp(curArmorPortion + inc, 0f, 1f);
+                            if (gaInfo.SetArmor(_this, curArmorPortion))
                             {
                                 armorFound = true;
                                 break;
                             }
                         }
+                        if (armorFound)
+                            gaInfo.SetArmor(_this, oldArmorPortion);
                     }
                     else
                     {
@@ -681,7 +679,10 @@ namespace TweaksAndFixes
                             _this.SetOpRange(newOpRange);
                             break;
                         default:
-                            _this.SetArmor(newArmor);
+                            if (useInfo)
+                                gaInfo.SetArmor(_this, curArmorPortion);
+                            else
+                                _this.SetArmor(newArmor);
                             break;
                     }
 
@@ -707,7 +708,10 @@ namespace TweaksAndFixes
                                 _this.SetOpRange(oldRange);
                                 break;
                             default:
-                                _this.SetArmor(oldArmor);
+                                if (useInfo)
+                                    gaInfo.SetArmor(_this, oldArmorPortion);
+                                else
+                                    _this.SetArmor(oldArmor);
                                 break;
                         }
                         return;
@@ -745,49 +749,29 @@ namespace TweaksAndFixes
                 var gaInfo = GenArmorData.GetInfoFor(_this);
                 if (gaInfo != null)
                 {
-                    float curArmorLerp;
-                    float sum = 0f;
-                    float sumTotal = 0f;
-                    foreach (var kvp in _this.armor)
-                    {
-                        sum += Mathf.InverseLerp(gaInfo.MinArmorValue(kvp.Key), gaInfo.MaxArmorValue(kvp.Key), kvp.Value);
-                        ++sumTotal;
-                    }
-                    curArmorLerp = sumTotal > 0 ? sum / sumTotal : 0f;
+                    float oldArmorLerp = gaInfo.EstimateLerp(_this);
+                    float curArmorLerp = oldArmorLerp;
 
                     _this.limiter = 699;
-                    Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-                    // we could probably just copy a ref to _this.armor before calling SetArmor since that sets it to a new dict
-                    // but I don't quite trust interop GC to not screw that up.
-                    Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> oldArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                    // Kinda dumb but because of turret armor we set, and then unset if needed.
                     while (underweight && _this.limiter-- > 0)
                     {
-                        bool stopLoop = true;
+                        oldArmorLerp = curArmorLerp;
                         while (curArmorLerp < 1f)
                         {
                             curArmorLerp = Mathf.Clamp(curArmorLerp + gaInfo.lerpStep, 0f, 1f);
-                            foreach (var a in _this.armor.Keys)
-                            {
-                                oldArmor[a] = _this.armor[a];
-                                newArmor[a] = gaInfo.GetArmorValue(_this, a, curArmorLerp);
-                            }
-                            if (!ModUtils.DictsEqual(newArmor, _this.armor))
-                            {
-                                stopLoop = false;
+
+                            if (gaInfo.SetArmor(_this, curArmorLerp))
                                 break;
-                            }
                         }
 
-                        if (stopLoop)
-                            break;
-
-                        _this.SetArmor(newArmor);
                         weight = _this.Weight();
                         if (weight > _this.tempGoodWeight)
                         {
-                            _this.SetArmor(oldArmor);
+                            gaInfo.SetArmor(_this, oldArmorLerp);
                             weight = _this.Weight();
-                            underweight = false;
+                            // These steps are bigger. It's worth trying other things.
+                            underweight = weight < _this.tempGoodWeight;
                             break;
                         }
                     }
@@ -948,37 +932,20 @@ namespace TweaksAndFixes
                 var gaInfo = GenArmorData.GetInfoFor(_this);
                 if (gaInfo != null)
                 {
-                    float curArmorLerp;
-                    float sum = 0f;
-                    float sumTotal = 0f;
-                    foreach (var kvp in _this.armor)
-                    {
-                        sum += Mathf.InverseLerp(gaInfo.MinArmorValue(kvp.Key), gaInfo.MaxArmorValue(kvp.Key), kvp.Value);
-                        ++sumTotal;
-                    }
-                    curArmorLerp = sumTotal > 0 ? sum / sumTotal : 0f;
+                    float oldArmorLerp = gaInfo.EstimateLerp(_this);
+                    float curArmorLerp = oldArmorLerp;
 
                     _this.limiter = 699;
-                    Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
                     while (overweight && _this.limiter-- > 0)
                     {
-                        bool stopLoop = true;
+                        oldArmorLerp = curArmorLerp;
                         while (curArmorLerp > 0f)
                         {
                             curArmorLerp = Mathf.Clamp(curArmorLerp - gaInfo.lerpStep, 0f, 1f);
-                            foreach (var a in _this.armor.Keys)
-                                newArmor[a] = gaInfo.GetArmorValue(_this, a, curArmorLerp);
-                            if (!ModUtils.DictsEqual(newArmor, _this.armor))
-                            {
-                                stopLoop = false;
+                            if (gaInfo.SetArmor(_this, curArmorLerp))
                                 break;
-                            }
                         }
 
-                        if (stopLoop)
-                            break;
-
-                        _this.SetArmor(newArmor);
                         weight = _this.Weight();
                         if (weight < _this.tempGoodWeight)
                         {
