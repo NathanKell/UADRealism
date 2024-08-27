@@ -376,7 +376,10 @@ namespace TweaksAndFixes
                     return 1f;
 
                 float max = MaxArmorValue(area);
-                return (maxArmThis + (max / maxArmMain)) * 0.5f / max;
+                float mult = (maxArmThis + (max / maxArmMain)) * 0.5f / max;
+                if (mult > 1f)
+                    mult = 1f;
+                return mult;
             }
 
             private static readonly Ship.A[] _Extendeds = new Ship.A[] { Ship.A.BeltBow, Ship.A.BeltStern, Ship.A.DeckBow, Ship.A.DeckStern };
