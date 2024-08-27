@@ -27,21 +27,22 @@ namespace TweaksAndFixes
 
             Dictionary<TKey, TValue> dict;
             if (paramST == null)
-                dict = new Dictionary<TKey, TValue>();
+                return Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramHull);
             else
                 dict = Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramST);
 
             if (paramHull != null)
             {
                 var hDict = Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramHull);
-                foreach (var kvp in hDict)
-                    dict[kvp.Key] = kvp.Value;
+                if (hDict != null)
+                    foreach (var kvp in hDict)
+                        dict[kvp.Key] = kvp.Value;
             }
 
             return dict;
         }
 
-        public static bool GetParamValue<T>(Ship _this, string pName, out T value )
+        public static bool GetParamValue<T>(Ship _this, string pName, out T value)
         {
             value = default(T);
             Type type = typeof(T);
@@ -63,6 +64,43 @@ namespace TweaksAndFixes
 
             value = (T)Serializer.CSV.FieldData.ReadValue(paramHull[0], dt, type);
             return true;
+        }
+
+        public static bool GetParamValue<TKey, TValue>(Ship _this, string pName, TKey key, out TValue value) where TKey : notnull
+        {
+            value = default(TValue);
+            Type type = typeof(TValue);
+            Serializer.CSV.DataType dt = Serializer.CSV.FieldData.ValueDataType(type);
+            if (dt == Serializer.CSV.DataType.INVALID)
+                return false;
+
+            _this.shipType.paramx.TryGetValue(pName, out var paramST);
+            _this.hull.data.paramx.TryGetValue(pName, out var paramHull);
+            if (paramST == null && paramHull == null)
+                return false;
+
+            if (paramHull != null)
+            {
+                if (paramHull.Count == 1)
+                {
+                    value = (TValue)Serializer.CSV.FieldData.ReadValue(paramHull[0], dt, type);
+                    return true;
+                }
+                var dictH = Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramHull);
+                if (dictH.TryGetValue(key, out value))
+                    return true;
+            }
+
+            if (paramST.Count == 1)
+            {
+                value = (TValue)Serializer.CSV.FieldData.ReadValue(paramST[0], dt, type);
+                return true;
+            }
+            var dictS = Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramST);
+            if (dictS.TryGetValue(key, out value))
+                return true;
+
+            return false;
         }
 
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
@@ -1227,19 +1265,13 @@ namespace TweaksAndFixes
 
         public static float GetParamSpeedMultMin(Ship _this, Il2CppSystem.Random rnd)
         {
-            float mult;
             string key = $"g{_this.hull.data.Generation}";
-            var dict = GetParamDict<string, float>(_this, "speedMultByGen_min");
-            if ((dict == null || !dict.TryGetValue(key, out mult)) && !GetParamValue(_this, "speedMultByGen_min", out mult))
+            if(!GetParamValue(_this, "speedMultByGen_min", key, out float mult))
                 return GetMinSpeedMult(_this, rnd);
 
-            if (rnd != null)
-            {
-                var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
-                float rMult;
-                if ((rDict != null && rDict.TryGetValue(key, out rMult)) || GetParamValue(_this, "speedMultByGen_rand", out rMult))
-                    mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
-            }
+            if (rnd != null && GetParamValue(_this, "speedMultByGen_rand", key, out float rMult))
+                mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
+
             return mult;
         }
 
@@ -1286,19 +1318,13 @@ namespace TweaksAndFixes
 
         public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd)
         {
-            float mult;
             string key = $"g{_this.hull.data.Generation}";
-            var dict = GetParamDict<string, float>(_this, "speedMultByGen_max");
-            if ((dict == null || !dict.TryGetValue(key, out mult)) && !GetParamValue(_this, "speedMultByGen_max", out mult))
+            if (!GetParamValue(_this, "speedMultByGen_max", key, out float mult))
                 return GetMaxSpeedMult(_this, rnd);
 
-            if (rnd != null)
-            {
-                var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
-                float rMult;
-                if ((rDict != null && rDict.TryGetValue(key, out rMult)) || GetParamValue(_this, "speedMultByGen_rand", out rMult))
-                    mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
-            }
+            if (rnd != null && GetParamValue(_this, "speedMultByGen_rand", key, out float rMult))
+                mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
+
             return mult;
         }
 
