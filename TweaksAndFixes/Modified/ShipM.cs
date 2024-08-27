@@ -1,17 +1,10 @@
-﻿//#define LOGHULLSTATS
-//#define LOGHULLSCALES
-//#define LOGPARTSTATS
-//#define LOGGUNSTATS
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
-using TweaksAndFixes;
 using Il2CppSystem.Linq;
-using Il2CppDigitalRuby.PyroParticles;
 using System.Globalization;
 
 #pragma warning disable CS8600
@@ -25,6 +18,29 @@ namespace TweaksAndFixes
 {
     public static class ShipM
     {
+        public static Dictionary<TKey, TValue> GetParamDict<TKey, TValue>(Ship _this, string pName) where TKey : notnull
+        {
+            var paramST = _this.shipType.paramx.GetValueOrDefault(pName);
+            var paramHull = _this.hull.data.paramx.GetValueOrDefault(pName);
+            if (paramST == null && paramHull == null)
+                return null;
+
+            Dictionary<TKey, TValue> dict;
+            if (paramST == null)
+                dict = new Dictionary<TKey, TValue>();
+            else
+                dict = Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramST);
+
+            if (paramHull != null)
+            {
+                var hDict = Serializer.Human.ParamToParsedDictionary<TKey, TValue>(paramHull);
+                foreach (var kvp in hDict)
+                    dict[kvp.Key] = kvp.Value;
+            }
+
+            return dict;
+        }
+
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
             => FindMatchingTurretArmor(ship, data.caliber, Ship.IsCasemateGun(data));
 
@@ -449,6 +465,7 @@ namespace TweaksAndFixes
             float maxSpeed;
             if (Config.ShipGenTweaks)
             {
+
                 minSpeed = GetMinSpeed(_this, limitSpeed, rnd);
                 maxSpeed = GetMaxSpeed(_this, rnd);
             }
@@ -858,12 +875,14 @@ namespace TweaksAndFixes
 
             _this.limiter = 699;
             float step = MonoBehaviourExt.Param("speed_step", 0.1f);
-            float maxMS = _this.shipType.speedMax * KnotsToMS;
+            float maxMS = GetMaxSpeed(_this, null);
             float minMS = _this.shipType.speedMin * KnotsToMS;
             while (underweight && _this.limiter-- > 0)
             {
                 float oldSpeed = _this.speedMax;
-                float newSpeed = RoundSpeedToStep(oldSpeed + step);
+                float newSpeed = RoundSpeedToStep(Mathf.Clamp(oldSpeed + step, minMS, maxMS));
+                if (oldSpeed == newSpeed)
+                    break;
                 _this.SetSpeedMax(newSpeed);
                 weight = _this.Weight();
                 if (weight > _this.tempGoodWeight)
@@ -908,6 +927,26 @@ namespace TweaksAndFixes
                         weight = _this.Weight();
                         break;
                     }
+                }
+            }
+
+            // Uncapped speed increase
+            _this.limiter = 699;
+            maxMS = _this.shipType.speedMax * KnotsToMS;
+            while (underweight && _this.limiter-- > 0)
+            {
+                float oldSpeed = _this.speedMax;
+                float newSpeed = RoundSpeedToStep(Mathf.Clamp(oldSpeed + step, minMS, maxMS));
+                if (oldSpeed == newSpeed)
+                    break;
+                _this.SetSpeedMax(newSpeed);
+                weight = _this.Weight();
+                if (weight > _this.tempGoodWeight)
+                {
+                    _this.SetSpeedMax(oldSpeed);
+                    weight = _this.Weight();
+                    underweight = false;
+                    break;
                 }
             }
         }
@@ -1160,57 +1199,93 @@ namespace TweaksAndFixes
         }
 
         public static float GetMinSpeed(Ship _this, float speedLimit, Il2CppSystem.Random rnd)
+            => speedLimit > 0f ? speedLimit
+                : Mathf.Clamp(GetParamSpeedMultMin(_this, rnd) * _this.hull.data.speedLimiter, _this.shipType.speedMin, _this.shipType.speedMax) * KnotsToMS;
+
+        public static float GetParamSpeedMultMin(Ship _this, Il2CppSystem.Random rnd)
+        {
+            var dict = GetParamDict<string, float>(_this, "speedMultByGen_min");
+            string key = $"g{_this.hull.data.Generation}";
+            if (dict != null && dict.TryGetValue(key, out var mult))
+            {
+                if (rnd != null)
+                {
+                    var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
+                    if (rDict != null && rDict.TryGetValue(key, out var rMult))
+                        mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
+                }
+                return mult;
+            }
+            return GetMinSpeedMult(_this, rnd);
+        }
+
+        public static float GetMinSpeedMult(Ship _this, Il2CppSystem.Random rnd)
         {
             float year = _this.GetYear(_this);
-            float spdLimitMult, minMS;
-
-            if (speedLimit > 0f)
-                minMS = speedLimit;
+            float mult, randFactor;
+            if (_this.shipType.name == "dd" || _this.shipType.name == "tb")
+            {
+                mult = 0.925f;
+                randFactor = -0.027f;
+            }
             else
             {
-                if (_this.shipType.name == "dd" || _this.shipType.name == "tb")
+                switch (_this.hull.data.Generation)
                 {
-                    spdLimitMult = Util.Range(0.9f, 0.925f, rnd);
+                    case 1:
+                        randFactor = -0.1f;
+                        mult = Util.Remap(year, 1890f, 1940f, 0.89f, 0.85f, true);
+                        break;
+                    case 2:
+                        randFactor = -0.105f;
+                        mult = Util.Remap(year, 1890f, 1940f, 0.836f, 0.855f, true);
+                        break;
+                    case 3:
+                        randFactor = -0.12f;
+                        mult = Util.Remap(year, 1890f, 1940f, 0.77f, 0.84f, true);
+                        break;
+                    default:
+                    case 4:
+                        randFactor = -0.13f;
+                        mult = Util.Remap(year, 1890f, 1940f, 0.76f, 0.85f, true);
+                        break;
                 }
-                else
-                {
-                    switch (_this.hull.data.Generation)
-                    {
-                        case 1:
-                            spdLimitMult = Util.Range(0.9f, 1f, rnd)
-                                * Util.Remap(year, 1890f, 1940f, 0.89f, 0.85f, true);
-                            break;
-                        case 2:
-                            spdLimitMult = Util.Range(0.895f, 1f, rnd)
-                                * Util.Remap(year, 1890f, 1940f, 0.836f, 0.855f, true);
-                            break;
-                        case 3:
-                            spdLimitMult = Util.Range(0.88f, 1f, rnd)
-                                * Util.Remap(year, 1890f, 1940f, 0.77f, 0.84f, true);
-                            break;
-                        default:
-                        case 4:
-                            spdLimitMult = Util.Range(0.87f, 1f, rnd)
-                                * Util.Remap(year, 1890f, 1940f, 0.76f, 0.85f, true);
-                            break;
-                    }
-                }
-
-                minMS = Mathf.Clamp(spdLimitMult * _this.hull.data.speedLimiter, _this.shipType.speedMin, _this.shipType.speedMax) * KnotsToMS;
             }
+            if (rnd != null)
+                mult *= Util.Range(1f + randFactor, 1f, rnd);
 
-            return minMS;
+            return mult;
         }
 
         public static float GetMaxSpeed(Ship _this, Il2CppSystem.Random rnd)
+            => Mathf.Min(_this.shipType.speedMax, _this.hull.data.speedLimiter * GetParamSpeedMultMax(_this, rnd)) * KnotsToMS;
+
+        public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd)
+        {
+            var dict = GetParamDict<string, float>(_this, "speedMultByGen_max");
+            string key = $"g{_this.hull.data.Generation}";
+            if (dict != null && dict.TryGetValue(key, out var mult))
+            {
+                if (rnd != null)
+                {
+                    var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
+                    if (rDict != null && rDict.TryGetValue(key, out var rMult))
+                        mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
+                }
+                return mult;
+            }
+            return GetMaxSpeedMult(_this, rnd);
+        }
+
+        public static float GetMaxSpeedMult(Ship _this, Il2CppSystem.Random rnd)
         {
             float year = _this.GetYear(_this);
-            bool isCL = _this.shipType.name == "cl";
-            bool isLight = _this.shipType.name == "dd" || _this.shipType.name == "tb";
-            float maxMult = (isCL || isLight) ? 1.05f : 1.1f;
-            float maxMS = Mathf.Min(_this.shipType.speedMax, _this.hull.data.speedLimiter * maxMult * Util.Remap(year, 1890f, 1940f, 1.05f, 1.0f, true))
-                * KnotsToMS;
-            return maxMS;
+            float mult = _this.shipType.name == "cl" || _this.shipType.name == "tb" || _this.shipType.name == "dd" ? 1f : 1.05f;
+            mult *= Util.Remap(year, 1890f, 1940f, 1.05f, 1.0f, true);
+            if (rnd != null)
+                mult *= Util.Range(0.95f, 1.05f, rnd);
+
+            return mult;
         }
 
         public static float GetCitadelMultFromBase(Ship.A a)

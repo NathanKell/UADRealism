@@ -321,6 +321,43 @@ namespace TweaksAndFixes
         }
     }
 
+    // This patch doesn't really work, because components are selected
+    // AFTER parts. Durr.
+    //[HarmonyPatch(typeof(Ship._AddRandomPartsNew_d__579))]
+    //internal class Patch_Ship_AddRandParts
+    //{
+    //    [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__579.MoveNext))]
+    //    [HarmonyPrefix]
+    //    internal static void Prefix_MoveNext(Ship._AddRandomPartsNew_d__579 __instance, out int __state)
+    //    {
+    //        __state = __instance.__1__state;
+    //        switch (__state)
+    //        {
+    //            case 2: // pick a part and place it
+    //                // The below is a colossal hack to get the game
+    //                // to stop adding funnels past a certain point.
+    //                if (!Config.ShipGenTweaks)
+    //                    return;
+
+    //                var _this = __instance.__4__this;
+    //                if (!_this.statsValid)
+    //                    _this.CStats();
+    //                var eff = _this.stats.GetValueOrDefault(G.GameData.stats["smoke_exhaust"]);
+    //                if (eff == null)
+    //                    return;
+    //                if (eff.total < Config.Param("taf_generate_funnel_maxefficiency", 150f))
+    //                    return;
+
+    //                foreach (var p in G.GameData.parts.Values)
+    //                {
+    //                    if (p.type == "funnel")
+    //                        _this.badData.Add(p);
+    //                }
+    //                break;
+    //        }
+    //    }
+    //}
+
     [HarmonyPatch(typeof(VesselEntity))]
     internal class Patch_VesselEntityFromStore
     {
