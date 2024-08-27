@@ -20,8 +20,8 @@ namespace TweaksAndFixes
     {
         public static Dictionary<TKey, TValue> GetParamDict<TKey, TValue>(Ship _this, string pName) where TKey : notnull
         {
-            var paramST = _this.shipType.paramx.GetValueOrDefault(pName);
-            var paramHull = _this.hull.data.paramx.GetValueOrDefault(pName);
+            _this.shipType.paramx.TryGetValue(pName, out var paramST);
+            _this.hull.data.paramx.TryGetValue(pName, out var paramHull);
             if (paramST == null && paramHull == null)
                 return null;
 
@@ -39,6 +39,30 @@ namespace TweaksAndFixes
             }
 
             return dict;
+        }
+
+        public static bool GetParamValue<T>(Ship _this, string pName, out T value )
+        {
+            value = default(T);
+            Type type = typeof(T);
+            Serializer.CSV.DataType dt = Serializer.CSV.FieldData.ValueDataType(type);
+            if (dt == Serializer.CSV.DataType.INVALID)
+                return false;
+
+            _this.shipType.paramx.TryGetValue(pName, out var paramST);
+            _this.hull.data.paramx.TryGetValue(pName, out var paramHull);
+
+            if (paramHull == null || paramHull.Count != 1)
+            {
+                if (paramST == null || paramST.Count != 1)
+                    return false;
+
+                value = (T)Serializer.CSV.FieldData.ReadValue(paramST[0], dt, type);
+                return true;
+            }
+
+            value = (T)Serializer.CSV.FieldData.ReadValue(paramHull[0], dt, type);
+            return true;
         }
 
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
@@ -465,7 +489,6 @@ namespace TweaksAndFixes
             float maxSpeed;
             if (Config.ShipGenTweaks)
             {
-
                 minSpeed = GetMinSpeed(_this, limitSpeed, rnd);
                 maxSpeed = GetMaxSpeed(_this, rnd);
             }
@@ -1204,19 +1227,20 @@ namespace TweaksAndFixes
 
         public static float GetParamSpeedMultMin(Ship _this, Il2CppSystem.Random rnd)
         {
-            var dict = GetParamDict<string, float>(_this, "speedMultByGen_min");
+            float mult;
             string key = $"g{_this.hull.data.Generation}";
-            if (dict != null && dict.TryGetValue(key, out var mult))
+            var dict = GetParamDict<string, float>(_this, "speedMultByGen_min");
+            if ((dict == null || !dict.TryGetValue(key, out mult)) && !GetParamValue(_this, "speedMultByGen_min", out mult))
+                return GetMinSpeedMult(_this, rnd);
+
+            if (rnd != null)
             {
-                if (rnd != null)
-                {
-                    var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
-                    if (rDict != null && rDict.TryGetValue(key, out var rMult))
-                        mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
-                }
-                return mult;
+                var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
+                float rMult;
+                if ((rDict != null && rDict.TryGetValue(key, out rMult)) || GetParamValue(_this, "speedMultByGen_rand", out rMult))
+                    mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
             }
-            return GetMinSpeedMult(_this, rnd);
+            return mult;
         }
 
         public static float GetMinSpeedMult(Ship _this, Il2CppSystem.Random rnd)
@@ -1262,19 +1286,20 @@ namespace TweaksAndFixes
 
         public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd)
         {
-            var dict = GetParamDict<string, float>(_this, "speedMultByGen_max");
+            float mult;
             string key = $"g{_this.hull.data.Generation}";
-            if (dict != null && dict.TryGetValue(key, out var mult))
+            var dict = GetParamDict<string, float>(_this, "speedMultByGen_max");
+            if ((dict == null || !dict.TryGetValue(key, out mult)) && !GetParamValue(_this, "speedMultByGen_max", out mult))
+                return GetMaxSpeedMult(_this, rnd);
+
+            if (rnd != null)
             {
-                if (rnd != null)
-                {
-                    var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
-                    if (rDict != null && rDict.TryGetValue(key, out var rMult))
-                        mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
-                }
-                return mult;
+                var rDict = GetParamDict<string, float>(_this, "speedMultByGen_rand");
+                float rMult;
+                if ((rDict != null && rDict.TryGetValue(key, out rMult)) || GetParamValue(_this, "speedMultByGen_rand", out rMult))
+                    mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
             }
-            return GetMaxSpeedMult(_this, rnd);
+            return mult;
         }
 
         public static float GetMaxSpeedMult(Ship _this, Il2CppSystem.Random rnd)
