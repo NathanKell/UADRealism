@@ -4,7 +4,6 @@ using System.Text;
 using Il2Cpp;
 using System.Collections;
 using MelonLoader;
-using Il2CppInterop.Runtime;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -1673,6 +1672,37 @@ namespace TweaksAndFixes
             {
                 var arr = input.Split(_SplitChars, StringSplitOptions.RemoveEmptyEntries);
                 return arr.ToHashSet();
+            }
+
+            public static Dictionary<TKey, TValue> ParamToParsedDictionary<TKey, TValue>(Il2CppSystem.Collections.Generic.List<string> param) where TKey : notnull
+            {
+                int pC = param.Count;
+                if (pC == 0 || pC % 2 != 0)
+                    return null;
+
+                Type tk = typeof(TKey);
+                Type tv = typeof(TValue);
+                CSV.DataType kdt = CSV.FieldData.ValueDataType(tk);
+                CSV.DataType vdt = CSV.FieldData.ValueDataType(tv);
+                if (kdt == CSV.DataType.INVALID || vdt == CSV.DataType.INVALID)
+                    return null;
+
+                Dictionary<TKey, TValue> dict = new Dictionary<TKey, TValue>();
+
+                --pC;
+                for (int i = 0; i < pC; i += 2)
+                {
+                    string key = param[i];
+                    string value = param[i + 1];
+                    object kVal = CSV.FieldData.ReadValue(key, kdt, tk);
+                    if (kVal == null)
+                        continue;
+                    // allow default values, don't check and continue
+
+                    dict[(TKey)kVal] = (TValue)CSV.FieldData.ReadValue(value, vdt, tv);
+                }
+
+                return dict;
             }
         }
 
