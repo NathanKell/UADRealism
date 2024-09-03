@@ -349,6 +349,9 @@ namespace TweaksAndFixes
             if (info == null)
                 return GenerateArmor(armorMaximal, shipHint);
 
+            if (shipHint.armor == null)
+                shipHint.armor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+
             // Divide out the scaling done by GenerateRandomShip, since we scale by year ourselves.
             if (Patch_Ship._GenerateShipState == 5)
                 armorMaximal /= Util.Remap(shipHint.GetYear(shipHint), 1890f, 1940f, 1.0f, 0.85f, true);
@@ -1247,7 +1250,7 @@ namespace TweaksAndFixes
 
             if (overweight)
             {
-                Ship.Survivability minSurv = _this.shipType.name == "dd" || _this.shipType.name == "tb" ? Ship.Survivability.Low : Ship.Survivability.High;
+                Ship.Survivability minSurv = (_this.shipType.name == "dd" || _this.shipType.name == "tb") && !Config.ShipGenTweaks  ? Ship.Survivability.Low : Ship.Survivability.High;
                 while (_this.survivability > minSurv)
                 {
                     _this.isSurvivabilityDecreased = true;

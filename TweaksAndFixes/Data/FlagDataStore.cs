@@ -247,10 +247,10 @@ namespace TweaksAndFixes
                     int idx = data.yearForGovernmentTypeList.Count - 1;
                     if (idx < 0)
                         return null;
-                    while (idx > 0 && year > data.yearForGovernmentTypeList[idx])
+                    while (idx > 0 && year < data.yearForGovernmentTypeList[idx])
                         --idx;
 
-                    return Player.GetFolderFlagFromName(data.governmentTypeOnYearList[idx], naval);
+                    return Player.GetFolderFlagFromName(data.governmentTypeOnYearList[idx].Trim(), naval);
                 }
             }
         }
