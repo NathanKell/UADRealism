@@ -71,6 +71,13 @@ bb,1940,10,15,0.5,1.2,1,5,8,0.5,1.2,10,15,2,4,0,1
 ```
 turretSideMult is the multiplier to belt armor used as the default for turrets. barbetteMult also uses belt as its base value, but turretTopMult uses deck. The belt/deckExtendedMult values are multipliers to belt and deck used by fore/aft belt and deck areas respectively. citadelMult is the portion of maximum possible citadel armor used. foreAftVariation is the maximum multiplier to fore/aft armor by which that armor can vary, so a value of 0.02 means the fore armor can be up to +/-2% as thick as default, and aft armor can be up to -/+2% as thick as default.
 
+### Per-shiptype speed min/max params
+TAF supports adding the following to each shipType's param: speedMultByGen_max, speedMultByGen_min, and speedMultByGen_rand. These take a list of ship generation and multiplier (or in the case of rand, maximum randomness). They can also take a single value which will apply to all ships of that type regardless of generation.
+
+For example you could add for ca: `speedMultByGen_max(g1;1.01;g2;1.1;g3;1.02;g4;1), speedMultByGen_min(g1;0.8;g2;0.78;g3;0.82;g4;0.85), speedMultByGen_rand(0.05)` and that would, for gen2 ca hulls, have a min speed of 0.78 +/- 5% times speedLimiter and a max of 1.1 +/- 5% times speedLimiter.
+
+Note that you can also override these on a hull-by-hull basis by putting any or all of those params in the hull's param set. So if a particular ca hull had speedMultByGen_max(1.03) instead, the max speed would be speedLimiter times 1.03 +/-5%.
+
 ### Replacement scrapping behavior
 The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships in order of mothballed ships first (to that target), then active ships (to that target), and finally all ships to the all-ships target tonnage. The target tonnage is determined with a minimum base tonnage and then a coefficient times (shipyard capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params (you will likely also want to set `min_fleet_tonnage_for_scrap` to 1 or something so that doesn't block scrapping), then tune using the following values:
 ```
