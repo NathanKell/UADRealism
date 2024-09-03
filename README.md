@@ -88,6 +88,8 @@ taf_scrap_scrapTargetBaseMothball and taf_scrap_capacityCoeffMothball - target t
 taf_scrap_scrapTargetBaseMain and taf_scrap_capacityCoeffMain - as above, but for active ships.
 taf_scrap_scrapTargetBaseTotal and taf_scrap_capacityCoeffTotal - as above but for total fleet tonnage
 taf_scrap_multToScrapRequiredVsShipTng - when determining whether to scrap a ship, if a ship's tonnage is greater than this value times the remaining tonnage to scrap to reach the target (either the global target, or the per-shiptype target), then don't scrap this ship.
+taf_scrap_useBuildTimeScore - if set to 1, scrap ships based on their score: age in years -  ( taf_scrap_buildTimeCoeff x build time in months ). When set, useStrictAge is ignored.
+taf_scrap_buildTimeCoeff - the coefficient to build time
 ```
 
 ### Tunable mine behavior
