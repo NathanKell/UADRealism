@@ -250,7 +250,10 @@ namespace TweaksAndFixes
                     while (idx > 0 && year < data.yearForGovernmentTypeList[idx])
                         --idx;
 
-                    return Player.GetFolderFlagFromName(data.governmentTypeOnYearList[idx].Trim(), naval);
+                    int len = data.governmentTypeOnYearList[idx].Length;
+                    if (len > 0 && data.governmentTypeOnYearList[idx][0] == ' ' || data.governmentTypeOnYearList[idx][len - 1] == ' ')
+                        Melon<TweaksAndFixes>.Logger.Error($"Error overriding flag! Player {data.name} for year {year} has government type {data.governmentTypeOnYearList[idx]} which includes a space. That means there were spaces separating entries in the list of governments in the players asset. Items must not be separated by anything but commas. \"{data.governmentTypeOnYear}\" should instead be \"{data.governmentTypeOnYear.Replace(" ", string.Empty)}\"");
+                    return Player.GetFolderFlagFromName(data.governmentTypeOnYearList[idx], naval);
                 }
             }
         }
