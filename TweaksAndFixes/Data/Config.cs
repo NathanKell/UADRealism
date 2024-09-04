@@ -52,6 +52,8 @@ namespace TweaksAndFixes
         public static bool DumpMap = false;
         [ConfigParse("Ship Autodesign Tweaks", "shipgen_tweaks")]
         public static bool ShipGenTweaks = true;
+        [ConfigParse("Limit Caliber Counts", "shipgen_limit_calibercounts")]
+        public static bool LimitCaliberCounts = false;
 
         public static void LoadConfig()
         {

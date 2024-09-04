@@ -578,6 +578,40 @@ namespace TweaksAndFixes
             return true;
         }
 
+        // Managed reimplementation of List.RemoveAll
+        public static int RemoveAllManaged<T>(this Il2CppSystem.Collections.Generic.List<T> list, Predicate<T> match)
+        {
+            int freeIndex = 0;   // the first free slot in items array
+            int size = list._size;
+
+            // Find the first item which needs to be removed.
+            while (freeIndex < size && !match(list._items[freeIndex])) freeIndex++;
+            if (freeIndex >= size) return 0;
+
+            int current = freeIndex + 1;
+            while (current < size)
+            {
+                // Find the first item which needs to be kept.
+                while (current < size && match(list._items[current])) current++;
+
+                if (current < size)
+                {
+                    // copy item to the free slot.
+                    list._items[freeIndex++] = list._items[current++];
+                }
+            }
+
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                Array.Clear(list._items, freeIndex, size - freeIndex); // Clear the elements so that the gc can reclaim the references.
+            }
+
+            int result = size - freeIndex;
+            list._size = freeIndex;
+            list._version++;
+            return result;
+        }
+
         public static void FillGradeData<T>(Il2CppSystem.Collections.Generic.Dictionary<int, T> dict, int max)
         {
             int maxGradeFound = 5;

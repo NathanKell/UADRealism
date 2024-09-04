@@ -1704,6 +1704,37 @@ namespace TweaksAndFixes
 
                 return dict;
             }
+
+            public static List<KeyValuePair<TKey, TValue>> ParamToParsedKVPs<TKey, TValue>(Il2CppSystem.Collections.Generic.List<string> param) where TKey : notnull
+            {
+                int pC = param.Count;
+                if (pC == 0 || pC % 2 != 0)
+                    return null;
+
+                Type tk = typeof(TKey);
+                Type tv = typeof(TValue);
+                CSV.DataType kdt = CSV.FieldData.ValueDataType(tk);
+                CSV.DataType vdt = CSV.FieldData.ValueDataType(tv);
+                if (kdt == CSV.DataType.INVALID || vdt == CSV.DataType.INVALID)
+                    return null;
+
+                List<KeyValuePair<TKey, TValue>> list = new List<KeyValuePair<TKey, TValue>>();
+
+                --pC;
+                for (int i = 0; i < pC; i += 2)
+                {
+                    string key = param[i];
+                    string value = param[i + 1];
+                    object kVal = CSV.FieldData.ReadValue(key, kdt, tk);
+                    if (kVal == null)
+                        continue;
+                    // allow default values, don't check and continue
+
+                    list.Add(new KeyValuePair<TKey, TValue>((TKey)kVal, (TValue)CSV.FieldData.ReadValue(value, vdt, tv)));
+                }
+
+                return list;
+            }
         }
 
         public class JSON

@@ -78,6 +78,15 @@ For example you could add for ca: `speedMultByGen_max(g1;1.01;g2;1.1;g3;1.02;g4;
 
 Note that you can also override these on a hull-by-hull basis by putting any or all of those params in the hull's param set. So if a particular ca hull had speedMultByGen_max(1.03) instead, the max speed would be speedLimiter times 1.03 +/-5%.
 
+### Limit caliber counts
+TAF can limit the number of calibers the autodesigner will use for a given battery (main/secondary/tertiary). Note that due to how various parts have different length multipliers, while the caliber may be kept the same, the caliber length may vary between guns. Also note that the game treats casemated guns and turreted guns differently, so a ship may have for example 6.2in secondary turrets but 6.6in casemates.
+
+In main params:
+`taf_shipgen_limit_calibercounts` - set to 1 to enable the feature
+`taf_shipgen_limit_calibercounts_default_main` (or sec or ter )- the default limit of calibers of that battery (main/secondary/tertiary) to use if no limit is specified in the shiptype params or hull params.
+
+In shiptype param or hull param, you can add `calCount_main` (or sec or ter). This takes either a single value, which is used always, or a set of year;count pairs, for example `calCount_sec(1890;2;1905;0;1915;1)` or `calCount_main(1)`. Anything in a hull's param will override the shipType value for that battery. Note that the year used is the year the hull unlocks, not the year the ship was designed.
+
 ### Replacement scrapping behavior
 The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships in order of mothballed ships first (to that target), then active ships (to that target), and finally all ships to the all-ships target tonnage. The target tonnage is determined with a minimum base tonnage and then a coefficient times (shipyard capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params (you will likely also want to set `min_fleet_tonnage_for_scrap` to 1 or something so that doesn't block scrapping), then tune using the following values:
 ```

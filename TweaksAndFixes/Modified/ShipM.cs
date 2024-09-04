@@ -42,6 +42,43 @@ namespace TweaksAndFixes
             return dict;
         }
 
+        public static List<KeyValuePair<TKey, TValue>> GetParamList<TKey, TValue>(Ship _this, string pName) where TKey : notnull
+        {
+            _this.shipType.paramx.TryGetValue(pName, out var paramST);
+            _this.hull.data.paramx.TryGetValue(pName, out var paramHull);
+            if (paramST == null && paramHull == null)
+                return null;
+
+            // This will hopefully be cheaper than just parsing to dict and then converting.
+            List<KeyValuePair<TKey, TValue>> list;
+            if (paramST == null)
+                return Serializer.Human.ParamToParsedKVPs<TKey, TValue>(paramHull);
+            else
+                list = Serializer.Human.ParamToParsedKVPs<TKey, TValue>(paramST);
+
+            if (paramHull != null)
+            {
+                var hList = Serializer.Human.ParamToParsedKVPs<TKey, TValue>(paramHull);
+                if (hList != null)
+                {
+                    foreach (var kvp in hList)
+                    {
+                        for (int i = list.Count; i-- > 0;)
+                        {
+                            var li = list[i];
+                            if (li.Key.Equals(kvp.Key))
+                            {
+                                list[i] = kvp;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return list;
+        }
+
         public static bool GetParamValue<T>(Ship _this, string pName, out T value)
         {
             value = default(T);
@@ -101,6 +138,99 @@ namespace TweaksAndFixes
                 return true;
 
             return false;
+        }
+
+        public static bool GetParamValueByYear<TValue>(Ship _this, string pName, out TValue value, bool hullYear = true)
+        {
+            int year;
+            if (hullYear && Database.GetYear(_this.hull.data) is int hy && hy > 0)
+                year = hy;
+            else
+                year = Mathf.RoundToInt(_this.GetYear(_this));
+
+            value = default(TValue);
+            Type type = typeof(TValue);
+            Serializer.CSV.DataType dt = Serializer.CSV.FieldData.ValueDataType(type);
+            if (dt == Serializer.CSV.DataType.INVALID)
+                return false;
+
+            _this.shipType.paramx.TryGetValue(pName, out var paramST);
+            _this.hull.data.paramx.TryGetValue(pName, out var paramHull);
+            if (paramST == null && paramHull == null)
+                return false;
+
+            if (paramHull != null && paramHull.Count == 1)
+            {
+                value = (TValue)Serializer.CSV.FieldData.ReadValue(paramHull[0], dt, type);
+                return true;
+            }
+
+            List<KeyValuePair<int, TValue>> list;
+            if (paramHull != null && paramST != null)
+            {
+                // We know Hull has pairs
+                list = Serializer.Human.ParamToParsedKVPs<int, TValue>(paramHull);
+                if (paramST.Count != 1)
+                {
+                    var list2 = Serializer.Human.ParamToParsedKVPs<int, TValue>(paramST);
+                    if (list == null)
+                        list = list2;
+                    else if (list2 != null)
+                    {
+                        foreach (var kvp in list2)
+                        {
+                            bool insert = true;
+                            for (int i = list.Count; i-- > 0;)
+                            {
+                                if (list[i].Key == kvp.Key)
+                                {
+                                    insert = false;
+                                    break;
+                                }
+                            }
+                            if (insert)
+                                list.Add(kvp);
+                        }
+                    }
+                }
+                
+            }
+            else if (paramHull != null)
+            {
+                // We know Hull has pairs and ST is null
+                list = Serializer.Human.ParamToParsedKVPs<int, TValue>(paramHull);
+            }
+            else
+            {
+                // we know Hull is null.
+                // If single value in ST, done. Else we have to sort.
+                if (paramST.Count == 1)
+                {
+                    value = (TValue)Serializer.CSV.FieldData.ReadValue(paramST[0], dt, type);
+                    return true;
+                }
+
+                // use ST only
+                list = Serializer.Human.ParamToParsedKVPs<int, TValue>(paramST);
+            }
+
+            if (list == null)
+                return false;
+
+            int lC = list.Count;
+
+            if (lC == 1)
+            {
+                value = list[0].Value;
+                return true;
+            }
+
+            list.Sort((a, b) => (a.Key.CompareTo(b.Key)));
+            int idx = lC - 1;
+            while (idx > 0 && year < list[idx].Key)
+                --idx;
+            value = list[idx].Value;
+            return true;
         }
 
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
@@ -1366,6 +1496,66 @@ namespace TweaksAndFixes
 
             float val = a > Ship.A.InnerBelt_3rd ? deck : belt;
             return val * GetCitadelMultFromBase(a);
+        }
+
+        public enum BatteryType
+        {
+            main = 0,
+            sec = 1,
+            ter = 2,
+
+            COUNT,
+        }
+
+        public class GenGunInfo
+        {
+            public int[] maxCounts = new int[(int)BatteryType.COUNT];
+            public List<int>[] caliberCounts = new List<int>[(int)BatteryType.COUNT];
+
+            public GenGunInfo()
+            {
+                for (int i = maxCounts.Length; i-- > 0;)
+                    caliberCounts[i] = new List<int>();
+            }
+
+            public void FillFor(Ship ship)
+            {
+                for (int i = maxCounts.Length; i-- > 0;)
+                {
+                    caliberCounts[i].Clear();
+                    BatteryType b = (BatteryType)i;
+                    if (!GetParamValueByYear(ship, $"calCount_{b}", out int count))
+                        count = (int)(Config.Param($"taf_shipgen_limit_calibercounts_default_{b}", 2f) + 0.1f);
+                    maxCounts[i] = count;
+                }
+            }
+
+            public bool CaliberOK(BatteryType b, PartData data)
+                => CaliberOK(b, (int)((data.caliber + 1f) * (1f / 25.4f)));
+
+            public bool CaliberOK(BatteryType b, int cal)
+            {
+                int idx = (int)b;
+                if (caliberCounts[idx].Count < maxCounts[idx])
+                    return true;
+
+                return caliberCounts[idx].Contains(cal);
+            }
+
+            public bool RegisterCaliber(BatteryType b, PartData data)
+                => RegisterCaliber(b, (int)((data.caliber + 1f) * (1f / 25.4f)));
+
+            public bool RegisterCaliber(BatteryType b, int cal)
+            {
+                int idx = (int)b;
+                // Add unique. Lets us just always register.
+                if (!caliberCounts[idx].Contains(cal))
+                {
+                    caliberCounts[idx].Add(cal);
+                    return caliberCounts[idx].Count >= maxCounts[idx];
+                }
+                return false;
+            }
         }
     }
 }
