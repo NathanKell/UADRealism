@@ -124,6 +124,9 @@ taf_mines_crew_damage_percent_min,5,The minimum percent damage to the crew of th
 taf_mines_crew_damage_percent_max,35,The maximum percent damage to the crew of the ship. This is before being multiplied by the dmg_factor_crew and by antimine and by the minefield damage mult.,,,,,,,
 ```
 
+### Version text
+If `taf_versiontext_mode` is set, the version text in the lower right corner of the screen will be replaced. 0 is the default and means no change. 1 means append the supplied text to the existing version string. 2 means replace the text but keep the base version number. 3 means entirely replace. The text used here is set in `taf_versiontext`, in the string column.
+
 ### Serialization support
 TAF includes a serialization library for reading and writing CSV files to managed data, as well as the ability to read to BaseData formats on demand from arbitrary files/strings. In addition, a number of the HumanXtoY methods have been reimplemented in managed code, and support exists to read a set of params and update indexed dictionaries (as used by guns, torpedos, and partModels).
 
