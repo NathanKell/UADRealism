@@ -17,6 +17,7 @@ namespace TweaksAndFixes
         internal static void Postfix_LoadVersionAndData(GameData __instance)
         {
             GameDataM.LoadData(__instance);
+            Patch_Ui.UpdateVersionString(G.ui);
         }        
 
         [HarmonyPrefix]

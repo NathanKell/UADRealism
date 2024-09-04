@@ -18,38 +18,72 @@ namespace TweaksAndFixes
     {
         internal static bool _InUpdateConstructor = false;
 
-        [HarmonyPrefix]
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ui.Start))]
+        internal static void Postfix_Start(Ui __instance)
+        {
+            UpdateVersionString(__instance);
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(Ui.RefreshVersion))]
+        internal static void Postfix_RefreshVersion(Ui __instance)
+        {
+            UpdateVersionString(__instance);
+        }
+
+        internal static void UpdateVersionString(Ui ui)
+        {
+            if (G.GameData == null || G.GameData.paramsRaw == null || G.GameData.parms == null)
+                return;
+
+            int mode = (int)(Config.Param("taf_versiontext_mode", 0f) + 0.01f);
+            if (mode == 0)
+                return;
+
+            var vt = ui.overlayUi.Get("Version", false, false).Get<Text>("VersionText", false, false);
+            string? text = Config.ParamS("taf_versiontext", string.Empty);
+            switch (mode)
+            {
+                case 1: text = vt.text + " " + text; break;
+                case 2: text = GameData.GameVersion + " " + text; break;
+                // default: entirely replace
+            }
+            vt.text = text;
+        }
+
         [HarmonyPatch(nameof(Ui.UpdateConstructor))]
+        [HarmonyPrefix]
         internal static void Prefix_UpdateConstructor()
         {
             _InUpdateConstructor = true;
             Patch_Ui_c.RestoreBarbette(); // just in case
         }
 
-        [HarmonyPostfix]
         [HarmonyPatch(nameof(Ui.UpdateConstructor))]
+        [HarmonyPostfix]
         internal static void Postfix_UpdateConstructor()
         {
             _InUpdateConstructor = false;
         }
 
-        [HarmonyPostfix]
         [HarmonyPatch(nameof(Ui.ConstructorUI))]
+        [HarmonyPostfix]
         internal static void Postfix_ConstructorUI(Ui __instance)
         {
             ClearAllButtons(__instance);
             EnsureAllButtons(__instance);
         }
 
-        [HarmonyPrefix]
         [HarmonyPatch(nameof(Ui.RefreshConstructorInfo))]
+        [HarmonyPrefix]
         internal static void Prefix_RefreshConstructorInfo(Ui __instance)
         {
             ClearAllButtons(__instance);
         }
 
-        [HarmonyPostfix]
         [HarmonyPatch(nameof(Ui.RefreshConstructorInfo))]
+        [HarmonyPostfix]
         internal static void Postfix_RefreshConstructorInfo(Ui __instance)
         {
             EnsureAllButtons(__instance);
