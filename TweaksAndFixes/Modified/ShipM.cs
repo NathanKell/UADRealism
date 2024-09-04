@@ -1511,6 +1511,7 @@ namespace TweaksAndFixes
         {
             public int[] maxCounts = new int[(int)BatteryType.COUNT];
             public List<int>[] caliberCounts = new List<int>[(int)BatteryType.COUNT];
+            public int maxCaliber = int.MaxValue;
 
             public GenGunInfo()
             {
@@ -1528,6 +1529,8 @@ namespace TweaksAndFixes
                         count = (int)(Config.Param($"taf_shipgen_limit_calibercounts_default_{b}", 2f) + 0.1f);
                     maxCounts[i] = count;
                 }
+                if (ship.hull.data.paramx.TryGetValue("ai_max_caliber", out var lst) && lst.Count > 0 && int.TryParse(lst[0], out int mc))
+                    maxCaliber = mc;
             }
 
             public bool CaliberOK(BatteryType b, PartData data)
@@ -1535,6 +1538,9 @@ namespace TweaksAndFixes
 
             public bool CaliberOK(BatteryType b, int cal)
             {
+                if (cal > maxCaliber)
+                    return false;
+
                 int idx = (int)b;
                 if (caliberCounts[idx].Count < maxCounts[idx])
                     return true;
