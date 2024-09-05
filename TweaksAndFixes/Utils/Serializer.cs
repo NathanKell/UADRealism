@@ -553,6 +553,18 @@ namespace TweaksAndFixes
                 return File.ReadAllText(filePath);
             }
 
+            public static string[] GetLinesFromFile(string filename)
+            {
+                if (!Directory.Exists(Config._BasePath))
+                    return null;
+
+                string filePath = Path.Combine(Config._BasePath, filename);
+                if (!File.Exists(filePath))
+                    return null;
+
+                return File.ReadAllLines(filePath);
+            }
+
             public static readonly string _TempTextAssetName = "tafTempTA";
             public static void SetTempTextAssetText(string? text)
             {
