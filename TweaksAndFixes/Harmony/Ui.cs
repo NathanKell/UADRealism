@@ -57,7 +57,7 @@ namespace TweaksAndFixes
         internal static void Prefix_UpdateConstructor()
         {
             _InUpdateConstructor = true;
-            Patch_Ui_c.RestoreBarbette(); // just in case
+            Patch_Ui_c.Postfix_16(); // just in case we somehow died after running b15 and before b16
         }
 
         [HarmonyPatch(nameof(Ui.UpdateConstructor))]
@@ -324,9 +324,28 @@ namespace TweaksAndFixes
     {
         internal static bool _SetBackToBarbette = false;
         internal static PartData _BarbetteData = null;
+        internal static bool _IsFirstCallofB15 = true;
 
-        internal static void RestoreBarbette()
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_15))]
+        [HarmonyPostfix]
+        internal static void Postfix_15()
         {
+            if (Patch_Ui._InUpdateConstructor && _IsFirstCallofB15 && Patch_Ship._GenerateShipState < 0 && G.ui.currentPart != null && G.ui.currentPart.isBarbette
+                && G.ui.placingPart != null && !G.ui.placingPart.data.paramx.ContainsKey("center"))
+            {
+                _SetBackToBarbette = true;
+                _BarbetteData = G.ui.currentPart;
+                _BarbetteData.isBarbette = false;
+                Patch_Part._IgnoreNextActiveBad = true;
+            }
+            _IsFirstCallofB15 = false;
+        }
+
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_16))]
+        [HarmonyPostfix]
+        internal static void Postfix_16()
+        {
+            _IsFirstCallofB15 = true;
             if (_SetBackToBarbette)
             {
                 if (!Patch_Ui._InUpdateConstructor)
@@ -339,27 +358,6 @@ namespace TweaksAndFixes
                     _BarbetteData = null;
                 }
             }
-        }
-
-        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_15))]
-        [HarmonyPostfix]
-        internal static void Postfix_17()
-        {
-            if (Patch_Ui._InUpdateConstructor && Patch_Ship._GenerateShipState < 0 && G.ui.currentPart != null && G.ui.currentPart.isBarbette
-                && G.ui.placingPart != null && !G.ui.placingPart.data.paramx.ContainsKey("center"))
-            {
-                _SetBackToBarbette = true;
-                _BarbetteData = G.ui.currentPart;
-                _BarbetteData.isBarbette = false;
-                Patch_Part._IgnoreNextActiveBad = true;
-            }
-        }
-
-        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_16))]
-        [HarmonyPostfix]
-        internal static void Postfix_18()
-        {
-            RestoreBarbette();
         }
     }
 }

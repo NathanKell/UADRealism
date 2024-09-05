@@ -82,12 +82,11 @@ Note that you can also override these on a hull-by-hull basis by putting any or 
 TAF can limit the number of calibers the autodesigner will use for a given battery (main/secondary/tertiary). Note that due to how various parts have different length multipliers, while the caliber may be kept the same, the caliber length may vary between guns. Also note that the game treats casemated guns and turreted guns differently, so a ship may have for example 6.2in secondary turrets but 6.6in casemates.
 
 In main params:
-`taf_shipgen_limit_calibercounts` - set to 1 to enable the feature
-`taf_shipgen_limit_calibercounts_default_main` (or sec or ter )- the default limit of calibers of that battery (main/secondary/tertiary) to use if no limit is specified in the shiptype params or hull params.
+`taf_shipgen_limit_calibercounts_main` (or sec or ter )- the default limit of calibers of that battery (main/secondary/tertiary) to use if no limit is specified in the shiptype params or hull params.
 
 In shiptype param or hull param, you can add `calCount_main` (or sec or ter). This takes either a single value, which is used always, or a set of year;count pairs, for example `calCount_sec(1890;2;1905;0;1915;1)` or `calCount_main(1)`. Anything in a hull's param will override the shipType value for that battery. Note that the year used is the year the hull unlocks, not the year the ship was designed.
 
-On a per-hull basis, TAF can also limit the maximum caliber the AI autodesigner is allowed to select. add ai_max_caliber(X) to the hull's params, where X is the maximum caliber in inches that is allowed. This has no effect on the human player.
+On a per-hull basis, TAF can also limit the maximum caliber the AI autodesigner is allowed to select for each battery. Add `ai_max_caliber_main(X)` (or sec or ter) to the hull's params, where X is the maximum caliber in inches that is allowed. This has no effect on the human player. Limits transfer down, so a main limit of 7in and a sec limit of 10in (or no sec limit at all) will still result in a sec limit of 7in.
 
 ### Replacement scrapping behavior
 The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships in order of mothballed ships first (to that target), then active ships (to that target), and finally all ships to the all-ships target tonnage. The target tonnage is determined with a minimum base tonnage and then a coefficient times (shipbuilding capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params (you will likely also want to set `min_fleet_tonnage_for_scrap` to 1 or something so that doesn't block scrapping), then tune using the following values:

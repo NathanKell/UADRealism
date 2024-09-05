@@ -163,7 +163,7 @@ namespace TweaksAndFixes
                 {
                     return (__instance.Weight() / __instance.Tonnage()) <= (1f - Util.Remap(designYear, 1890f, 1940f, 0.63f, 0.52f, true));
                 });
-                ShipM.AdjustHullStats(__instance, -1, origTargetWeightRatio, stopFunc, true, true, true, true, null, -1f, -1f);
+                ShipM.AdjustHullStats(__instance, -1, origTargetWeightRatio, stopFunc, true, true, true, true, true, null, -1f, -1f);
             }
         }
 
@@ -178,7 +178,7 @@ namespace TweaksAndFixes
         [HarmonyPostfix]
         internal static void Postfix_AddShipTurretArmor(Part part)
         {
-            if (!Config.LimitCaliberCounts || _AddRandomPartsRoutine == null || UpdateRPGunCacheOrSkip(_AddRandomPartsRoutine.__8__1.randPart))
+            if (_AddRandomPartsRoutine == null || !_GenGunInfo.isLimited || UpdateRPGunCacheOrSkip(_AddRandomPartsRoutine.__8__1.randPart))
                 return;
 
             // Register reports true iff we're at the count limit
@@ -266,7 +266,7 @@ namespace TweaksAndFixes
         internal static bool Prefix_b0(Ship.__c__DisplayClass578_0 __instance, PartData a, ref bool __result)
         {
             // Super annoying we can't prefix GetParts itself to do the RP caching
-            if (!Config.LimitCaliberCounts || Patch_Ship.UpdateRPGunCacheOrSkip(__instance.randPart))
+            if (!Patch_Ship._GenGunInfo.isLimited || Patch_Ship.UpdateRPGunCacheOrSkip(__instance.randPart))
                 return true;
 
             int partCal = (int)((a.caliber + 1f) * (1f / 25.4f));
@@ -283,13 +283,21 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__562))]
     internal class Patch_ShipGenRandom
     {
+        //static string lastName = string.Empty;
+        //static int shipCount = 0;
+
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPrefix]
         internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
             Patch_Ship._GenerateRandomShipRoutine = __instance;
             Patch_Ship._ShipForGenerateRandom = __instance.__4__this;
-            //Melon<TweaksAndFixes>.Logger.Msg($"In ship generation for {__instance.__4__this.vesselName}, state {__instance.__1__state}");
+            //if (lastName != __instance.__4__this.vesselName)
+            //{
+            //    lastName = __instance.__4__this.vesselName;
+            //    Melon<TweaksAndFixes>.Logger.Msg($"ShipGen {__instance.__4__this.vesselName} ({__instance.__4__this.hull.data.name}) for {__instance.__4__this.player.data.name}, #{shipCount++}"); // state {__instance.__1__state}");
+            //}
+            //Melon<TweaksAndFixes>.Logger.Msg($"{__instance.__4__this.vesselName}: state {__instance.__1__state}");
 
             // So we know what state we started in.
             __state = __instance.__1__state;
@@ -325,6 +333,7 @@ namespace TweaksAndFixes
                       Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
                       true,
                       true,
+                      true,
                       __instance.__8__1.rnd,
                       Patch_BattleManager_d114._ShipGenInfo.limitArmor,
                       __instance._savedSpeedMinValue_5__3);
@@ -345,6 +354,7 @@ namespace TweaksAndFixes
                       null,
                       Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
                       Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                      true,
                       true,
                       true,
                       __instance.__8__1.rnd,
@@ -414,32 +424,32 @@ namespace TweaksAndFixes
             Patch_Ship._AddRandomPartsRoutine = __instance;
             __state = __instance.__1__state;
             //Melon<TweaksAndFixes>.Logger.Msg($"Iteraing AddRandomPartsNew, state {__state}");
-            switch (__state)
-            {
-                case 2: // pick a part and place it
-                        // The below is a colossal hack to get the game
-                        // to stop adding funnels past a certain point.
-                        // This patch doesn't really work, because components are selected
-                        // AFTER parts. Durr.
-                        //if (!Config.ShipGenTweaks)
-                        //    return;
+            //switch (__state)
+            //{
+            //    case 2: // pick a part and place it
+            //            // The below is a colossal hack to get the game
+            //            // to stop adding funnels past a certain point.
+            //            // This patch doesn't really work, because components are selected
+            //            // AFTER parts. Durr.
+            //            if (!Config.ShipGenTweaks)
+            //        return;
 
-                    //var _this = __instance.__4__this;
-                    //if (!_this.statsValid)
-                    //    _this.CStats();
-                    //var eff = _this.stats.GetValueOrDefault(G.GameData.stats["smoke_exhaust"]);
-                    //if (eff == null)
-                    //    return;
-                    //if (eff.total < Config.Param("taf_generate_funnel_maxefficiency", 150f))
-                    //    return;
+            //    var _this = __instance.__4__this;
+            //    if (!_this.statsValid)
+            //        _this.CStats();
+            //    var eff = _this.stats.GetValueOrDefault(G.GameData.stats["smoke_exhaust"]);
+            //    if (eff == null)
+            //        return;
+            //    if (eff.total < Config.Param("taf_generate_funnel_maxefficiency", 150f))
+            //        return;
 
-                    //foreach (var p in G.GameData.parts.Values)
-                    //{
-                    //    if (p.type == "funnel")
-                    //        _this.badData.Add(p);
-                    //}
-                    break;
-            }
+            //    foreach (var p in G.GameData.parts.Values)
+            //    {
+            //        if (p.type == "funnel")
+            //            _this.badData.Add(p);
+            //    }
+            //    break;
+            //}
         }
 
         [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__579.MoveNext))]

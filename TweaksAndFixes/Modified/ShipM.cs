@@ -6,6 +6,7 @@ using UnityEngine;
 using Il2Cpp;
 using Il2CppSystem.Linq;
 using System.Globalization;
+using System.Text.Json.Serialization;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -509,12 +510,15 @@ namespace TweaksAndFixes
         private static readonly Dictionary<Ship.A, float> _AdjustPriorityArmorLocal = new Dictionary<Ship.A, float>();
         private static readonly Dictionary<AdjustHullStatsItem, float> _AdjustHullStatsOptions = new Dictionary<AdjustHullStatsItem, float>();
         private static string[] _OpRangeValues = null;
+        private static string[] _SurvValues = null;
+
         internal enum AdjustHullStatsItem
         {
             Speed,
             Range,
             Quarters,
             Armor,
+            Surv,
             Empty
         }
 
@@ -579,7 +583,7 @@ namespace TweaksAndFixes
             return Mathf.RoundToInt(speed * _SpeedStepR) * _SpeedStep;
         }
 
-        private static VesselEntity.OpRange MinOpRange(Ship ship, VesselEntity.OpRange minOpRange = VesselEntity.OpRange.VeryLow)
+        private static VesselEntity.OpRange MinOpRange(Ship ship, VesselEntity.OpRange defaultMin = VesselEntity.OpRange.VeryLow)
         {
             if (ship.shipType.paramx.TryGetValue("range_min", out var minRange) && minRange.Count > 0)
             {
@@ -588,24 +592,44 @@ namespace TweaksAndFixes
                     var vals = Enum.GetValues(typeof(VesselEntity.OpRange));
                     _OpRangeValues = new string[vals.Length];
                     for (int i = vals.Length; i-- > 0;)
-                        _OpRangeValues[i] = Util.ToStringShort(vals.GetValue(i).ToString()).ToLower();
+                        _OpRangeValues[i] = vals.GetValue(i).ToString().ToLower();
                 }
 
                 string minR = minRange[0].ToLower();
                 for (int i = 0; i < _OpRangeValues.Length; ++i)
                 {
                     if (_OpRangeValues[i] == minR)
-                    {
-                        minOpRange = (VesselEntity.OpRange)i;
-                        break;
-                    }
+                        return (VesselEntity.OpRange)i;
                 }
             }
 
-            return minOpRange;
+            return defaultMin;
         }
 
-        public static void AdjustHullStats(Ship _this, int delta, float targetWeightRatio, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, Il2CppSystem.Random rnd = null, float limitArmor = -1f, float limitSpeed = -1f)
+        private static Ship.Survivability MinSurv(Ship ship, Ship.Survivability defaultMin = Ship.Survivability.VeryLow)
+        {
+            if (ship.shipType.paramx.TryGetValue("surv_min", out var min) && min.Count > 0)
+            {
+                if (_SurvValues == null)
+                {
+                    var vals = Enum.GetValues(typeof(Ship.Survivability));
+                    _SurvValues = new string[vals.Length];
+                    for (int i = vals.Length; i-- > 0;)
+                        _SurvValues[i] = vals.GetValue(i).ToString().ToLower();
+                }
+
+                string minS = min[0].ToLower();
+                for (int i = 0; i < _SurvValues.Length; ++i)
+                {
+                    if (_SurvValues[i] == minS)
+                        return (Ship.Survivability)i;
+                }
+            }
+
+            return defaultMin;
+        }
+
+        public static void AdjustHullStats(Ship _this, int delta, float targetWeightRatio, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, bool allowEditSurv = true, Il2CppSystem.Random rnd = null, float limitArmor = -1f, float limitSpeed = -1f)
         {
             float year = _this.GetYear(_this);
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
@@ -616,6 +640,7 @@ namespace TweaksAndFixes
             bool cldd = isCL || isLightCraft;
 
             var minOpRange = MinOpRange(_this, VesselEntity.OpRange.Low);
+            var minSurv = MinSurv(_this, Ship.Survivability.High);
 
             var gaInfo = GenArmorData.GetInfoFor(_this);
             bool useInfo = gaInfo != null;
@@ -644,6 +669,7 @@ namespace TweaksAndFixes
             float oldSpeed = _this.speedMax;
             Ship.CrewQuarters oldQuarters = _this.CurrentCrewQuarters;
             var oldRange = _this.opRange < minOpRange ? minOpRange : _this.opRange;
+            var oldSurv = _this.survivability < minSurv ? minSurv : _this.survivability;
             if (_this.armor == null)
             {
                 _this.armor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
@@ -694,6 +720,7 @@ namespace TweaksAndFixes
                 _this.SetSpeedMax(minSpeed);
                 _this.CurrentCrewQuarters = Ship.CrewQuarters.Cramped;
                 _this.SetOpRange(minOpRange);
+                _this.SetSurvivability(minSurv);
 
                 if (gaInfo == null)
                 {
@@ -722,6 +749,7 @@ namespace TweaksAndFixes
                 _this.SetSpeedMax(maxSpeed);
                 _this.CurrentCrewQuarters = Ship.CrewQuarters.Spacious;
                 _this.SetOpRange(VesselEntity.OpRange.VeryHigh);
+                _this.SetSurvivability(Ship.Survivability.VeryHigh);
 
                 for (Ship.A area = Ship.A.Belt; area <= Ship.A.Barbette; area += 1)
                     newArmor[area] = Mathf.Min(armorLimit, _this.MaxArmorForZone(area, null));
@@ -751,6 +779,7 @@ namespace TweaksAndFixes
             _this.SetSpeedMax(oldSpeed);
             _this.CurrentCrewQuarters = oldQuarters;
             _this.SetOpRange(oldRange);
+            _this.SetSurvivability(oldSurv);
             if (gaInfo == null)
                 _this.SetArmor(oldArmor);
             else
@@ -779,6 +808,7 @@ namespace TweaksAndFixes
                 oldSpeed = _this.speedMax;
                 oldQuarters = _this.CurrentCrewQuarters;
                 oldRange = _this.opRange;
+                oldSurv = _this.survivability;
                 oldArmorPortion = curArmorPortion;
 
                 float newSpeed = speedStep + _this.speedMax;
@@ -786,6 +816,7 @@ namespace TweaksAndFixes
                 newSpeed = RoundSpeedToStep(newSpeed);
                 Ship.CrewQuarters newQuarters = (Ship.CrewQuarters)Mathf.Clamp((int)_this.CurrentCrewQuarters + delta, (int)Ship.CrewQuarters.Cramped, (int)Ship.CrewQuarters.Spacious);
                 VesselEntity.OpRange newOpRange = (VesselEntity.OpRange)Mathf.Clamp((int)_this.opRange + delta, (int)minOpRange, (int)VesselEntity.OpRange.VeryHigh);
+                Ship.Survivability newSurv = (Ship.Survivability)Mathf.Clamp((int)_this.survivability + delta, (int)minSurv, (int)Ship.Survivability.VeryHigh);
 
                 // We don't have to do all this work if we're not allowed to change armor anyway
                 bool armorFound = false;
@@ -863,6 +894,8 @@ namespace TweaksAndFixes
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Armor, delta > 0 ? 850f : 450f);
                 if (allowEditRange && newOpRange != oldRange)
                     _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Range, delta > 0 ? 75f : 400f);
+                if (allowEditSurv && newSurv != oldSurv)
+                    _AdjustHullStatsOptions.Add(AdjustHullStatsItem.Surv, delta > 0 ? 400f : 400f);
 
                 // if we can't make any more changes, we're done regardless.
                 if (_AdjustHullStatsOptions.Count == 0)
@@ -888,6 +921,9 @@ namespace TweaksAndFixes
                             break;
                         case AdjustHullStatsItem.Range:
                             _this.SetOpRange(newOpRange);
+                            break;
+                        case AdjustHullStatsItem.Surv:
+                            _this.SetSurvivability(newSurv);
                             break;
                         default:
                             if (useInfo)
@@ -917,6 +953,9 @@ namespace TweaksAndFixes
                                 break;
                             case AdjustHullStatsItem.Range:
                                 _this.SetOpRange(oldRange);
+                                break;
+                            case AdjustHullStatsItem.Surv:
+                                _this.SetSurvivability(oldSurv);
                                 break;
                             default:
                                 if (useInfo)
@@ -1380,7 +1419,7 @@ namespace TweaksAndFixes
 
             if (overweight)
             {
-                Ship.Survivability minSurv = (_this.shipType.name == "dd" || _this.shipType.name == "tb") && !Config.ShipGenTweaks  ? Ship.Survivability.Low : Ship.Survivability.High;
+                Ship.Survivability minSurv = Config.ShipGenTweaks ? MinSurv(_this, Ship.Survivability.High) : (_this.shipType.name == "dd" || _this.shipType.name == "tb" ? Ship.Survivability.Low : Ship.Survivability.High);
                 while (_this.survivability > minSurv)
                 {
                     _this.isSurvivabilityDecreased = true;
@@ -1511,7 +1550,8 @@ namespace TweaksAndFixes
         {
             public int[] maxCounts = new int[(int)BatteryType.COUNT];
             public List<int>[] caliberCounts = new List<int>[(int)BatteryType.COUNT];
-            public int maxCaliber = int.MaxValue;
+            public int[] maxCalibers = new int[(int)BatteryType.COUNT];
+            public bool isLimited = false;
 
             public GenGunInfo()
             {
@@ -1521,16 +1561,32 @@ namespace TweaksAndFixes
 
             public void FillFor(Ship ship)
             {
-                for (int i = maxCounts.Length; i-- > 0;)
+                isLimited = false;
+
+                const int noLimitCount = 999;
+                for (int i = 0; i < maxCounts.Length; ++i)
                 {
                     caliberCounts[i].Clear();
                     BatteryType b = (BatteryType)i;
                     if (!GetParamValueByYear(ship, $"calCount_{b}", out int count))
-                        count = (int)(Config.Param($"taf_shipgen_limit_calibercounts_default_{b}", 2f) + 0.1f);
+                        count = (int)(Config.Param($"taf_shipgen_limit_calibercounts_{b}", noLimitCount) + 0.1f);
                     maxCounts[i] = count;
+                    if (count != noLimitCount)
+                        isLimited = true;
+
+                    if (ship.hull.data.paramx.TryGetValue($"ai_max_caliber_{b}", out var lst) && lst.Count > 0 && int.TryParse(lst[0], out int mc))
+                    {
+                        isLimited = true;
+                        maxCalibers[i] = mc;
+                    }
+                    else
+                    {
+                        maxCalibers[i] = noLimitCount;
+                    }
+                    // Make sure we can't have a main limit lower than sec (or main/sec lower than ter)
+                    if (i > 0 && maxCalibers[i - 1] < maxCalibers[i])
+                        maxCalibers[i] = maxCalibers[i - 1];
                 }
-                if (ship.hull.data.paramx.TryGetValue("ai_max_caliber", out var lst) && lst.Count > 0 && int.TryParse(lst[0], out int mc))
-                    maxCaliber = mc;
             }
 
             public bool CaliberOK(BatteryType b, PartData data)
@@ -1538,10 +1594,10 @@ namespace TweaksAndFixes
 
             public bool CaliberOK(BatteryType b, int cal)
             {
-                if (cal > maxCaliber)
+                int idx = (int)b;
+                if (cal > maxCalibers[idx])
                     return false;
 
-                int idx = (int)b;
                 if (caliberCounts[idx].Count < maxCounts[idx])
                     return true;
 
