@@ -18,15 +18,15 @@ namespace TweaksAndFixes
     {
         internal static bool _InUpdateConstructor = false;
 
-        [HarmonyPostfix]
         [HarmonyPatch(nameof(Ui.Start))]
+        [HarmonyPostfix]
         internal static void Postfix_Start(Ui __instance)
         {
             UpdateVersionString(__instance);
         }
 
-        [HarmonyPostfix]
         [HarmonyPatch(nameof(Ui.RefreshVersion))]
+        [HarmonyPostfix]
         internal static void Postfix_RefreshVersion(Ui __instance)
         {
             UpdateVersionString(__instance);
