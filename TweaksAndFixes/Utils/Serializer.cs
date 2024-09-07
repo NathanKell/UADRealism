@@ -977,13 +977,13 @@ namespace TweaksAndFixes
                         case DataType.ValueString:
                             return (string)value;
                         case DataType.ValueGuid:
-                            return ((Guid)value).ToString();
+                            return ((Guid)value).ToString("D", _Invariant);
                         case DataType.ValueBool:
                             return ((bool)value).ToString(_Invariant);
                         case DataType.ValueDouble:
-                            return ((double)value).ToString("G17");
+                            return ((double)value).ToString("G17", _Invariant);
                         case DataType.ValueFloat:
-                            return ((float)value).ToString("G9");
+                            return ((float)value).ToString("G9", _Invariant);
                         case DataType.ValueDecimal:
                             return ((decimal)value).ToString(_Invariant);
                         case DataType.ValueInt:
