@@ -278,9 +278,20 @@ namespace TweaksAndFixes
         //static string lastName = string.Empty;
         //static int shipCount = 0;
 
+        internal struct GRSData
+        {
+            public int state;
+            public float beamMin;
+            public float beamMax;
+            public float draughtMin;
+            public float draughtMax;
+        }
+
+        const string bdlParamName = "ai_beamdraughtlimits";
+
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPrefix]
-        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
+        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out GRSData __state, ref bool __result)
         {
             Patch_Ship._GenerateRandomShipRoutine = __instance;
             //if (lastName != __instance.__4__this.vesselName)
@@ -291,10 +302,44 @@ namespace TweaksAndFixes
             //Melon<TweaksAndFixes>.Logger.Msg($"{__instance.__4__this.vesselName}: state {__instance.__1__state}");
 
             // So we know what state we started in.
-            __state = __instance.__1__state;
-            Patch_Ship._GenerateShipState = __state;
+            __state = new GRSData();
+            __state.state = __instance.__1__state;
+            Patch_Ship._GenerateShipState = __state.state;
             var ship = __instance.__4__this;
-            switch (__state)
+            var hd = ship.hull.data;
+            __state.beamMin = hd.beamMin;
+            __state.beamMax = hd.beamMax;
+            __state.draughtMin = hd.draughtMin;
+            __state.draughtMax = hd.draughtMax;
+
+            if (hd.paramx.TryGetValue(bdlParamName, out var bdlParam))
+            {
+                int iC = bdlParam.Count;
+                if (iC == 4)
+                {
+                    for (int i = 0; i < iC; ++i)
+                    {
+                        if (!float.TryParse(bdlParam[i], out var val))
+                        {
+                            Melon<TweaksAndFixes>.Logger.Error($"For ship {hd.name}, {bdlParamName} failed to parse {bdlParam[i]}");
+                            continue;
+                        }
+                        if (val != 0)
+                        {
+                            switch (i)
+                            {
+                                case 0: hd.beamMin = val; break;
+                                case 1: hd.beamMax = val; break;
+                                case 2: hd.draughtMin = val; break;
+                                default: hd.draughtMax = val; break;
+                            }
+                        }
+                    }
+                }
+                else
+                    Melon<TweaksAndFixes>.Logger.Error($"For ship {hd.name}, {bdlParamName} doesn't have 4 elements. The elements should be beamMin, beamMax, draughtMin, draughtMax. Values of 0 mean keep existing non-AI values.");
+            }
+            switch (__state.state)
             {
                 case 0:
                     __instance.__4__this.TAFData().ResetAllGrades();
@@ -369,12 +414,18 @@ namespace TweaksAndFixes
 
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, int __state)
+        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, GRSData __state)
         {
+            var ship = __instance.__4__this;
+            var hd = ship.hull.data;
+            hd.beamMin = __state.beamMin;
+            hd.beamMax = __state.beamMax;
+            hd.draughtMin = __state.draughtMin;
+            hd.draughtMax = __state.draughtMax;
             // For now, we're going to reset all grades regardless.
             //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))
             //    __instance.__4__this.TAFData().ResetAllGrades();
-            switch (__state)
+            switch (__state.state)
             {
                 case 0:
                     if (Config.ShipGenTweaks)
