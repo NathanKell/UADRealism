@@ -1772,7 +1772,7 @@ namespace UADRealism
             {
                 if (_ship.IsComponentAvailable(comp, out _) && Ui.NeedComponentsActive(ct, comp, _ship, true, false))
                 {
-                    _CompWeights[comp] = TweaksAndFixes.ComponentDataM.GetWeight(comp, _sType);
+                    _CompWeights[comp] = TweaksAndFixes.ComponentDataM.GetWeight(comp, _ship.shipType);
                 }
             }
             if (_CompWeights.Count == 0)

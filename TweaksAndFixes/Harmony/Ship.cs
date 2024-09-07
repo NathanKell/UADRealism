@@ -13,7 +13,6 @@ namespace TweaksAndFixes
     internal class Patch_Ship
     {
         internal static int _GenerateShipState = -1;
-        internal static Ship _ShipForGenerateRandom = null;
         internal static bool _IsLoading = false;
         internal static Ship _ShipForLoading = null;
         internal static Ship.Store _StoreForLoading = null;
@@ -78,12 +77,7 @@ namespace TweaksAndFixes
             // is that we can't patch the cache if we want to use it at all,
             // because we need to preserve the _real_ grade but we also
             // don't want to cache-bust every time.
-            //int newGrade = __instance.TAFData().GunGrade(gun, __result);
-            //if (newGrade != __result)
-            //{
-            //    Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced gun grade for part {gun.name} with {newGrade} (was {__result})");
-            //    __result = newGrade;
-            //}
+
             __result = __instance.TAFData().GunGrade(gun, __result);
         }
 
@@ -96,12 +90,7 @@ namespace TweaksAndFixes
             // is that we can't patch the cache if we want to use it at all,
             // because we need to preserve the _real_ grade but we also
             // don't want to cache-bust every time.
-            //int newGrade = __instance.TAFData().TorpedoGrade(__result);
-            //if (newGrade != __result)
-            //{
-            //    Melon<TweaksAndFixes>.Logger.Msg($"For ship {__instance.name}, replaced torpedo grade for part {torpedo.name} with {newGrade} (was {__result})");
-            //    __result = newGrade;
-            //}
+
             __result = __instance.TAFData().TorpedoGrade(__result);
         }
 
@@ -187,7 +176,8 @@ namespace TweaksAndFixes
                 // Ideally we'd do RemoveAll, but we can't use a managed predicate
                 // on the native list. We could reimplement RemoveAll, but I don't trust
                 // calling RuntimeHelpers across the boundary. This should still be faster
-                // than the O(n^2) of doing RemoveAts.
+                // than the O(n^2) of doing RemoveAts, because we don't have to copy
+                // back to compress the array each time.
                 for (int i = _AddRandomPartsRoutine._chooseFromParts_5__11.Count; i-- > 0;)
                     if (_GenGunInfo.CaliberOK(_LastBattery, _AddRandomPartsRoutine._chooseFromParts_5__11[i]))
                         _TempDatas.Add(_AddRandomPartsRoutine._chooseFromParts_5__11[i]);
@@ -212,18 +202,22 @@ namespace TweaksAndFixes
             return AccessTools.Method(typeof(Ship), nameof(Ship.IsComponentAvailable), new Type[] { typeof(ComponentData), typeof(string).MakeByRefType() });
         }
 
-        internal static bool Prefix(Ship __instance, ComponentData component, out string reason, ref bool __result, out float __state)
+        internal static bool Prefix(Ship __instance, ComponentData component, ref string reason, ref bool __result, out float __state)
         {
             __state = component.weight;
 
-            var weight = ComponentDataM.GetWeight(component, __instance.shipType.name);
+            var weight = ComponentDataM.GetWeight(component, __instance.shipType);
+            
+            //if (weight == component.weight)
+            //    return true;
+            //Melon<TweaksAndFixes>.Logger.Msg($"For component {component.name} and shipType {__instance.shipType.name}, overriding weight to {weight:F0}");
+
             if (weight <= 0f)
             {
                 __result = false;
                 reason = "Ship Type";
                 return false;
             }
-            reason = string.Empty;
             component.weight = weight;
             return true;
         }
@@ -245,11 +239,9 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_GenerateRandomShip_b__562_13(ComponentData c, ref float __result)
         {
-            var ship = Patch_Ship._ShipForGenerateRandom;
-            if (ship == null)
-                return true;
-
-            __result = ComponentDataM.GetWeight(c, ship.shipType.name);
+            __result = ComponentDataM.GetWeight(c, Patch_Ship._GenerateRandomShipRoutine.__4__this.shipType);
+            //if(__result != c.weight)
+            //    Melon<TweaksAndFixes>.Logger.Msg($"Gen: For component {c.name} and shipType {Patch_Ship._GenerateRandomShipRoutine.__4__this.shipType.name}, overriding weight to {__result:F0}");
             return false;
         }
     }
@@ -291,7 +283,6 @@ namespace TweaksAndFixes
         internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
             Patch_Ship._GenerateRandomShipRoutine = __instance;
-            Patch_Ship._ShipForGenerateRandom = __instance.__4__this;
             //if (lastName != __instance.__4__this.vesselName)
             //{
             //    lastName = __instance.__4__this.vesselName;
@@ -408,7 +399,6 @@ namespace TweaksAndFixes
 
             Patch_Ship._GenerateRandomShipRoutine = null;
             Patch_Ship._GenerateShipState = -1;
-            Patch_Ship._ShipForGenerateRandom = null;
             //Melon<TweaksAndFixes>.Logger.Msg($"GenerateRandomShip Iteration for state {__state} ended, new state {__instance.__1__state}");
         }
     }

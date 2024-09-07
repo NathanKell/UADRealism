@@ -10,35 +10,43 @@ namespace TweaksAndFixes
 {
     public class ComponentDataM
     {
-        public static float GetWeight(ComponentData c, string sType)
+        private static readonly Dictionary<int, Dictionary<int, float>> _ComponentWeightCache = new Dictionary<int, Dictionary<int, float>>();
+
+        public static float GetWeight(ComponentData c, ShipType sType)
         {
-            if (!c.paramx.TryGetValue("weight_per", out var list))
-                return c.weight;
-
-            //Melon<TweaksAndFixes>.Logger.Msg($"Have weight_per, count is {list.Count}");
-
-            // Annoyingly this is a flat list, not the multilist of a tech or part.
-            // So we have to chain items.
-
-            // Check there's an even number of entries, i.e. a bunch of key/value pairs
-            int iC = list.Count;
-            if (iC == 0 || (iC / 2) * 2 != iC)
-                return c.weight;
-
-            // Iterate through the pairs; if shiptype matches (key), return next item (value)
-            --iC;
-            for (int i = 0; i < iC; i += 2)
+            int cHash = c.GetHashCode();
+            int stHash = sType.GetHashCode();
+            float weight = c.weight;
+            if (_ComponentWeightCache.TryGetValue(cHash, out var dict))
             {
-                //Melon<TweaksAndFixes>.Logger.Msg($"Checking {list[i]} vs {sType} (weight would be {list[i + 1]}");
-                if (list[i] == sType)
-                {
-                    var res = float.Parse(list[i + 1], ModUtils._InvariantCulture);
-                    //Melon<TweaksAndFixes>.Logger.Msg($"Type {list[i]}: returning {res}");
-                    return res;
-                }
+                if (dict.TryGetValue(stHash, out float cw))
+                    return cw;
+
+                return weight;
             }
 
-            return c.weight;
+            dict = new Dictionary<int, float>();
+            if (c.paramx.TryGetValue("weight_per", out var pairs))
+            {
+                //Melon<TweaksAndFixes>.Logger.Msg($"Have weight_per, count is {list.Count}");
+
+                var kvps = Serializer.Human.ParamToParsedKVPs<string, float>(pairs);
+                //string logStr = $"Component {c.name} has override weights:";
+                foreach (var kvp in kvps)
+                {
+                    if (!G.GameData.shipTypes.TryGetValue(kvp.Key, out var st))
+                        continue;
+                    var hash = st.GetHashCode();
+                    dict[hash] = kvp.Value;
+                    if (hash == stHash)
+                        weight = kvp.Value;
+
+                    //logStr += $"  {kvp.Key}={kvp.Value:F0}";
+                }
+                //Melon<TweaksAndFixes>.Logger.Msg(logStr);
+            }
+            _ComponentWeightCache[cHash] = dict;
+            return weight;
         }
     }
 }

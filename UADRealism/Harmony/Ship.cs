@@ -562,30 +562,31 @@ namespace UADRealism
                     __instance.__1__state = 9; // this waits a frame and advances to 10
                     break;
 
-                case 10: // wait a frame
+                case 9: // wait a frame
                     // We'll also use this to do work.
 
-                    // Replace step 11.
+                    // Replace step 10.
                     __instance.__4__this.UpdateHullStats();
                     foreach (var part in __instance.__4__this.parts)
                         part.UpdateCollidersSize(__instance.__4__this);
                     foreach (var part in __instance.__4__this.parts)
                         Part.GunBarrelLength(part.data, __instance.__4__this, true);
-                    // let 10 execute, dont' change incoming state. This will set
-                    // next state to 11.
+                    // let 9 execute, don't change incoming state. This will set
+                    // next state to 10.
                     break;
 
-                case 11: // AHS and update parts. Done above.
+                case 10: // AHS and update parts. Done above.
                     // Skip this and just run 12.
-                    __instance.__1__state = 12;
+                    __instance.__1__state = 11;
                     break;
 
-                // 12: Verify maincal guns and barrels
+                // 11: Verify maincal guns and barrels
 
-                case 13: // Select components and then reduce weight.
+                case 12: // Select components and then reduce weight.
                     // We'll only do components. Then skip past all the add/reduce steps to
                     // the end.
                     gen.SelectComponents(GenerateShip.ComponentSelectionPass.PostParts);
+                    // FIXME run NeedComponentActive??
                     gen.AddArmorToLimit(__instance.__4__this.Tonnage());
                     __instance.__1__state = 17;
                     break;
