@@ -37,7 +37,7 @@ namespace TweaksAndFixes
             if (G.GameData == null || G.GameData.paramsRaw == null || G.GameData.parms == null)
                 return;
 
-            int mode = (int)(Config.Param("taf_versiontext_mode", 0f) + 0.01f);
+            int mode = (int)(Config.Param("taf_versiontext", 0f) + 0.01f);
             if (mode == 0)
                 return;
 
