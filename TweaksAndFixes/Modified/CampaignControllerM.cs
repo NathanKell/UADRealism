@@ -52,9 +52,6 @@ namespace TweaksAndFixes
                 return;
             
             float maxTonnageParam = MonoBehaviourExt.Param("min_fleet_tonnage_for_scrap", 1f);
-            if (totalTonnage < maxTonnageParam)
-                return;
-
             float capTerm = Config.Param("taf_scrap_capacityCoeff", 0f) * Mathf.Pow(player.ShipbuildingCapacityLimit(), Config.Param("taf_scrap_capacityExponent", 1f));
             float hystAdd = Config.Param("taf_scrap_hysteresis", 50000f);
             float targetTonnage = maxTonnageParam + capTerm;

@@ -95,17 +95,13 @@ In shiptype param or hull param, you can add `calCount_main` (or sec or ter). Th
 On a per-hull basis, TAF can also limit the maximum caliber the AI autodesigner is allowed to select for each battery. Add `ai_max_caliber_main(X)` (or sec or ter) to the hull's params, where X is the maximum caliber in inches that is allowed. This has no effect on the human player. Limits transfer down, so a main limit of 7in and a sec limit of 10in (or no sec limit at all) will still result in a sec limit of 7in.
 
 ### Replacement scrapping behavior
-The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships in order of mothballed ships first (to that target), then active ships (to that target), and finally all ships to the all-ships target tonnage. The target tonnage is determined with a minimum base tonnage and then a coefficient times (shipbuilding capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params (you will likely also want to set `min_fleet_tonnage_for_scrap` to 1 or something so that doesn't block scrapping), then tune using the following values:
+The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships based on their scrap score, which is their age minus (a coefficient times their build time in months). Mothballed ships have a bonus to their score. The target tonnage is determined with a minimum base tonnage (`min_fleet_tonnage_for_scrap`) which is increased by a coefficient times (shipbuilding capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params, then tune using the following values:
 ```
-taf_scrap_useOnlyShipAge - if set to 1, ships are scrapped purely in order of age (oldest first). If not present or set to 0, then ships will be scrapped proportionally, so if the fleet has a high tonnage of cruisers, more cruisers will be scrapped than other ships.
-taf_scrap_hysteresisMult - In order to not scrap every turn, the AI will only scrap when its fleet tonnage is greater than this multiplier times its scrap target. Once scrapping, it will scrap down to the scrap target, however.
-taf_scrap_capacityExponent - an exponent to shipbuilding capacity. This is multiplied by the appropriate Coeff to get the scrap target tonnage.
-taf_scrap_scrapTargetBaseMothball and taf_scrap_capacityCoeffMothball - target tonnage is the base plus the coeff times (shipbuilding capacity to the capacity Exponent power).
-taf_scrap_scrapTargetBaseMain and taf_scrap_capacityCoeffMain - as above, but for active ships.
-taf_scrap_scrapTargetBaseTotal and taf_scrap_capacityCoeffTotal - as above but for total fleet tonnage
-taf_scrap_multToScrapRequiredVsShipTng - when determining whether to scrap a ship, if a ship's tonnage is greater than this value times the remaining tonnage to scrap to reach the target (either the global target, or the per-shiptype target), then don't scrap this ship.
-taf_scrap_useBuildTimeScore - if set to 1, scrap ships based on their score: age in years -  ( taf_scrap_buildTimeCoeff x build time in months ). When set, useStrictAge is ignored.
+taf_scrap_hysteresis - In order to not scrap every turn, the AI will only scrap when its fleet tonnage is greater than the scrap target _plus_ this. Once scrapping, it will scrap down to the scrap target, however.
 taf_scrap_buildTimeCoeff - the coefficient to build time
+taf_scrap_mothballScoreAddYears - the score to add when a ship is mothballed
+taf_scrap_capacityCoeff - the coefficient to (shipbuilding ^ exponent)
+taf_scrap_capacityExponent - an exponent to shipbuilding capacity. This is multiplied by the coefficient to get the scrap target tonnage.
 ```
 
 ### Tunable mine behavior
