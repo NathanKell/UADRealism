@@ -11,156 +11,104 @@ namespace TweaksAndFixes
 {
     public class CampaignControllerM
     {
-        private static readonly List<Ship> _TempShipList = new List<Ship>();
-        private static readonly List<Ship> _TempShipListMB = new List<Ship>();
-        private static readonly List<KeyValuePair<Ship, float>> _TempShipListScores = new List<KeyValuePair<Ship, float>>();
-        private static readonly List<KeyValuePair<Ship, float>> _TempShipListMBScores = new List<KeyValuePair<Ship, float>>();
-        private static readonly Dictionary<ShipType, float> _TempShipTypeToWeight = new Dictionary<ShipType, float>();
-        private static readonly Dictionary<ShipType, float> _TempShipTypeToWeightMB = new Dictionary<ShipType, float>();
-        private static readonly Dictionary<ShipType, float> _TempShipTypeToRemaining = new Dictionary<ShipType, float>();
-        private static void ClearScrapData()
+        private struct ShipScrapInfo
         {
-            _TempShipList.Clear();
-            _TempShipListMB.Clear();
-            _TempShipListScores.Clear();
-            _TempShipListMBScores.Clear();
-            _TempShipTypeToWeight.Clear();
-            _TempShipTypeToWeightMB.Clear();
-            _TempShipTypeToRemaining.Clear();
+            public float score;
+            public float weight;
+            public Ship ship;
+
+            public ShipScrapInfo(Ship s, float sc, float wgt)
+            {
+                ship = s;
+                score = sc;
+                weight = wgt;
+            }
         }
+
         public static void HandleScrapping(CampaignController _this, Player player)
         {
+            List<ShipScrapInfo> scrapCandidates = new List<ShipScrapInfo>();
+
             float buildTimeCoeff = Config.Param("taf_scrap_buildTimeCoeff", 1f);
-            bool useScore = Config.Param("taf_scrap_useBuildTimeScore", 0f) > 0f;
+            float mbAdd = Config.Param("taf_scrap_mothballScoreAddYears", 5f);
 
             float totalTonnage = 0f;
-            float totalTonnageMB = 0f;
 
             foreach (var s in player.GetFleetAll())
             {
                 if (s.isScrapped || s.isSunk || s.isBuilding || s.isRefit)
                     continue;
 
-                if (useScore)
-                {
-                    if (s.isMothballed || s.isLowCrew)
-                        _TempShipListMBScores.Add(new KeyValuePair<Ship, float>(s, _this.CurrentDate.YearsPassedSince(s.dateFinished) - buildTimeCoeff * (s.design == null ? s : s.design).BuildingTime(false)));
-                    else
-                        _TempShipListScores.Add(new KeyValuePair<Ship, float>(s, _this.CurrentDate.YearsPassedSince(s.dateFinished) - buildTimeCoeff * (s.design == null ? s : s.design).BuildingTime(false)));
-                }
-                else
-                {
-                    float weight = s.Weight();
-                    if (s.isMothballed || s.isLowCrew)
-                    {
-                        _TempShipListMB.Add(s);
-                        _TempShipTypeToWeightMB.ChangeValueFor(s.shipType, weight);
-                        totalTonnageMB += weight;
-                    }
-                    else
-                    {
-                        _TempShipList.Add(s);
-                        _TempShipTypeToWeight.ChangeValueFor(s.shipType, weight);
-                        totalTonnage += weight;
-                    }
-                }
+                float score = _this.CurrentDate.YearsPassedSince(s.dateFinished) - buildTimeCoeff * (s.design == null ? s : s.design).BuildingTime(false);
+                if (s.isMothballed || s.isLowCrew)
+                    score += mbAdd;
+
+                float weight = s.Weight();
+                scrapCandidates.Add(new ShipScrapInfo(s, score, weight));
+                totalTonnage += weight;
             }
+
+            if (scrapCandidates.Count == 0)
+                return;
             
             float maxTonnageParam = MonoBehaviourExt.Param("min_fleet_tonnage_for_scrap", 1f);
-            if (totalTonnage + totalTonnageMB < maxTonnageParam)
-            {
-                ClearScrapData();
-                return;
-            }
-
-            // We will iterate backwards so we sort so newest (or lowest-score) ships are first.
-            if (useScore)
-            {
-                _TempShipList.Sort((a, b) => a.dateFinished.CompareTo(b.dateFinished));
-                _TempShipListMB.Sort((a, b) => a.dateFinished.CompareTo(b.dateFinished));
-            }
-            else
-            {
-                _TempShipListScores.Sort((a, b) => a.Value.CompareTo(b.Value));
-                foreach (var kvp in _TempShipListScores)
-                    _TempShipList.Add(kvp.Key);
-                _TempShipListMBScores.Sort((a, b) => a.Value.CompareTo(b.Value));
-                foreach (var kvp in _TempShipListMBScores)
-                    _TempShipList.Add(kvp.Key);
-            }
-
-            bool useWeighting = !(Config.Param("taf_scrap_useOnlyShipAge", 0) > 0 || useScore);
-
-            float capTerm = Mathf.Pow(player.ShipbuildingCapacityLimit(), Config.Param("taf_scrap_capacityExponent", 1f));
-            float hystMult = Config.Param("taf_scrap_hysteresisMult", 1.05f);
-
-            // Scrap mothballed first
-            ScrapLoop(_this, _TempShipTypeToWeightMB, _TempShipListMB,
-                Config.Param("taf_scrap_scrapTargetBaseMothball", float.MaxValue) + Config.Param("taf_scrap_capacityCoeffMothball", 0f) * capTerm,
-                totalTonnageMB, useWeighting, hystMult);
-
-            // Then scrap main fleet if needed
-            ScrapLoop(_this, _TempShipTypeToWeight, _TempShipList,
-                Config.Param("taf_scrap_scrapTargetBaseMain", float.MaxValue) + Config.Param("taf_scrap_capacityCoeffMain", 0f) * capTerm,
-                totalTonnage, useWeighting, hystMult);
-
-            // Finally, scrap everything down to target, taking mothballed first
-            for (int i = 0; i < _TempShipListMB.Count; ++i)
-                _TempShipList.Add(_TempShipListMB[i]);
-            _TempShipTypeToWeight.Clear();
-            totalTonnage = 0f;
-            foreach (var s in _TempShipList)
-            {
-                float weight = s.Weight();
-                totalTonnage += weight;
-                _TempShipTypeToWeight.ChangeValueFor(s.shipType, weight);
-            }
-            ScrapLoop(_this, _TempShipTypeToWeight, _TempShipList,
-                Config.Param("taf_scrap_scrapTargetBaseTotal", float.MaxValue) + Config.Param("taf_scrap_capacityCoeffTotal", 0f) * capTerm,
-                totalTonnage, useWeighting, hystMult);
-
-            ClearScrapData();
-        }
-
-        private static void ScrapLoop(CampaignController _this, Dictionary<ShipType, float> tngDict, List<Ship> ships, float targetTonnage, float totalTonnage, bool useWeighting, float hystMult)
-        {
-            if (totalTonnage <= targetTonnage * hystMult)
+            if (totalTonnage < maxTonnageParam)
                 return;
 
-            bool didScrap = false;
-            float tonnageDelta = totalTonnage - targetTonnage;
-            float tngLeft = tonnageDelta;
-            float tMult = 1f / totalTonnage * tonnageDelta;
-            float maxScrapTngMult = Config.Param("taf_scrap_multToScrapRequiredVsShipTng", 2f);
+            float capTerm = Config.Param("taf_scrap_capacityCoeff", 0f) * Mathf.Pow(player.ShipbuildingCapacityLimit(), Config.Param("taf_scrap_capacityExponent", 1f));
+            float hystAdd = Config.Param("taf_scrap_hysteresis", 50000f);
+            float targetTonnage = maxTonnageParam + capTerm;
 
-            foreach (var kvp in tngDict)
-                _TempShipTypeToRemaining[kvp.Key] = kvp.Value * tMult;
-            do
+            if (totalTonnage < targetTonnage + hystAdd)
+                return;
+
+            float toScrap = totalTonnage - targetTonnage;
+            scrapCandidates.Sort((a, b) => b.score.CompareTo(a.score));
+            int stopIdx;
+            int iC = scrapCandidates.Count;
+            for (stopIdx = 0; stopIdx < iC && toScrap > 0f; ++stopIdx)
             {
-                for (int i = ships.Count; i-- > 0 && tngLeft > 0;)
+                toScrap -= scrapCandidates[stopIdx].weight;
+            }
+            if (stopIdx < iC)
+                scrapCandidates.RemoveRange(stopIdx, iC - stopIdx);
+            iC = stopIdx;
+
+            // We know, by definition, we have to scrap the heaviest.
+            // But we might not have to scrap everything else.
+            toScrap = -toScrap;
+            if (toScrap > 0f)
+            {
+                int idxHeaviest = iC - 1;
+                float heaviest = scrapCandidates[idxHeaviest].weight;
+                for (int i = iC; i-- > 0;)
                 {
-                    var s = ships[i];
-                    float testTng = useWeighting ? _TempShipTypeToRemaining.GetValueOrDefault(s.shipType) : tngLeft;
-                    float sWeight = s.Weight();
-                    if (sWeight < testTng * maxScrapTngMult)
+                    var ssi = scrapCandidates[i];
+                    if (ssi.weight > heaviest)
                     {
-                        ships.RemoveAt(i);
-                        tngLeft -= sWeight;
-                        _TempShipTypeToRemaining.ChangeValueFor(s.shipType, -sWeight);
-                        _this.ScrapShip(s, true);
-                        didScrap = true;
+                        idxHeaviest = i;
+                        heaviest = ssi.weight;
                     }
                 }
-                // If we failed to find anything with tight constraints, try
-                // with the looser constraint (ignore ship type)
-                if (useWeighting && !didScrap)
-                {
-                    useWeighting = false;
-                    didScrap = true;
-                }
-            } while (didScrap && tngLeft > 0);
+                _this.ScrapShip(scrapCandidates[idxHeaviest].ship, true);
+                scrapCandidates.RemoveAt(idxHeaviest);
+                --iC;
 
-            _TempShipTypeToRemaining.Clear();
+                // Greedily remove ships, worst score first.
+                for (int i = iC; i-- > 0;)
+                {
+                    var ssi = scrapCandidates[i];
+                    if (ssi.weight <= toScrap)
+                    {
+                        toScrap -= ssi.weight;
+                        scrapCandidates.RemoveAt(i);
+                    }
+                }
+            }
+
+            // Finally, scrap all (remaining) ships to scrap
+            for (int i = scrapCandidates.Count; i-- > 0;)
+                _this.ScrapShip(scrapCandidates[i].ship, true);
         }
 
         public static List<CampaignController.TaskForce> GetTaskForceInsideRadius(CampaignController _this, Vector3 coord, float radiusKm, CampaignController.TaskForce except, Func<CampaignController.TaskForce, bool> predicate)
