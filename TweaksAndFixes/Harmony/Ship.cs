@@ -4,6 +4,7 @@ using UnityEngine;
 using Il2Cpp;
 using System.Collections.Generic;
 using System.Reflection;
+using MelonLoader.CoreClrUtils;
 
 #pragma warning disable CS8625
 
@@ -235,15 +236,27 @@ namespace TweaksAndFixes
         // the weighted-random dictionary. So we need to patch it too. But
         // it doesn't know the ship in question. So we have to patch the calling
         // method to pass that on.
+        // ALSO, it's code that's shared with IsComponentAvailable. But we
+        // patch that by changing weight before and after the method. So there's
+        // no need to do so here. So we abort if we're not in GenerateRandomShip.
         [HarmonyPatch(nameof(Ship.__c._GenerateRandomShip_b__562_13))]
         [HarmonyPrefix]
         internal static bool Prefix_GenerateRandomShip_b__562_13(ComponentData c, ref float __result)
         {
+            if (Patch_Ship._GenerateRandomShipRoutine == null)
+                return true;
+
             __result = ComponentDataM.GetWeight(c, Patch_Ship._GenerateRandomShipRoutine.__4__this.shipType);
             //if(__result != c.weight)
             //    Melon<TweaksAndFixes>.Logger.Msg($"Gen: For component {c.name} and shipType {Patch_Ship._GenerateRandomShipRoutine.__4__this.shipType.name}, overriding weight to {__result:F0}");
             return false;
         }
+
+        //[HarmonyPatch(nameof(Ship.__c._IsComponentAvailable_b__1022_2))]
+        //[HarmonyPrefix]
+        //internal static bool Prefix_IsComponentAvailable_b__1022_2(ComponentData c, ref float __result)
+        //{
+        //}
     }
 
     // This runs when selecting all possible parts for a RP
