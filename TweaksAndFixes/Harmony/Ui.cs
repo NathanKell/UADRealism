@@ -48,6 +48,7 @@ namespace TweaksAndFixes
                 case 1: text = vt.text + " " + text; break;
                 case 2: text = GameData.GameVersion + " " + text; break;
                 // default: entirely replace
+                case 4: text = string.Empty; break;
             }
             vt.text = text;
         }

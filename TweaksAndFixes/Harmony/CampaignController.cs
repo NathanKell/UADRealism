@@ -13,7 +13,7 @@ namespace TweaksAndFixes
         // We replace the _entirety_ of the scrap logic by:
         // 1. Prefixing/postfixing AI Manage Fleet's MoveNext to set a bool that we're in that method
         // 2. Changing the predicate method that determines whether to scrap a ship to always report
-        //      asingle true, all others false (using the bool in 1, such that the scrap loop runs
+        //      a single true, all others false (using the bool in 1, such that the scrap loop runs
         //      only once)
         // 3. Prefixing CampaignController.ScrapShip such that, when it runs, if the bool in 1 is set,
         //      our new scrap logic runs on the entire fleet of the player in question. To do that,
