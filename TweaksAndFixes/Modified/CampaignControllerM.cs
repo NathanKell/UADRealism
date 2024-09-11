@@ -27,10 +27,13 @@ namespace TweaksAndFixes
 
         public static void HandleScrapping(CampaignController _this, Player player)
         {
+            Melon<TweaksAndFixes>.Logger.Msg($"Starting scrapping for player {player.data.name}");
             List<ShipScrapInfo> scrapCandidates = new List<ShipScrapInfo>();
 
             float buildTimeCoeff = Config.Param("taf_scrap_buildTimeCoeff", 1f);
             float mbAdd = Config.Param("taf_scrap_mothballScoreAddYears", 5f);
+            int shipsScrapped = 0;
+            float tonnageScrapped = 0;
 
             float totalTonnage = 0f;
 
@@ -49,7 +52,10 @@ namespace TweaksAndFixes
             }
 
             if (scrapCandidates.Count == 0)
+            {
+                Melon<TweaksAndFixes>.Logger.Msg($"-------->Error: no ships to scrap!");
                 return;
+            }
             
             float maxTonnageParam = MonoBehaviourExt.Param("min_fleet_tonnage_for_scrap", 1f);
             float capTerm = Config.Param("taf_scrap_capacityCoeff", 0f) * Mathf.Pow(player.ShipbuildingCapacityLimit(), Config.Param("taf_scrap_capacityExponent", 1f));
@@ -57,7 +63,10 @@ namespace TweaksAndFixes
             float targetTonnage = maxTonnageParam + capTerm;
 
             if (totalTonnage < targetTonnage + hystAdd)
+            {
+                Melon<TweaksAndFixes>.Logger.Msg($"--->Tonnage {totalTonnage:N0} but target {targetTonnage:N0} and with hysteresis {(targetTonnage+hystAdd):N0}, so aborting");
                 return;
+            }
 
             float toScrap = totalTonnage - targetTonnage;
             scrapCandidates.Sort((a, b) => b.score.CompareTo(a.score));
@@ -87,6 +96,8 @@ namespace TweaksAndFixes
                         heaviest = ssi.weight;
                     }
                 }
+                ++shipsScrapped;
+                tonnageScrapped += scrapCandidates[idxHeaviest].weight;
                 _this.ScrapShip(scrapCandidates[idxHeaviest].ship, true);
                 scrapCandidates.RemoveAt(idxHeaviest);
                 --iC;
@@ -105,7 +116,13 @@ namespace TweaksAndFixes
 
             // Finally, scrap all (remaining) ships to scrap
             for (int i = scrapCandidates.Count; i-- > 0;)
+            {
                 _this.ScrapShip(scrapCandidates[i].ship, true);
+                ++shipsScrapped;
+                tonnageScrapped += scrapCandidates[i].weight;
+            }
+
+            Melon<TweaksAndFixes>.Logger.Msg($"---->Finished scrapping, {shipsScrapped} ships, {tonnageScrapped:N0} tons");
         }
 
         public static List<CampaignController.TaskForce> GetTaskForceInsideRadius(CampaignController _this, Vector3 coord, float radiusKm, CampaignController.TaskForce except, Func<CampaignController.TaskForce, bool> predicate)
