@@ -22,6 +22,15 @@ namespace TweaksAndFixes
             public float limitSpeed = -1f;
             public float customSpeed = -1f;
             public float customArmor = -1f;
+
+            public void Reset()
+            {
+                isActive = false;
+                limitArmor = -1f;
+                limitSpeed = -1f;
+                customArmor = -1f;
+                customSpeed = -1f;
+            }
         }
 
         internal static readonly BattleShipGenerationInfo _ShipGenInfo = new BattleShipGenerationInfo();
@@ -64,11 +73,7 @@ namespace TweaksAndFixes
         [HarmonyPostfix]
         internal static void Postfix_MoveNext(BattleManager._UpdateLoadingMissionBuild_d__113 __instance, int __state)
         {
-            _ShipGenInfo.isActive = false;
-            _ShipGenInfo.limitArmor = -1f;
-            _ShipGenInfo.limitSpeed = -1f;
-            _ShipGenInfo.customArmor = -1f;
-            _ShipGenInfo.customSpeed = -1f;
+            _ShipGenInfo.Reset();
         }
     }
 }

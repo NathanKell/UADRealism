@@ -143,30 +143,87 @@ namespace TweaksAndFixes
 
         public static bool GetParamValueByYear<TValue>(Ship _this, string pName, out TValue value, bool hullYear = true)
         {
+            value = default(TValue);
             int year;
             if (hullYear && Database.GetYear(_this.hull.data) is int hy && hy > 0)
                 year = hy;
             else
                 year = Mathf.RoundToInt(_this.GetYear(_this));
 
-            value = default(TValue);
+            var list = GetParamKVPsWithReplace<TValue>(_this, pName, hullYear);
+
+            if (list == null)
+                return false;
+
+            int lC = list.Count;
+
+            if (lC == 1)
+            {
+                value = list[0].Value;
+                return true;
+            }
+
+            list.Sort((a, b) => (a.Key.CompareTo(b.Key)));
+            int idx = lC - 1;
+            while (idx > 0 && year < list[idx].Key)
+                --idx;
+            value = list[idx].Value;
+            return true;
+        }
+
+        public static bool GetParamValueByYearLerped(Ship _this, string pName, out float value, bool hullYear = true)
+        {
+            value = default(int);
+            int year;
+            if (hullYear && Database.GetYear(_this.hull.data) is int hy && hy > 0)
+                year = hy;
+            else
+                year = Mathf.RoundToInt(_this.GetYear(_this));
+
+            var list = GetParamKVPsWithReplace<float>(_this, pName, hullYear);
+
+            if (list == null)
+                return false;
+
+            int lC = list.Count;
+
+            if (lC == 1)
+            {
+                value = list[0].Value;
+                return true;
+            }
+
+            list.Sort((a, b) => (a.Key.CompareTo(b.Key)));
+            int idx = lC - 1;
+            while (idx > 0 && year < list[idx].Key)
+                --idx;
+            value = list[idx].Value;
+            if (year > list[idx].Key && idx < lC - 1)
+                value = Mathf.Lerp(value, list[idx + 1].Value, Mathf.InverseLerp(list[idx].Key, list[idx + 1].Key, year));
+            return true;
+        }
+
+        private static List<KeyValuePair<int, TValue>> GetParamKVPsWithReplace<TValue>(Ship _this, string pName, bool hullYear = true)
+        {
             Type type = typeof(TValue);
             Serializer.CSV.DataType dt = Serializer.CSV.FieldData.ValueDataType(type);
             if (dt == Serializer.CSV.DataType.INVALID)
-                return false;
+                return null;
 
             _this.shipType.paramx.TryGetValue(pName, out var paramST);
             _this.hull.data.paramx.TryGetValue(pName, out var paramHull);
             if (paramST == null && paramHull == null)
-                return false;
-
-            if (paramHull != null && paramHull.Count == 1)
-            {
-                value = (TValue)Serializer.CSV.FieldData.ReadValue(paramHull[0], dt, type);
-                return true;
-            }
+                return null;
 
             List<KeyValuePair<int, TValue>> list;
+            if (paramHull != null && paramHull.Count == 1)
+            {
+                list = new List<KeyValuePair<int, TValue>>();
+                TValue value = (TValue)Serializer.CSV.FieldData.ReadValue(paramHull[0], dt, type);
+                list.Add(new KeyValuePair<int, TValue>(0, value));
+                return list;
+            }
+            
             if (paramHull != null && paramST != null)
             {
                 // We know Hull has pairs
@@ -207,31 +264,17 @@ namespace TweaksAndFixes
                 // If single value in ST, done. Else we have to sort.
                 if (paramST.Count == 1)
                 {
-                    value = (TValue)Serializer.CSV.FieldData.ReadValue(paramST[0], dt, type);
-                    return true;
+                    list = new List<KeyValuePair<int, TValue>>();
+                    TValue value = (TValue)Serializer.CSV.FieldData.ReadValue(paramST[0], dt, type);
+                    list.Add(new KeyValuePair<int, TValue>(0, value));
+                    return list;
                 }
 
                 // use ST only
                 list = Serializer.Human.ParamToParsedKVPs<int, TValue>(paramST);
             }
 
-            if (list == null)
-                return false;
-
-            int lC = list.Count;
-
-            if (lC == 1)
-            {
-                value = list[0].Value;
-                return true;
-            }
-
-            list.Sort((a, b) => (a.Key.CompareTo(b.Key)));
-            int idx = lC - 1;
-            while (idx > 0 && year < list[idx].Key)
-                --idx;
-            value = list[idx].Value;
-            return true;
+            return list;
         }
 
         public static Ship.TurretArmor FindMatchingTurretArmor(Ship ship, PartData data)
@@ -583,7 +626,7 @@ namespace TweaksAndFixes
             return Mathf.RoundToInt(speed * _SpeedStepR) * _SpeedStep;
         }
 
-        private static VesselEntity.OpRange MinOpRange(Ship ship, VesselEntity.OpRange defaultMin = VesselEntity.OpRange.VeryLow)
+        public static VesselEntity.OpRange MinOpRange(Ship ship, VesselEntity.OpRange defaultMin = VesselEntity.OpRange.VeryLow)
         {
             if (ship.shipType.paramx.TryGetValue("range_min", out var minRange) && minRange.Count > 0)
             {
@@ -606,7 +649,7 @@ namespace TweaksAndFixes
             return defaultMin;
         }
 
-        private static Ship.Survivability MinSurv(Ship ship, Ship.Survivability defaultMin = Ship.Survivability.VeryLow)
+        public static Ship.Survivability MinSurv(Ship ship, Ship.Survivability defaultMin = Ship.Survivability.VeryLow)
         {
             if (ship.shipType.paramx.TryGetValue("surv_min", out var min) && min.Count > 0)
             {
@@ -629,7 +672,7 @@ namespace TweaksAndFixes
             return defaultMin;
         }
 
-        public static void AdjustHullStats(Ship _this, int delta, float targetWeightRatio, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, bool allowEditSurv = true, Il2CppSystem.Random rnd = null, float limitArmor = -1f, float limitSpeed = -1f)
+        public static void AdjustHullStats(Ship _this, int delta, float targetWeightRatio, Func<bool> stopCondition, bool allowEditSpeed = true, bool allowEditArmor = true, bool allowEditCrewQuarters = true, bool allowEditRange = true, bool allowEditSurv = true, Il2CppSystem.Random rnd = null, float limitArmor = -1f, float limitSpeedMin = -1f, float limitSpeedMax = -1f)
         {
             float year = _this.GetYear(_this);
             Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float> newArmor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
@@ -686,14 +729,14 @@ namespace TweaksAndFixes
             float maxSpeed;
             if (Config.ShipGenTweaks)
             {
-                minSpeed = GetMinSpeed(_this, limitSpeed, rnd);
-                maxSpeed = GetMaxSpeed(_this, rnd);
+                minSpeed = GetMinSpeed(_this, limitSpeedMin, rnd);
+                maxSpeed = GetMaxSpeed(_this, limitSpeedMax, rnd);
             }
             else
             {
-                if (limitSpeed > 0f)
+                if (limitSpeedMin > 0f)
                 {
-                    minSpeed = limitSpeed;
+                    minSpeed = limitSpeedMin;
                 }
                 else
                 {
@@ -708,7 +751,8 @@ namespace TweaksAndFixes
                 }
                 float maxMult = cldd ? 1.05f : 1.1f;
                 maxSpeed = hullSpeedMS * maxMult * Util.Remap(year, 1890f, 1940f, 1.05f, 1.0f, true);
-
+                if (limitSpeedMax > 0 && maxSpeed > limitSpeedMax)
+                    maxSpeed = limitSpeedMax;
                 minSpeed = Mathf.Max(minSpeed, _this.shipType.speedMin * KnotsToMS);
                 maxSpeed = Mathf.Min(maxSpeed, _this.shipType.speedMax * KnotsToMS);
             }
@@ -1108,7 +1152,7 @@ namespace TweaksAndFixes
 
             _this.limiter = 699;
             float step = MonoBehaviourExt.Param("speed_step", 0.1f);
-            float maxMS = GetMaxSpeed(_this, null);
+            float maxMS = GetMaxSpeed(_this, -1f, null);
             float minMS = _this.shipType.speedMin * KnotsToMS;
             while (underweight && _this.limiter-- > 0)
             {
@@ -1435,11 +1479,11 @@ namespace TweaksAndFixes
             => speedLimit > 0f ? speedLimit
                 : Mathf.Clamp(GetParamSpeedMultMin(_this, rnd) * _this.hull.data.speedLimiter, _this.shipType.speedMin, _this.shipType.speedMax) * KnotsToMS;
 
-        public static float GetParamSpeedMultMin(Ship _this, Il2CppSystem.Random rnd)
+        public static float GetParamSpeedMultMin(Ship _this, Il2CppSystem.Random rnd, bool useFallback = true)
         {
             string key = $"g{_this.hull.data.Generation}";
-            if(!GetParamValue(_this, "speedMultByGen_min", key, out float mult))
-                return GetMinSpeedMult(_this, rnd);
+            if (!GetParamValue(_this, "speedMultByGen_min", key, out float mult))
+                return useFallback ? GetMinSpeedMult(_this, rnd) : -1f;
 
             if (rnd != null && GetParamValue(_this, "speedMultByGen_rand", key, out float rMult))
                 mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
@@ -1485,14 +1529,15 @@ namespace TweaksAndFixes
             return mult;
         }
 
-        public static float GetMaxSpeed(Ship _this, Il2CppSystem.Random rnd)
-            => Mathf.Min(_this.shipType.speedMax, _this.hull.data.speedLimiter * GetParamSpeedMultMax(_this, rnd)) * KnotsToMS;
+        public static float GetMaxSpeed(Ship _this, float limitSpeed, Il2CppSystem.Random rnd)
+            => Mathf.Min(limitSpeed > 0 ? Mathf.Min(_this.shipType.speedMax, limitSpeed) : _this.shipType.speedMax,
+                _this.hull.data.speedLimiter * GetParamSpeedMultMax(_this, rnd)) * KnotsToMS;
 
-        public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd)
+        public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd, bool useFallback = true)
         {
             string key = $"g{_this.hull.data.Generation}";
             if (!GetParamValue(_this, "speedMultByGen_max", key, out float mult))
-                return GetMaxSpeedMult(_this, rnd);
+                return useFallback ? GetMaxSpeedMult(_this, rnd) : -1f;
 
             if (rnd != null && GetParamValue(_this, "speedMultByGen_rand", key, out float rMult))
                 mult *= Util.Range(1f - rMult, 1f + rMult, rnd);

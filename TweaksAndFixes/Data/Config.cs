@@ -61,6 +61,8 @@ namespace TweaksAndFixes
         public static bool ShipGenTweaks = true;
         [ConfigParse("Alliance Behavior Tweaks", "alliance_changes")]
         public static bool AllianceTweaks = false;
+        [ConfigParse("Ship Autodesign Reordering", "shipgen_reorder")]
+        public static bool ShipGenReorder = false;
 
         public static void LoadConfig()
         {

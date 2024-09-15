@@ -17,24 +17,7 @@ namespace TweaksAndFixes
         internal static bool _IsLoading = false;
         internal static Ship _ShipForLoading = null;
         internal static Ship.Store _StoreForLoading = null;
-        internal static Ship._GenerateRandomShip_d__562 _GenerateRandomShipRoutine = null;
-        internal static Ship._AddRandomPartsNew_d__579 _AddRandomPartsRoutine = null;
-        internal static RandPart _LastRandPart = null;
-        internal static bool _LastRPIsGun = false;
-        internal static ShipM.BatteryType _LastBattery = ShipM.BatteryType.main;
-        internal static ShipM.GenGunInfo _GenGunInfo = new ShipM.GenGunInfo();
-
-        internal static bool UpdateRPGunCacheOrSkip(RandPart rp)
-        {
-            if (rp != _LastRandPart)
-            {
-                _LastRandPart = rp;
-                _LastRPIsGun = rp.type == "gun";
-                if (_LastRPIsGun)
-                    _LastBattery = rp.condition.Contains("main_cal") ? ShipM.BatteryType.main : (rp.condition.Contains("sec_cal") ? ShipM.BatteryType.sec : ShipM.BatteryType.ter);
-            }
-            return !_LastRPIsGun;
-        }
+        internal static GenerateShip _GenShipData = null;
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.ToStore))]
@@ -164,8 +147,6 @@ namespace TweaksAndFixes
             __instance.TAFData().OnRefit(newDesign);
         }
 
-        private static List<PartData> _TempDatas = new List<PartData>();
-
         // Hook this just so we can run this after a random gun is added. Bleh.
         // We need to do this because, if we place a part of a _new_ caliber,
         // we need to check if we are now at the limit for caliber counts for
@@ -173,29 +154,28 @@ namespace TweaksAndFixes
         // chosen.
         [HarmonyPatch(nameof(Ship.AddShipTurretArmor), new Type[] { typeof(Part) })]
         [HarmonyPostfix]
-        internal static void Postfix_AddShipTurretArmor(Part part)
+        internal static void Postfix_AddShipTurretArmor(Ship __instance, Part part)
         {
-            if (_AddRandomPartsRoutine == null || !_GenGunInfo.isLimited || UpdateRPGunCacheOrSkip(_AddRandomPartsRoutine.__8__1.randPart))
+            if (_GenShipData == null)
                 return;
 
-            // Register reports true iff we're at the count limit
-            if (_GenGunInfo.RegisterCaliber(_LastBattery, part.data))
+            _GenShipData.OnAddTurretArmor(part);
+        }
+
+        [HarmonyPatch(nameof(Ship.CheckOperations))]
+        [HarmonyPrefix]
+        internal static bool Prefix_CheckOperation(Ship __instance, RandPart randPart, ref bool __result)
+        {
+            if (!Config.ShipGenReorder)
+                return true;
+
+            if (!_GenShipData.IsRPAllowed(randPart))
             {
-                // Ideally we'd do RemoveAll, but we can't use a managed predicate
-                // on the native list. We could reimplement RemoveAll, but I don't trust
-                // calling RuntimeHelpers across the boundary. This should still be faster
-                // than the O(n^2) of doing RemoveAts, because we don't have to copy
-                // back to compress the array each time.
-                for (int i = _AddRandomPartsRoutine._chooseFromParts_5__11.Count; i-- > 0;)
-                    if (_GenGunInfo.CaliberOK(_LastBattery, _AddRandomPartsRoutine._chooseFromParts_5__11[i]))
-                        _TempDatas.Add(_AddRandomPartsRoutine._chooseFromParts_5__11[i]);
-
-                _AddRandomPartsRoutine._chooseFromParts_5__11.Clear();
-                for (int i = _TempDatas.Count; i-- > 0;)
-                    _AddRandomPartsRoutine._chooseFromParts_5__11.Add(_TempDatas[i]);
-
-                _TempDatas.Clear();
+                __result = false;
+                return false;
             }
+
+            return true;
         }
     }
 
@@ -250,10 +230,9 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_GenerateRandomShip_b__562_13(ComponentData c, ref float __result)
         {
-            if (Patch_Ship._GenerateRandomShipRoutine == null)
+            if (Patch_Ship._GenShipData == null)
                 return true;
-
-            __result = ComponentDataM.GetWeight(c, Patch_Ship._GenerateRandomShipRoutine.__4__this.shipType);
+            __result = ComponentDataM.GetWeight(c, Patch_Ship._GenShipData._ship.shipType);
             //if(__result != c.weight)
             //    Melon<TweaksAndFixes>.Logger.Msg($"Gen: For component {c.name} and shipType {Patch_Ship._GenerateRandomShipRoutine.__4__this.shipType.name}, overriding weight to {__result:F0}");
             return false;
@@ -269,7 +248,7 @@ namespace TweaksAndFixes
     // This runs when selecting all possible parts for a RP
     // but once an RP is having parts placed, we also need to
     // knock options out whenever a caliber is picked. See
-    // AddTurretArmor above.
+    // AddShipTurretArmor above.
     [HarmonyPatch(typeof(Ship.__c__DisplayClass578_0))]
     internal class Patch_Ship_c_AddRandomParts578_0
     {
@@ -278,11 +257,7 @@ namespace TweaksAndFixes
         internal static bool Prefix_b0(Ship.__c__DisplayClass578_0 __instance, PartData a, ref bool __result)
         {
             // Super annoying we can't prefix GetParts itself to do the RP caching
-            if (!Patch_Ship._GenGunInfo.isLimited || Patch_Ship.UpdateRPGunCacheOrSkip(__instance.randPart))
-                return true;
-
-            int partCal = (int)((a.caliber + 1f) * (1f / 25.4f));
-            if (!Patch_Ship._GenGunInfo.CaliberOK(Patch_Ship._LastBattery, partCal))
+            if (Patch_Ship._GenShipData.OnGetParts_ShouldSkip(__instance, a))
             {
                 __result = false;
                 return false;
@@ -295,180 +270,32 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__562))]
     internal class Patch_ShipGenRandom
     {
-        //static string lastName = string.Empty;
-        //static int shipCount = 0;
-
-        internal struct GRSData
-        {
-            public int state;
-            public float beamMin;
-            public float beamMax;
-            public float draughtMin;
-            public float draughtMax;
-        }
-
-        const string bdlParamName = "ai_beamdraughtlimits";
-
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPrefix]
-        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out GRSData __state, ref bool __result)
+        internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
-            Patch_Ship._GenerateRandomShipRoutine = __instance;
-            //if (lastName != __instance.__4__this.vesselName)
-            //{
-            //    lastName = __instance.__4__this.vesselName;
-            //    Melon<TweaksAndFixes>.Logger.Msg($"ShipGen {__instance.__4__this.vesselName} ({__instance.__4__this.hull.data.name}) for {__instance.__4__this.player.data.name}, #{shipCount++}"); // state {__instance.__1__state}");
-            //}
-            //Melon<TweaksAndFixes>.Logger.Msg($"{__instance.__4__this.vesselName}: state {__instance.__1__state}");
+            if (__instance.__1__state == 0)
+                Patch_Ship._GenShipData = new GenerateShip(__instance);
 
-            // So we know what state we started in.
-            __state = new GRSData();
-            __state.state = __instance.__1__state;
-            Patch_Ship._GenerateShipState = __state.state;
+            __state = __instance.__1__state;
+            Patch_Ship._GenerateShipState = __state;
             var ship = __instance.__4__this;
-            var hd = ship.hull.data;
-            __state.beamMin = hd.beamMin;
-            __state.beamMax = hd.beamMax;
-            __state.draughtMin = hd.draughtMin;
-            __state.draughtMax = hd.draughtMax;
-
-            if (hd.paramx.TryGetValue(bdlParamName, out var bdlParam))
-            {
-                int iC = bdlParam.Count;
-                if (iC == 4)
-                {
-                    for (int i = 0; i < iC; ++i)
-                    {
-                        if (!float.TryParse(bdlParam[i], out var val))
-                        {
-                            Melon<TweaksAndFixes>.Logger.Error($"For ship {hd.name}, {bdlParamName} failed to parse {bdlParam[i]}");
-                            continue;
-                        }
-                        if (val != 0)
-                        {
-                            switch (i)
-                            {
-                                case 0: hd.beamMin = val; break;
-                                case 1: hd.beamMax = val; break;
-                                case 2: hd.draughtMin = val; break;
-                                default: hd.draughtMax = val; break;
-                            }
-                        }
-                    }
-                }
-                else
-                    Melon<TweaksAndFixes>.Logger.Error($"For ship {hd.name}, {bdlParamName} doesn't have 4 elements. The elements should be beamMin, beamMax, draughtMin, draughtMax. Values of 0 mean keep existing non-AI values.");
-            }
-            switch (__state.state)
-            {
-                case 0:
-                    __instance.__4__this.TAFData().ResetAllGrades();
-                    break;
-
-                case 6:
-                    float weightTargetRand = Util.Range(0.875f, 1.075f, __instance.__8__1.rnd);
-                    var designYear = ship.GetYear(ship);
-                    float yearRemapToFreeTng = Util.Remap(designYear, 1890f, 1940f, 0.6f, 0.4f, true);
-                    float weightTargetRatio = 1f - Mathf.Clamp(weightTargetRand * yearRemapToFreeTng, 0.45f, 0.65f);
-                    var stopFunc = new System.Func<bool>(() =>
-                    {
-                        float targetRand = Util.Range(0.875f, 1.075f, __instance.__8__1.rnd);
-                        return (ship.Weight() / ship.Tonnage()) <= (1.0f - Mathf.Clamp(targetRand * yearRemapToFreeTng, 0.45f, 0.65f));
-                    });
-
-                    // We can't access the nullable floats on this object
-                    // so we cache off their values at the callsite (the
-                    // only one that sets them).
-
-                    ShipM.AdjustHullStats(
-                      ship,
-                      -1,
-                      weightTargetRatio,
-                      stopFunc,
-                      Patch_BattleManager_d115._ShipGenInfo.customSpeed <= 0f,
-                      Patch_BattleManager_d115._ShipGenInfo.customArmor <= 0f,
-                      true,
-                      true,
-                      true,
-                      __instance.__8__1.rnd,
-                      Patch_BattleManager_d115._ShipGenInfo.limitArmor,
-                      __instance._savedSpeedMinValue_5__3);
-
-                    // We can't do the frame-wait thing easily, let's just advance straight-away
-                    __instance.__1__state = 7;
-                    break;
-
-                case 10:
-                    // We can't access the nullable floats on this object
-                    // so we cache off their values at the callsite (the
-                    // only one that sets them).
-
-                    ShipM.AdjustHullStats(
-                      ship,
-                      1,
-                      1f,
-                      null,
-                      Patch_BattleManager_d115._ShipGenInfo.customSpeed <= 0f,
-                      Patch_BattleManager_d115._ShipGenInfo.customArmor <= 0f,
-                      true,
-                      true,
-                      true,
-                      __instance.__8__1.rnd,
-                      Patch_BattleManager_d115._ShipGenInfo.limitArmor,
-                      __instance._savedSpeedMinValue_5__3);
-
-                    ship.UpdateHullStats();
-
-                    foreach (var p in ship.parts)
-                        p.UpdateCollidersSize(ship);
-
-                    foreach (var p in ship.parts)
-                        Part.GunBarrelLength(p.data, ship, true);
-
-                    // We can't do the frame-wait thing easily, let's just advance straight-away
-                    __instance.__1__state = 11;
-                    break;
-            }
-            return true;
+            Patch_Ship._GenShipData.OnPrefix();
         }
 
         [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__562.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, GRSData __state)
+        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, int __state, bool __result)
         {
             var ship = __instance.__4__this;
-            var hd = ship.hull.data;
-            hd.beamMin = __state.beamMin;
-            hd.beamMax = __state.beamMax;
-            hd.draughtMin = __state.draughtMin;
-            hd.draughtMax = __state.draughtMax;
-            // For now, we're going to reset all grades regardless.
-            //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))
-            //    __instance.__4__this.TAFData().ResetAllGrades();
-            switch (__state.state)
+            Patch_Ship._GenShipData.OnPostfix(__state);
+
+            if (__result == false)
             {
-                case 0:
-                    if (Config.ShipGenTweaks)
-                    {
-                        Patch_Ship._GenGunInfo.FillFor(__instance.__4__this);
-
-                        if (!G.ui.isConstructorRefitMode)
-                        {
-                            //__instance._savedSpeedMinValue_5__3 = Mathf.Max(__instance.__4__this.shipType.speedMin,
-                            //    Mathf.Min(__instance.__4__this.hull.data.speedLimiter - 2f, __instance.__4__this.hull.data.speedLimiter * G.GameData.parms.GetValueOrDefault("taf_genship_minspeed_mult")))
-                            //    * ShipM.KnotsToMS;
-
-                            // For now, let each method handle it.
-                            __instance._savedSpeedMinValue_5__3 = -1f;
-                        }
-                    }
-                    break;
-
-                case 8: // Add parts
-                    break;
+                Patch_Ship._GenShipData.OnGenerateEnd();
+                Patch_Ship._GenShipData = null;
             }
 
-            Patch_Ship._GenerateRandomShipRoutine = null;
             Patch_Ship._GenerateShipState = -1;
             //Melon<TweaksAndFixes>.Logger.Msg($"GenerateRandomShip Iteration for state {__state} ended, new state {__instance.__1__state}");
         }
@@ -482,42 +309,18 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static void Prefix_MoveNext(Ship._AddRandomPartsNew_d__579 __instance, out int __state)
         {
-            Patch_Ship._AddRandomPartsRoutine = __instance;
+            Patch_Ship._GenShipData.OnARPNPrefix(__instance);
             __state = __instance.__1__state;
             //Melon<TweaksAndFixes>.Logger.Msg($"Iteraing AddRandomPartsNew, state {__state}");
-            //switch (__state)
-            //{
-            //    case 2: // pick a part and place it
-            //            // The below is a colossal hack to get the game
-            //            // to stop adding funnels past a certain point.
-            //            // This patch doesn't really work, because components are selected
-            //            // AFTER parts. Durr.
-            //            if (!Config.ShipGenTweaks)
-            //        return;
-
-            //    var _this = __instance.__4__this;
-            //    if (!_this.statsValid)
-            //        _this.CStats();
-            //    var eff = _this.stats.GetValueOrDefault(G.GameData.stats["smoke_exhaust"]);
-            //    if (eff == null)
-            //        return;
-            //    if (eff.total < Config.Param("taf_generate_funnel_maxefficiency", 150f))
-            //        return;
-
-            //    foreach (var p in G.GameData.parts.Values)
-            //    {
-            //        if (p.type == "funnel")
-            //            _this.badData.Add(p);
-            //    }
-            //    break;
-            //}
         }
 
         [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__579.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(Ship._AddRandomPartsNew_d__579 __instance, int __state)
+        internal static void Postfix_MoveNext(Ship._AddRandomPartsNew_d__579 __instance, int __state, bool __result)
         {
-            Patch_Ship._AddRandomPartsRoutine = null;
+            Patch_Ship._GenShipData.OnARPNPostfix(__state);
+            if (!__result)
+                Patch_Ship._GenShipData.OnARPNEnd();
             //Melon<TweaksAndFixes>.Logger.Msg($"AddRandomPartsNew Iteration for state {__state} ended, new state {__instance.__1__state}");
         }
     }

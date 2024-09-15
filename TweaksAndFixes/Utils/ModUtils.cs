@@ -153,21 +153,25 @@ namespace TweaksAndFixes
         // Returns a smoothed distribution, i.e.
         // Random.Range(-range, range) + Random.Range(-range, range)...
         // divided by steps
-        public static float DistributedRange(float range, int steps = 2, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null)
+        public static float DistributedRange(float range, int steps = 2, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null, float biasPct = 0f)
         {
             float val = 0f;
             for (int i = steps; i-- > 0;)
             {
-                val += Range(-range, range, rnd, nativeRnd);
+                float rVal = Range(-range, range, rnd, nativeRnd);
+                if (biasPct != 0f)
+                    rVal = BiasRange(rVal / range, biasPct) * range;
+                
+                val += rVal;
             }
             return val / steps;
         }
 
-        public static float DistributedRange(float range, Il2CppSystem.Random rnd)
-            => DistributedRange(range, 2, null, rnd);
+        public static float DistributedRange(float range, Il2CppSystem.Random rnd, float biasPct = 0f)
+            => DistributedRange(range, 2, null, rnd, biasPct);
 
-        public static float DistributedRange(int steps, Il2CppSystem.Random rnd)
-            => DistributedRange(1f, steps, null, rnd);
+        public static float DistributedRange(int steps, Il2CppSystem.Random rnd, float biasPct = 0f)
+            => DistributedRange(1f, steps, null, rnd, biasPct);
 
         // Biases a random number in the range [-1, 1]
         // so the midpoint is at the bias
@@ -181,15 +185,22 @@ namespace TweaksAndFixes
             return randomNum + bias;
         }
 
-        public static int RangeToInt(float input, int size)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="rangePosNeg1">A random number -1 to +1</param>
+        /// <param name="maxExclusive">The array size (i.e. result will be 0 inclusive, maxExclusive )</param>
+        /// <returns></returns>
+        public static int RangeToInt(float rangePosNeg1, int maxExclusive)
         {
-            input += 1f;
-            input *= 0.5f;
+            float range = rangePosNeg1;
+            range += 1f;
+            range *= 0.5f;
             // Now in range 0-1
-            int result = (int)(input * size);
+            int result = (int)(range * maxExclusive);
             // Catch if it was -1 to 1 _inclusive_
-            if (result >= size)
-                result = size - 1;
+            if (result >= maxExclusive)
+                result = maxExclusive - 1;
 
             return result;
         }

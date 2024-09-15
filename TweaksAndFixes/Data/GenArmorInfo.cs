@@ -254,78 +254,106 @@ namespace TweaksAndFixes
                 return _current.GetValueOrDefault(area);
             }
 
+            public void ReapplyArmor(Ship ship)
+                => SetArmor(ship, _lastLerpVal);
+
             public bool SetArmor(Ship ship, float portionOfMax)
             {
                 bool didChange = false;
-                if (portionOfMax != _lastLerpVal)
-                    UpdateForLerp(ship, portionOfMax);
-
-                // We don't early-out here. This is because we have no guarantee
-                // that either (a) our armor is unchanged, or (b) there haven't been
-                // TurretArmor additions.
-
-                var oldArmor = ship.armor;
-                ship.armor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
-                foreach (var a in _max.Keys)
-                    ship.armor[a] = _current.GetValueOrDefault(a);
-
-                var citA = ship.GetCitadelArmor();
-                if (citA != null)
+                if (portionOfMax < 0f)
                 {
-                    for (Ship.A a = Ship.A.InnerBelt_1st; a <= Ship.A.InnerDeck_3rd; a += 1)
-                        if (citA.Contains(a))
-                            ship.armor[a] = GetArmorValue(ship, a, portionOfMax);
-                }
-
-                didChange = ship.armor.Count != oldArmor.Count;
-                if (!didChange)
-                {
-                    foreach (var kvp in ship.armor)
+                    for (Ship.A a = Ship.A.Belt; a <= Ship.A.InnerDeck_3rd; a += 1)
                     {
-                        if (kvp.Value != oldArmor.GetValueOrDefault(kvp.key))
+                        didChange = ship.armor[a] != 0f;
+                        ship.armor[a] = 0f;
+                    }
+                    if (ship.shipTurretArmor != null && ship.shipTurretArmor.Count > 0)
+                    {
+                        for (int i = ship.shipTurretArmor.Count; i-- > 0;)
                         {
-                            didChange = true;
-                            break;
+                            var ta = ship.shipTurretArmor[i];
+                            if (ta.barbetteArmor + ta.sideTurretArmor + ta.topTurretArmor > 0)
+                                didChange = true;
+
+                            ta.barbetteArmor = 0f;
+                            ta.sideTurretArmor = 0f;
+                            ta.topTurretArmor = 0f;
                         }
                     }
+                    _lastLerpVal = -1f;
                 }
-
-                Ship.TurretArmor mainGun = null;
-                if (ship.shipTurretArmor != null && ship.shipTurretArmor.Count > 0)
+                else
                 {
-                    mainGun = ship.shipTurretArmor[0];
-                    for (int i = 1, iC = ship.shipTurretArmor.Count; i < iC; ++i)
+                    if (portionOfMax != _lastLerpVal)
+                        UpdateForLerp(ship, portionOfMax);
+
+                    // We don't early-out here. This is because we have no guarantee
+                    // that either (a) our armor is unchanged, or (b) there haven't been
+                    // TurretArmor additions.
+
+                    var oldArmor = ship.armor;
+                    ship.armor = new Il2CppSystem.Collections.Generic.Dictionary<Ship.A, float>();
+                    foreach (var a in _max.Keys)
+                        ship.armor[a] = _current.GetValueOrDefault(a);
+
+                    var citA = ship.GetCitadelArmor();
+                    if (citA != null)
                     {
-                        var ta = ship.shipTurretArmor[i];
-                        if (mainGun.turretPartData.GetCaliber() < ta.turretPartData.GetCaliber())
-                            mainGun = ta;
+                        for (Ship.A a = Ship.A.InnerBelt_1st; a <= Ship.A.InnerDeck_3rd; a += 1)
+                            if (citA.Contains(a))
+                                ship.armor[a] = GetArmorValue(ship, a, portionOfMax);
                     }
-                }
 
-                if (mainGun != null)
-                {
-                    foreach (var ta in ship.shipTurretArmor)
+                    didChange = ship.armor.Count != oldArmor.Count;
+                    if (!didChange)
                     {
-                        Ship.A area = Ship.A.TurretSide;
-                        float mult = GetTurretArmorMultiplier(ship, area, ta.turretPartData, mainGun);
-                        float nVal = G.settings.RoundToArmorStep(Mathf.Clamp(_current[area] * mult, ship.MinArmorForZone(area), ship.MaxArmorForZone(area, ta.turretPartData)));
-                        if (nVal != ta.sideTurretArmor)
-                            didChange = true;
-                        ta.sideTurretArmor = nVal;
+                        foreach (var kvp in ship.armor)
+                        {
+                            if (kvp.Value != oldArmor.GetValueOrDefault(kvp.key))
+                            {
+                                didChange = true;
+                                break;
+                            }
+                        }
+                    }
 
-                        area = Ship.A.TurretTop;
-                        mult = GetTurretArmorMultiplier(ship, area, ta.turretPartData, mainGun);
-                        nVal = G.settings.RoundToArmorStep(Mathf.Clamp(_current[area] * mult, ship.MinArmorForZone(area), ship.MaxArmorForZone(area, ta.turretPartData)));
-                        if (nVal != ta.topTurretArmor)
-                            didChange = true;
-                        ta.topTurretArmor = nVal;
+                    Ship.TurretArmor mainGun = null;
+                    if (ship.shipTurretArmor != null && ship.shipTurretArmor.Count > 0)
+                    {
+                        mainGun = ship.shipTurretArmor[0];
+                        for (int i = 1, iC = ship.shipTurretArmor.Count; i < iC; ++i)
+                        {
+                            var ta = ship.shipTurretArmor[i];
+                            if (mainGun.turretPartData.GetCaliber() < ta.turretPartData.GetCaliber())
+                                mainGun = ta;
+                        }
+                    }
 
-                        area = Ship.A.Barbette;
-                        mult = GetTurretArmorMultiplier(ship, area, ta.turretPartData, mainGun);
-                        nVal = G.settings.RoundToArmorStep(Mathf.Clamp(_current[area] * mult, ship.MinArmorForZone(area), ship.MaxArmorForZone(area, ta.turretPartData)));
-                        if (nVal != ta.barbetteArmor)
-                            didChange = true;
-                        ta.barbetteArmor = nVal;
+                    if (mainGun != null)
+                    {
+                        foreach (var ta in ship.shipTurretArmor)
+                        {
+                            Ship.A area = Ship.A.TurretSide;
+                            float mult = GetTurretArmorMultiplier(ship, area, ta.turretPartData, mainGun);
+                            float nVal = G.settings.RoundToArmorStep(Mathf.Clamp(_current[area] * mult, ship.MinArmorForZone(area), ship.MaxArmorForZone(area, ta.turretPartData)));
+                            if (nVal != ta.sideTurretArmor)
+                                didChange = true;
+                            ta.sideTurretArmor = nVal;
+
+                            area = Ship.A.TurretTop;
+                            mult = GetTurretArmorMultiplier(ship, area, ta.turretPartData, mainGun);
+                            nVal = G.settings.RoundToArmorStep(Mathf.Clamp(_current[area] * mult, ship.MinArmorForZone(area), ship.MaxArmorForZone(area, ta.turretPartData)));
+                            if (nVal != ta.topTurretArmor)
+                                didChange = true;
+                            ta.topTurretArmor = nVal;
+
+                            area = Ship.A.Barbette;
+                            mult = GetTurretArmorMultiplier(ship, area, ta.turretPartData, mainGun);
+                            nVal = G.settings.RoundToArmorStep(Mathf.Clamp(_current[area] * mult, ship.MinArmorForZone(area), ship.MaxArmorForZone(area, ta.turretPartData)));
+                            if (nVal != ta.barbetteArmor)
+                                didChange = true;
+                            ta.barbetteArmor = nVal;
+                        }
                     }
                 }
 
