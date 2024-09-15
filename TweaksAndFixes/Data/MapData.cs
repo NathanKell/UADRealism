@@ -16,6 +16,7 @@ using Il2CppSystem.Runtime.Remoting.Messaging;
 #pragma warning disable CS8600
 #pragma warning disable CS8602
 #pragma warning disable CS8603
+#pragma warning disable CS8605
 #pragma warning disable CS8604
 #pragma warning disable CS8618
 #pragma warning disable CS8625
@@ -24,6 +25,24 @@ namespace TweaksAndFixes
 {
     public class MapData
     {
+        private static void LogChanged<T>(T a, T b, string name, ref string log)
+        {
+            if (typeof(T) == typeof(float))
+            {
+                object tmp = (object)a;
+                tmp = (float)Math.Round((float)tmp, 6);
+                a = (T)tmp;
+                tmp = (object)b;
+                tmp = (float)Math.Round((float)tmp, 6);
+                b = (T)tmp;
+            }
+            if (a.Equals(b))
+                return;
+
+
+            log += $" {name}: {a}->{b}.";
+        }
+
         public abstract class MapDataLoader<T> where T : MapElement2D
         {
             [Serializer.Field] public string name;
@@ -42,6 +61,18 @@ namespace TweaksAndFixes
 
             public override void Apply(PortElement old)
             {
+                if (Config.OverrideMap == Config.OverrideMapOptions.LogDifferences)
+                {
+                    string logStr = string.Empty;
+                    LogChanged(old.Name, nameUi, "nameUi", ref logStr);
+                    LogChanged(old.ProvinceId, province, "province", ref logStr);
+                    LogChanged(old.PortCapacity, portCapacity, "portCapacity", ref logStr);
+                    LogChanged(old.SeaControlDistanceMultiplier, seaControlDistanceMultiplier, "seaControlDistanceMultiplier", ref logStr);
+                    LogChanged(old.InBeingDistanceMultiplier, inBeingDistanceMultiplier, "inBeingDistanceMultiplier", ref logStr);
+
+                    if (logStr != string.Empty)
+                        Melon<TweaksAndFixes>.Logger.Msg($"Differences for port {old.Id}:{logStr}");
+                }
                 old.Name = nameUi;
                 old.ProvinceId = province;
                 old.PortCapacity = portCapacity;
@@ -91,6 +122,37 @@ namespace TweaksAndFixes
 
             public override void Apply(Province old)
             {
+                if (Config.OverrideMap == Config.OverrideMapOptions.LogDifferences)
+                {
+                    string logStr = string.Empty;
+                    LogChanged(old.Name, nameUi, "nameUI", ref logStr);
+                    LogChanged(old.AreaId, area, "area", ref logStr);
+                    LogChanged(old.Controller, controller, "controller", ref logStr);
+                    LogChanged(old.Controller_1890, controller_1890, "controller_1890", ref logStr);
+                    LogChanged(old.Controller_1900, controller_1900, "controller_1900", ref logStr);
+                    LogChanged(old.Controller_1910, controller_1910, "controller_1910", ref logStr);
+                    LogChanged(old.Controller_1920, controller_1920, "controller_1920", ref logStr);
+                    LogChanged(old.Controller_1930, controller_1930, "controller_1930", ref logStr);
+                    LogChanged(old.Controller_1940, controller_1940, "controller_1940", ref logStr);
+                    LogChanged(old.Claim, claim, "Claim", ref logStr);
+                    LogChanged(old.IsHome, isHome > 0, "isHome", ref logStr);
+                    LogChanged(old.Type, type, "type", ref logStr);
+                    LogChanged(old.InitialDevelopment, development, "development", ref logStr);
+                    LogChanged(old.Port, port, "Port", ref logStr);
+                    LogChanged(old.population, population, "population", ref logStr);
+                    LogChanged(old.oilDiscoveryYear, oilDiscoveryYear, "oilDiscoveryYear", ref logStr);
+                    LogChanged(old.oilDiscoveryBaseChance, oilDiscoveryBaseChance, "oilDiscoveryBaseChance", ref logStr);
+                    LogChanged(old.oilCapacity, oilCapacity, "oilCapacity", ref logStr);
+                    LogChanged(old.oilReservesInTurns, oilReservesInTurns, "oilReservesInTurns", ref logStr);
+                    LogChanged(old.RevoltChance, revoltChance, "revoltChance", ref logStr);
+                    LogChanged(old.ProvinceArmyPercentage, provinceArmyPercentage, "provinceArmyPercentage", ref logStr);
+                    LogChanged(old.ProvinceDefenderBonus, ProvinceDefenderBonus, "ProvinceDefenderBonus", ref logStr);
+                    LogChanged(old.NeighbourProvincesString, neighbour_provinces, "neighbour_provinces", ref logStr);
+
+                    if (logStr != string.Empty)
+                        Melon<TweaksAndFixes>.Logger.Msg($"Differences for province {old.Id}:{logStr}");
+                }
+
                 old.Name = nameUi;
                 old.AreaId = area;
                 old.Controller = controller;
@@ -147,7 +209,7 @@ namespace TweaksAndFixes
 
         public static void LoadMapData()
         {
-            if (Config.DumpMap)
+            if (Config.OverrideMap == Config.OverrideMapOptions.DumpData)
                 WriteData();
             else
                 LoadData();

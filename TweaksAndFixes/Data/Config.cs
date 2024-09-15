@@ -44,12 +44,18 @@ namespace TweaksAndFixes
         internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         internal static readonly string _FlagFile = "flags.csv";
 
+        public enum OverrideMapOptions
+        {
+            Disabled,
+            Enabled,
+            DumpData,
+            LogDifferences
+        }
+
         [ConfigParse("New Scrapping behavior", "scrap_enable")]
         public static bool ScrappingChange = false;
-        [ConfigParse("Ports/Provinces overriding", "override_map", _exceptVal = 2f) ]
-        public static bool OverrideMap = false;
-        [ConfigParse("Map dumping", "override_map", _checkValue = 2f, _invertCheck = false)]
-        public static bool DumpMap = false;
+        [ConfigParse("Ports/Provinces overriding", "override_map")]
+        public static OverrideMapOptions OverrideMap = OverrideMapOptions.Disabled;
         [ConfigParse("Ship Autodesign Tweaks", "shipgen_tweaks")]
         public static bool ShipGenTweaks = true;
 
@@ -66,6 +72,40 @@ namespace TweaksAndFixes
                 // Do this to suppress warning message
                 if (Il2Cpp.G.GameData.parms.TryGetValue(attrib._param, out var param))
                 {
+                    if (f.FieldType.IsEnum)
+                    {
+                        if (Il2Cpp.G.GameData.paramsRaw.TryGetValue(attrib._param, out var paramObj) && !string.IsNullOrEmpty(paramObj.str))
+                        {
+                            if (!Enum.TryParse(f.FieldType, paramObj.str, out var eResult))
+                            {
+                                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: Could not parse {paramObj.str}, using default value {eResult}");
+                            }
+                            else
+                            {
+                                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
+                            }
+                            f.SetValue(null, eResult);
+                            continue;
+                        }
+                        else
+                        {
+                            var eArray = Enum.GetValues(f.FieldType);
+                            int val = (int)param;
+                            var eResult = val >= eArray.Length ? eArray.GetValue(0) : eArray.GetValue(val);
+                            if (val >= eArray.Length)
+                            {
+                                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: Value {val} out of range, using default value {eResult}");
+                            }
+                            else
+                            {
+                                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
+                            }
+                            f.SetValue(null, eResult);
+                            continue;
+                        }
+                    }
+
+
                     bool isEnabled;
                     if (attrib._invertCheck)
                         isEnabled = param != attrib._checkValue && (attrib._checkValue == attrib._exceptVal || param != attrib._exceptVal);
@@ -73,7 +113,6 @@ namespace TweaksAndFixes
                         isEnabled = param == attrib._checkValue;
                     f.SetValue(null, isEnabled);
                 }
-
                 Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {((bool)(f.GetValue(null)) ? "Enabled" : "Disabled")}");
             }
         }
