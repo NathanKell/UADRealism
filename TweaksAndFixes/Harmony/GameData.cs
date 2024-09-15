@@ -100,6 +100,7 @@ namespace TweaksAndFixes
             Database.FillDatabase();
             Config.LoadConfig();
             Melon<TweaksAndFixes>.Logger.Msg("**************************************** Loaded database and config");
+            GameDataReloader.Create();
 
             if (!Directory.Exists(Config._BasePath))
             {
