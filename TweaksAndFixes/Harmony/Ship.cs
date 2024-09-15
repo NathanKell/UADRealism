@@ -157,6 +157,13 @@ namespace TweaksAndFixes
             }
         }
 
+        [HarmonyPatch(nameof(Ship.ChangeRefitShipTech))]
+        [HarmonyPostfix]
+        internal static void Postfix_ChangeRefitShipTech(Ship __instance, Ship newDesign)
+        {
+            __instance.TAFData().OnRefit(newDesign);
+        }
+
         private static List<PartData> _TempDatas = new List<PartData>();
 
         // Hook this just so we can run this after a random gun is added. Bleh.

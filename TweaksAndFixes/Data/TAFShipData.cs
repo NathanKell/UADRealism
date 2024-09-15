@@ -146,6 +146,11 @@ namespace TweaksAndFixes
         {
         }
 
+        public void OnRefit(Ship design)
+        {
+            CopyGradeData(design.TAFData());
+        }
+
         private void Awake()
         {
             _ship = gameObject.GetComponent<Ship>();
@@ -390,6 +395,20 @@ namespace TweaksAndFixes
             _ship.Init();
             _ship.CalcInstability(true);
             G.ui.Refresh(true);
+        }
+
+        [HideFromIl2Cpp]
+        private void CopyGradeData(TAFShipData other)
+        {
+            _torpedoGrade = other._torpedoGrade;
+            _gradeData.Clear();
+            foreach (var gdO in other._gradeData)
+            {
+                var gd = new GunGradeData();
+                gd.grade = gdO.grade;
+                gd.caliber = gdO.caliber;
+                gd.isCasemateGun = gdO.isCasemateGun;
+            }
         }
 
         private void LoadTCs(Ship.Store store)
