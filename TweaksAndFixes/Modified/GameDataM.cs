@@ -112,7 +112,7 @@ namespace TweaksAndFixes
 
         public void Update()
         {
-            if (UnityEngine.Input.GetKeyUp(KeyCode.F12))
+            if (UnityEngine.Input.GetKeyUp(KeyCode.F9))
             {
                 Melon<TweaksAndFixes>.Logger.Msg("Performing minimal hot-reloading of parts and randParts and randPartsRefit. Note that no items may be added or removed or this will break!");
                 var text = GameDataM.GetText("parts");
