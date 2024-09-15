@@ -100,7 +100,8 @@ namespace TweaksAndFixes
             Database.FillDatabase();
             Config.LoadConfig();
             Melon<TweaksAndFixes>.Logger.Msg("**************************************** Loaded database and config");
-            GameDataReloader.Create();
+            if (Config.Param("taf_hot_reload", 0f) > 0f)
+                GameDataReloader.Create();
 
             if (!Directory.Exists(Config._BasePath))
             {
