@@ -20,8 +20,10 @@ namespace TweaksAndFixes
 
         private static void CheckTurn()
         {
-            if (_currentTurn == CampaignController.Instance.CurrentDate.turn)
+            var turn = CampaignController.Instance.CurrentDate.turn;
+            if (_currentTurn == turn)
                 return;
+            _currentTurn = turn;
 
             foreach (var set in _attackedTFs.Values)
                 set.Clear();
@@ -86,6 +88,9 @@ namespace TweaksAndFixes
         private static readonly List<VesselEntity> _TempVessels = new List<VesselEntity>();
         public static float DamageTaskForce(MinesFieldManager _this, CampaignController.TaskForce taskForce, Player mineFieldOwner, float minefieldRadiusKm, float damageMultiplier = 1f)
         {
+            if (!CanAttackTFNoChange(taskForce))
+                return 0f;
+
             var rel = RelationExt.Between(CampaignController.Instance.CampaignData.Relations, mineFieldOwner, taskForce.Controller);
             bool isWar = rel == null ? true : rel.isWar;
             var sweepPrevent = (MonoBehaviourExt.Param("mine_sweep_prevention", 0.1f) * taskForce.AverageMinesweepingValue()) + 1f;
