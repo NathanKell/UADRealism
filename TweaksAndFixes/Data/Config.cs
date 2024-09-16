@@ -58,6 +58,8 @@ namespace TweaksAndFixes
         public static OverrideMapOptions OverrideMap = OverrideMapOptions.Disabled;
         [ConfigParse("Ship Autodesign Tweaks", "shipgen_tweaks")]
         public static bool ShipGenTweaks = true;
+        [ConfigParse("Alliance Behavior Tweaks", "alliance_changes")]
+        public static bool AllianceTweaks = false;
 
         public static void LoadConfig()
         {
