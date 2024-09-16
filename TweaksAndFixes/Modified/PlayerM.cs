@@ -40,5 +40,27 @@ namespace TweaksAndFixes
                 yield return s;
             }
         }
+
+        public static int CrewPoolincome(Player _this)
+        {
+            var provs = _this.homeProvinces;
+            float homePop = 0;
+            foreach (var p in provs)
+            {
+                float pop = p.GetPopulation();
+                if (pop == 0)
+                    Melon<TweaksAndFixes>.Logger.Msg($"Province {p.Id} has 0 pop!");
+                homePop += pop;
+            }
+            float mult = MonoBehaviourExt.Param("crew_pool_income_modifier_max", 0.005f);
+            float existingPoolMult = Mathf.Lerp(2f, 0.13f, _this.crewPool / 90000);
+            float portionOfHomePop = Mathf.Clamp01(_this.crewPool * 25000 / homePop);
+            Melon<TweaksAndFixes>.Logger.Msg($"Player {_this.data.name} crew pool {_this.crewPool}, pop {_this.TotalPopulation:N0} (we say {homePop:N0}), budget {_this.trainingBudget:N2}, existingMult {existingPoolMult:F3}, portion {portionOfHomePop:F3}. AI would be {(CampaignController.Instance.AiIncomeMultiplier * 1.15f):F2}x");
+            float val = Mathf.Lerp(1f, 0.1f, portionOfHomePop) * _this.trainingBudget * homePop * mult * existingPoolMult;
+            if (_this.isAi)
+                val *= CampaignController.Instance.AiIncomeMultiplier * 1.15f;
+
+            return (int)val;
+        }
     }
 }
