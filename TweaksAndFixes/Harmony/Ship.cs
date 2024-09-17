@@ -177,6 +177,48 @@ namespace TweaksAndFixes
 
             return true;
         }
+
+        [HarmonyPatch(nameof(Ship.AddPart))]
+        [HarmonyPrefix]
+        internal static void Prefix_AddPart(Ship __instance, Part part, out float __state)
+        {
+            __state = -1f;
+            if (_GenShipData == null || !_GenShipData.AddingParts)
+                return;
+
+            __state = __instance.Weight();
+        }
+
+        [HarmonyPatch(nameof(Ship.AddPart))]
+        [HarmonyPostfix]
+        internal static void Postfix_AddPart(Ship __instance, Part part, float __state)
+        {
+            if (__state < 0f)
+                return;
+
+            _GenShipData.OnAddPart(__state, part);
+        }
+
+        [HarmonyPatch(nameof(Ship.RemovePart))]
+        [HarmonyPrefix]
+        internal static void Prefix_RemovePart(Ship __instance, Part part, out float __state)
+        {
+            __state = -1f;
+            if (_GenShipData == null || !_GenShipData.AddingParts)
+                return;
+
+            __state = __instance.Weight();
+        }
+
+        [HarmonyPatch(nameof(Ship.RemovePart))]
+        [HarmonyPostfix]
+        internal static void Postfix_RemovePart(Ship __instance, Part part, float __state)
+        {
+            if (__state < 0f)
+                return;
+
+            _GenShipData.OnRemovePart(__state, part);
+        }
     }
 
     // We can't target ref arguments in an attribute, so

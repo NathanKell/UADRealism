@@ -106,18 +106,17 @@ namespace TweaksAndFixes
         float _customSpeed = -1f;
         float _customArmor = -1f;
 
-        RandPart _LastRandPart = null;
-        bool _LastRPIsGun = false;
-        ShipM.BatteryType _LastBattery = ShipM.BatteryType.main;
-        ShipM.GenGunInfo _GenGunInfo = new ShipM.GenGunInfo();
-        GenArmorData.GenArmorInfo _gaInfo;
-        Ship._AddRandomPartsNew_d__579 _AddRandomPartsRoutine = null;
+        RandPart _curRP = null;
+        bool _rpIsGun = false;
+        ShipM.BatteryType _rpBattery = ShipM.BatteryType.main;
+        ShipM.GenGunInfo _gunInfo = new ShipM.GenGunInfo();
+        GenArmorData.GenArmorInfo _armorInfo;
+        Ship._AddRandomPartsNew_d__579 _arpnRoutine = null;
+        public bool AddingParts => _arpnRoutine != null;
 
         List<PartData> _availableParts = new List<PartData>();
 
         HashSet<string> _seenCompTypes = new HashSet<string>();
-
-        int[] _gunGrades = new int[21];
 
         float _tonnage;
         float _baseHullWeight;
@@ -125,13 +124,14 @@ namespace TweaksAndFixes
         float _armRatio;
         float _prePartsFreeTngNoPayload;
         float _hullPartsTonnage = 0;
-        float _lastWeight = 0;
 
         float _payloadBaseWeight;
         float _payloadTotalWeight;
         float _maxPayloadWeight;
         bool _doneAddingParts = false;
         bool _doneAddingFunnels = false;
+        int _rpDesiredAmount = 0;
+        float _maxFunnelEff;
 
         public GenerateShip(Ship._GenerateRandomShip_d__562 coroutine)
         {
@@ -147,6 +147,8 @@ namespace TweaksAndFixes
             _isIC = _sType == "ic";
             _gen = _ship.hull.data.Generation;
             _isMissionMainShip = GameManager.IsMission && this._ship.player.isMain && BattleManager.Instance.MissionMainShip == this._ship;
+
+            _maxFunnelEff = Config.Param("taf_generate_funnel_maxefficiency", 150f);
 
             newBDL = BeamDraughtData.FromParam(_ship);
             if (newBDL != null)
@@ -164,7 +166,7 @@ namespace TweaksAndFixes
 
             InitParts();
 
-            _gaInfo = GenArmorData.GetInfoFor(this._ship);
+            _armorInfo = GenArmorData.GetInfoFor(this._ship);
 
             _armRatio = GetArmamentRatio(_avgYear);
         }
@@ -236,16 +238,19 @@ namespace TweaksAndFixes
             }
         }
 
-        private bool UpdateRPGunCacheOrSkip(RandPart rp)
+        private bool UpdateRPCacheOrSkipGun(RandPart rp)
         {
-            if (rp != _LastRandPart)
+            if (rp != _curRP)
             {
-                _LastRandPart = rp;
-                _LastRPIsGun = rp.type == "gun";
-                if (_LastRPIsGun)
-                    _LastBattery = rp.condition.Contains("main_cal") ? ShipM.BatteryType.main : (rp.condition.Contains("sec_cal") ? ShipM.BatteryType.sec : ShipM.BatteryType.ter);
+                _curRP = rp;
+                _rpIsGun = rp.type == "gun";
+                if (_arpnRoutine._desiredAmount_5__10 == 0)
+                    Melon<TweaksAndFixes>.Logger.Error($"Error: Desired amount already 0 for {rp.name} on {_ship.shipType.name} {_ship.hull.data.name} {_ship.vesselName}");
+                _rpDesiredAmount = _arpnRoutine._desiredAmount_5__10;
+                if (_rpIsGun)
+                    _rpBattery = rp.condition.Contains("main_cal") ? ShipM.BatteryType.main : (rp.condition.Contains("sec_cal") ? ShipM.BatteryType.sec : ShipM.BatteryType.ter);
             }
-            return !_LastRPIsGun;
+            return !_rpIsGun;
         }
 
         public void PostTonnageUpdate()
@@ -389,83 +394,35 @@ namespace TweaksAndFixes
 
         private void OnStartARPN(Ship._AddRandomPartsNew_d__579 coroutine)
         {
-            _AddRandomPartsRoutine = coroutine;
+            _arpnRoutine = coroutine;
             _doneAddingParts = !StartSelectParts();
         }
 
         public void OnARPNPrefix(Ship._AddRandomPartsNew_d__579 coroutine)
         {
-            if (_AddRandomPartsRoutine == null)
+            if (_arpnRoutine == null)
                 OnStartARPN(coroutine);
 
-            _lastWeight = _ship.Weight();
-            switch (coroutine.__1__state)
-            {
-                case 2: // pick a part and place it
-                    if (_doneAddingParts)
-                    {
-                        // if we've created only one of a pair, we have to create the other too.
-                        // Otherwise, we're done picking for this (or any) RP. So force this RP
-                        // to finish. Note that we will be slightly overweight from whatever the
-                        // last part was.
-                        if (coroutine._firstPairCreated_5__12 == null)
-                            coroutine._desiredAmount_5__10 = 0;
-                    }
-                    else
-                    {
-                        if (!_ship.statsValid)
-                            _ship.CStats();
-                        if (_ship.stats.TryGetValue(G.GameData.stats["smoke_exhaust"], out var eff))
-                        {
-                            if (eff.total >= Config.Param("taf_generate_funnel_maxefficiency", 150f))
-                            {
-                                foreach (var p in G.GameData.parts.Values)
-                                {
-                                    if (p.type == "funnel")
-                                        _ship.badData.Add(p);
-                                }
-                            }
-                        }
-                    }
-                    break;
-            }
+            // this coroutine yields after a bunch of steps, not after
+            // each part, so it doesn't do us any good to hook here right now
         }
 
         public void OnARPNPostfix(int state)
         {
-            switch (state)
-            {
-                case 2:
-                    // Assume the last part in the parts list is the most recently added.
-                    int idx = _ship.parts.Count - 1;
-                    if (idx >= 0)
-                        OnAddPart(_lastWeight, _ship.parts[idx].data);
-                    // TODO: Remove this part and mark bad if we are over mass (or if paired, if
-                    // second would push us over.
-
-                    if (_doneAddingParts)
-                    {
-                        // if we've created only one of a pair, we have to create the other too.
-                        // Otherwise, we're done picking for this (or any) RP. So force this RP
-                        // to finish. Note that we will be slightly overweight from whatever the
-                        // last part was.
-                        if (_AddRandomPartsRoutine._firstPairCreated_5__12 == null)
-                            _AddRandomPartsRoutine._desiredAmount_5__10 = 0;
-                    }
-                    break;
-            }
+            // this coroutine yields after a bunch of steps, not after
+            // each part, so it doesn't do us any good to hook here right now
         }
 
         public void OnARPNEnd()
         {
-            _AddRandomPartsRoutine = null;
+            _arpnRoutine = null;
         }
 
         private void EndInitialStep()
         {
             if (Config.ShipGenTweaks)
             {
-                _GenGunInfo.FillFor(_ship);
+                _gunInfo.FillFor(_ship);
 
                 if (!G.ui.isConstructorRefitMode)
                 {
@@ -855,10 +812,13 @@ namespace TweaksAndFixes
             if (rp.paramx.ContainsKey("delete_unmounted") || rp.paramx.ContainsKey("delete_refit"))
                 return true;
 
-            if (rp.type == "funnel" && _doneAddingFunnels)
+            if (_doneAddingParts)
                 return false;
 
-            return !_doneAddingParts;
+            if (_doneAddingFunnels && rp.type == "funnel")
+                return false;
+
+            return true;
         }
 
         private bool StartSelectParts()
@@ -881,20 +841,71 @@ namespace TweaksAndFixes
             return true;
         }
 
-        public bool OnAddPart(float preWeight, PartData data)
+        private void SetOverweight()
         {
-            // Verify we can have _any_ payload,
-            // i.e. the towers/funnels we added aren't
-            // already putting us over budget.
-            if (!CheckSetMaxPayloadWeight())
-                return false;
+            if (_doneAddingParts)
+                return;
+            _doneAddingParts = true;
 
-            if (_payloadTotalWeight >= _maxPayloadWeight)
-                return false;
+            UpdateRPCacheOrSkipGun(_arpnRoutine.__8__1.randPart);
+            _arpnRoutine._desiredAmount_5__10 = 0;
+        }
 
+        private void UnsetOverweight()
+        {
+            if (!_doneAddingParts)
+                return;
+            _doneAddingParts = false;
+
+            if (!_doneAddingFunnels)
+            {
+                UpdateRPCacheOrSkipGun(_arpnRoutine.__8__1.randPart);
+                _arpnRoutine._desiredAmount_5__10 = _rpDesiredAmount;
+            }
+        }
+
+        private void SetEnoughFunnels()
+        {
+            if (_doneAddingFunnels)
+                return;
+            _doneAddingFunnels = true;
+
+            UpdateRPCacheOrSkipGun(_arpnRoutine.__8__1.randPart);
+            _arpnRoutine._desiredAmount_5__10 = 0;
+        }
+
+        private void UnsetEnoughFunnels()
+        {
+            if (!_doneAddingFunnels || _arpnRoutine._desiredAmount_5__10 != 0)
+                return;
+            _doneAddingParts = false;
+
+            if (!_doneAddingParts)
+            {
+                UpdateRPCacheOrSkipGun(_arpnRoutine.__8__1.randPart);
+                _arpnRoutine._desiredAmount_5__10 = _rpDesiredAmount;
+            }
+        }
+
+        private bool EnoughFunnels()
+        {
+            if (!_ship.statsValid)
+                _ship.CStats();
+            if (_ship.stats.TryGetValue(G.GameData.stats["smoke_exhaust"], out var eff))
+            {
+                if (eff.total >= _maxFunnelEff)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void UpdateStoredWeight(float preWeight, Part part)
+        {
             float delta = _ship.Weight() - preWeight;
-            bool isHull = true;
-            switch (data.type)
+            switch (part.data.type)
             {
                 case "funnel":
                 case "tower_main":
@@ -904,29 +915,53 @@ namespace TweaksAndFixes
                     break;
 
                 default:
-                    isHull = false;
                     _payloadTotalWeight += delta;
                     break;
             }
+        }
 
+        public void OnAddPart(float preWeight, Part part)
+        {
+            if (!Config.ShipGenReorder)
+                return;
 
-            if (isHull)
+            if (part.data.isFunnel)
             {
-                if (!CheckSetMaxPayloadWeight())
-                    return false;
-            }
-            else if (_payloadTotalWeight >= _maxPayloadWeight && _AddRandomPartsRoutine._firstPairCreated_5__12 == null)
-            {
-                return false;
+                if (EnoughFunnels())
+                    SetEnoughFunnels();
+                else
+                    UnsetEnoughFunnels();
             }
 
-            return true;
+            UpdateStoredWeight(preWeight, part);
+
+            if (!CheckSetMaxPayloadWeight() || _payloadTotalWeight >= _maxPayloadWeight)
+                SetOverweight();
+        }
+
+        public void OnRemovePart(float preWeight, Part part)
+        {
+            if (!Config.ShipGenReorder)
+                return;
+
+            if (part.data.isFunnel)
+            {
+                if (EnoughFunnels())
+                    SetEnoughFunnels();
+                else
+                    UnsetEnoughFunnels();
+            }
+
+            UpdateStoredWeight(preWeight, part);
+
+            if (CheckSetMaxPayloadWeight() && _payloadTotalWeight < _maxPayloadWeight && _doneAddingParts)
+                UnsetOverweight();
         }
 
         private static List<PartData> _TempDatas = new List<PartData>();
         public void OnAddTurretArmor(Part part)
         {
-            if (_AddRandomPartsRoutine == null)
+            if (_arpnRoutine == null)
                 return;
 
             // We need to fix the armor levels if this is a new TA.
@@ -934,28 +969,28 @@ namespace TweaksAndFixes
             {
                 // we know we jsut did AdjustHullStats, so this is safe
                 // (i.e. there was a lerpval set that we can reapply)
-                if (_gaInfo != null)
-                    _gaInfo.ReapplyArmor(_ship);
+                if (_armorInfo != null)
+                    _armorInfo.ReapplyArmor(_ship);
             }
 
-            if (!_GenGunInfo.isLimited || UpdateRPGunCacheOrSkip(_AddRandomPartsRoutine.__8__1.randPart))
+            if (!_gunInfo.isLimited || UpdateRPCacheOrSkipGun(_arpnRoutine.__8__1.randPart))
                 return;
 
             // Register reports true iff we're at the count limit
-            if (_GenGunInfo.RegisterCaliber(_LastBattery, part.data))
+            if (_gunInfo.RegisterCaliber(_rpBattery, part.data))
             {
                 // Ideally we'd do RemoveAll, but we can't use a managed predicate
                 // on the native list. We could reimplement RemoveAll, but I don't trust
                 // calling RuntimeHelpers across the boundary. This should still be faster
                 // than the O(n^2) of doing RemoveAts, because we don't have to copy
                 // back to compress the array each time.
-                for (int i = _AddRandomPartsRoutine._chooseFromParts_5__11.Count; i-- > 0;)
-                    if (_GenGunInfo.CaliberOK(_LastBattery, _AddRandomPartsRoutine._chooseFromParts_5__11[i]))
-                        _TempDatas.Add(_AddRandomPartsRoutine._chooseFromParts_5__11[i]);
+                for (int i = _arpnRoutine._chooseFromParts_5__11.Count; i-- > 0;)
+                    if (_gunInfo.CaliberOK(_rpBattery, _arpnRoutine._chooseFromParts_5__11[i]))
+                        _TempDatas.Add(_arpnRoutine._chooseFromParts_5__11[i]);
 
-                _AddRandomPartsRoutine._chooseFromParts_5__11.Clear();
+                _arpnRoutine._chooseFromParts_5__11.Clear();
                 for (int i = _TempDatas.Count; i-- > 0;)
-                    _AddRandomPartsRoutine._chooseFromParts_5__11.Add(_TempDatas[i]);
+                    _arpnRoutine._chooseFromParts_5__11.Add(_TempDatas[i]);
 
                 _TempDatas.Clear();
             }
@@ -963,11 +998,11 @@ namespace TweaksAndFixes
 
         public bool OnGetParts_ShouldSkip(Ship.__c__DisplayClass578_0 coroutineData, PartData data)
         {
-            if (!_GenGunInfo.isLimited || UpdateRPGunCacheOrSkip(coroutineData.randPart))
+            if (!_gunInfo.isLimited || UpdateRPCacheOrSkipGun(coroutineData.randPart))
                 return false;
 
             int partCal = (int)((data.caliber + 1f) * (1f / 25.4f));
-            return !_GenGunInfo.CaliberOK(_LastBattery, partCal);
+            return !_gunInfo.CaliberOK(_rpBattery, partCal);
         }
 
         private bool IsPlacementValid(Part part)
