@@ -196,6 +196,18 @@ namespace TweaksAndFixes
                         if (!rel.isWar)
                             __instance.AdjustAttitude(rel, -200f, true, false, info, raiseEvents, true, fromCommonEnemy);
                     }
+                    // Allies declare war on each other
+                    for (int i = __state.alliesA.Count; i-- > 0;)
+                    {
+                        Player a = __state.alliesA[i];
+                        for (int j = __state.alliesB.Count; j-- > 0;)
+                        {
+                            Player b = __state.alliesB[i];
+                            var rel = RelationExt.Between(__instance.CampaignData.Relations, a, b);
+                            if (!rel.isWar)
+                                __instance.AdjustAttitude(rel, -200f, true, false, info, raiseEvents, true, fromCommonEnemy);
+                        }
+                    }
                 }
             }
 
