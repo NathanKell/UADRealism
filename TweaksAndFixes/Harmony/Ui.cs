@@ -96,11 +96,11 @@ namespace TweaksAndFixes
                 return;
 
             // Would be faster to drill down but this works.
-            var objTCs = ui.gameObject.FindDeepChild("TurretCalibers");
+            var objTCs = ui.gameObject.Get("TurretCalibers");
             if (objTCs != null)
                 ClearButtons(objTCs);
 
-            var objCase = ui.gameObject.FindDeepChild("CasemateCalibers");
+            var objCase = ui.gameObject.Get("CasemateCalibers");
             if (objCase != null)
                 ClearButtons(objCase);
 
@@ -112,7 +112,7 @@ namespace TweaksAndFixes
         private static GameObject FindArmamentsComponentList(Ui ui)
         {
             string label = LocalizeManager.Localize("$comptypes_category_armament");
-            var objComps = ui.gameObject.FindDeepChild("Components");
+            var objComps = ui.gameObject.Get("Components");
             //Melon<TweaksAndFixes>.Logger.Msg($"Finding complist. Label {label}. Child count {objComps.transform.childCount}");
 
             for (int i = objComps.transform.childCount - 1; i-- > 0;)
@@ -167,11 +167,11 @@ namespace TweaksAndFixes
                 return;
 
             // Would be faster to drill down but this works.
-            var objTCs = ui.gameObject.FindDeepChild("TurretCalibers");
+            var objTCs = ui.gameObject.Get("TurretCalibers");
             if (objTCs == null)
                 return;
 
-            var objCase = ui.gameObject.FindDeepChild("CasemateCalibers");
+            var objCase = ui.gameObject.Get("CasemateCalibers");
             if (objCase == null)
                 return;
 
@@ -282,8 +282,8 @@ namespace TweaksAndFixes
                 return;
 
             //Melon<TweaksAndFixes>.Logger.Msg("Adding torp upgrade button");
-
-            var buttonOld = ui.gameObject.FindDeepChild("ShipNew")?.GetChild("Button", true);
+            var sName = ui.gameObject.Get("ShipNew");
+            var buttonOld = sName == null ? null : sName.GetChild("Button", true);
             if (buttonOld == null)
             {
                 Melon<TweaksAndFixes>.Logger.Error("Could not find button to clone!");

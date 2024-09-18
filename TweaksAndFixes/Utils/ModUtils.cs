@@ -150,21 +150,6 @@ namespace TweaksAndFixes
             return hierarchy;
         }
 
-        public static GameObject FindDeepChild(this GameObject obj, string name)
-        {
-            if (obj.name == name)
-                return obj;
-
-            for (int i = 0; i < obj.transform.childCount; ++i)
-            {
-                var test = obj.transform.GetChild(i).gameObject.FindDeepChild(name);
-                if (test != null)
-                    return test;
-            }
-
-            return null;
-        }
-
         // Returns a smoothed distribution, i.e.
         // Random.Range(-range, range) + Random.Range(-range, range)...
         // divided by steps
