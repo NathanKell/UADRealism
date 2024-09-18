@@ -60,6 +60,45 @@ namespace TweaksAndFixes
             SpriteDatabase.Instance.OverrideResources();
         }
 
+        // If we're autodesigning, allow selection of comptypes before parts
+
+        // Done like this rather than KVP since that's weird managed-native
+        private static readonly Il2CppSystem.Collections.Generic.List<NeedsDifferentItems> _NDIs = new Il2CppSystem.Collections.Generic.List<NeedsDifferentItems>();
+        private static readonly Il2CppSystem.Collections.Generic.List<int> _NDIIdxs = new Il2CppSystem.Collections.Generic.List<int>();
+        [HarmonyPatch(nameof(Ui.NeedComponentsActive))]
+        [HarmonyPrefix]
+        internal static void Prefix_NeedComponentsActive(CompType compType, ComponentData componentData, Ship checkShip, bool isAutoDesign, bool isNotComponentNeedUpdate)
+        {
+            if (!isAutoDesign || !Config.ShipGenReorder || !Patch_Ship._GenShipData.IsValid)
+                return;
+
+            for (int i = compType.needDiffItems.Count; i-- > 0;)
+            {
+                var ndi = compType.needDiffItems[i];
+                if (Patch_Ship._GenShipData.SkipNDI(ndi))
+                {
+                    _NDIs.Add(ndi);
+                    _NDIIdxs.Add(i);
+                    compType.needDiffItems.RemoveAt(i);
+                }
+            }
+        }
+
+        [HarmonyPatch(nameof(Ui.NeedComponentsActive))]
+        [HarmonyPostfix]
+        internal static void Postfix_NeedComponentsActive(CompType compType, ComponentData componentData, Ship checkShip, bool isAutoDesign, bool isNotComponentNeedUpdate)
+        {
+            if (_NDIs.Count == 0)
+                return;
+
+            for (int i = _NDIs.Count; i-- > 0;)
+                compType.needDiffItems.Insert(_NDIIdxs[i], _NDIs[i]);
+
+            _NDIs.Clear();
+            _NDIIdxs.Clear();
+        }
+
+
         [HarmonyPatch(nameof(Ui.UpdateConstructor))]
         [HarmonyPrefix]
         internal static void Prefix_UpdateConstructor()

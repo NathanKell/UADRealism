@@ -157,6 +157,8 @@ namespace TweaksAndFixes
 
         public void Bind(Ship._GenerateRandomShip_d__562 coroutine)
         {
+            _isValid = true;
+
             _this = coroutine;
             _ship = _this.__4__this;
             _hullYear = Database.GetYear(_ship.hull.data);
@@ -630,6 +632,16 @@ namespace TweaksAndFixes
                 _ship.CrewTrainingAmount = ModUtils.Range(17f, 100f, null, _this.__8__1.rnd);
         }
 
+        public bool SkipNDI(NeedsDifferentItems ndi)
+        {
+            if (_this._isRefitMode_5__2)
+                return false;
+
+            return (_isCombatant && ndi.m_RequiredType == RequiredType.needs_Part && ndi.needCompOne == "gun")
+                    || (_isCombatant && ndi.m_RequiredType == RequiredType.needs_Caliber && _ship.shipType.mainTo * 25.4f >= ndi.floatValueNeed)
+                    || (_canUseTorps && ndi.m_RequiredType == RequiredType.needs_Part && ndi.needCompOne == "torpedo");
+        }
+
         public enum ComponentSelectionPass
         {
             Initial,
@@ -653,47 +665,17 @@ namespace TweaksAndFixes
                 return;
             }
 
-            
-            Part gun = null;
-            PartData gunData = null;
-            Part torp = null;
-            PartData torpData = null;
             if (pass == ComponentSelectionPass.Initial)
             {
-                _seenCompTypes.Clear();
+                // This starts null???
+                if (_ship.parts == null)
+                    _ship.parts = new Il2CppSystem.Collections.Generic.List<Part>();
+                if (_ship.shipGunCaliber == null)
+                    _ship.shipGunCaliber = new Il2CppSystem.Collections.Generic.List<Ship.TurretCaliber>();
+                if (_ship.shipTurretArmor == null)
+                    _ship.shipTurretArmor = new Il2CppSystem.Collections.Generic.List<Ship.TurretArmor>();
 
-                // Add temporary gun and torp
-                bool needGun = _isCombatant && !_this.isSimpleRefit;
-                bool needTorp = _canUseTorps && !_this.isSimpleRefit;
-                foreach (var p in _ship.parts)
-                {
-                    if (p.data.isGun)
-                        needGun = false;
-                    else if (p.data.isTorpedo)
-                        needTorp = false;
-                }
-                if (needGun || needTorp)
-                {
-                    foreach (var data in _availableParts)
-                    {
-                        if (needGun && data.isGun)
-                        {
-                            gunData = data;
-                            gun = Part.Create(data, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int);
-                            _ship.AddPart(gun);
-                            needGun = false;
-                        }
-                        else if (needTorp && data.isTorpedo)
-                        {
-                            torpData = data;
-                            torp = Part.Create(data, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int);
-                            _ship.AddPart(gun);
-                            needTorp = false;
-                        }
-                        if (!needTorp && !needGun)
-                            break;
-                    }
-                }
+                _seenCompTypes.Clear();
             }
 
             CompType mines = null;
@@ -734,21 +716,21 @@ namespace TweaksAndFixes
                     // These count as part of armament so need to get installed later.
                     //if (!_this._isRefitMode_5__2)
                     //{
-                    if (ct.name == "mines")
-                    {
-                        mines = ct;
-                        continue;
-                    }
-                    else if (ct.name == "depthcharge")
-                    {
-                        dc = ct;
-                        continue;
-                    }
-                    else if (ct.name == "minesweep")
-                    {
-                        sweep = ct;
-                        continue;
-                    }
+                        if (ct.name == "mines")
+                        {
+                            mines = ct;
+                            continue;
+                        }
+                        else if (ct.name == "depthcharge")
+                        {
+                            dc = ct;
+                            continue;
+                        }
+                        else if (ct.name == "minesweep")
+                        {
+                            sweep = ct;
+                            continue;
+                        }
                     //}
 
                     compTypes.Add(ct);
@@ -765,19 +747,6 @@ namespace TweaksAndFixes
 
             if (pass == ComponentSelectionPass.Initial)
             {
-                if (gun != null)
-                {
-                    _ship.RemovePart(gun);
-                    gun = null;
-                    CleanTAs();
-                    CleanTCs();
-                }
-                if (torp != null)
-                {
-                    _ship.RemovePart(torp);
-                    torp = null;
-                }
-
                 _ship.RefreshHullStats();
                 _ship.NeedRecalcCache();
 
@@ -799,27 +768,7 @@ namespace TweaksAndFixes
                 _ship.NeedRecalcCache();
                 _prePartsWeight = _ship.Weight();
 
-                if (gunData != null)
-                {
-                    gun = Part.Create(gunData, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int);
-                    _ship.AddPart(gun);
-                }
-                if (torpData != null)
-                {
-                    torp = Part.Create(torpData, _ship, _ship.partsCont, ModUtils._NullableEmpty_Int);
-                    _ship.AddPart(torp);
-                }
-
                 SelectComponents(ComponentSelectionPass.Armor);
-
-                if (gun != null)
-                {
-                    _ship.RemovePart(gun);
-                    CleanTAs();
-                    CleanTCs();
-                }
-                if (torp != null)
-                    _ship.RemovePart(torp);
             }
 
             _ship.RefreshHullStats();

@@ -171,7 +171,7 @@ namespace TweaksAndFixes
 
             if (!_GenShipData.IsValid)
             {
-                Debug.LogWarning("GenShipData null!\n" + NativeStackWalk.NativeStackTrace);
+                Debug.LogWarning("GenShipData null!");
                 return true;
             }
             if (!_GenShipData.IsRPAllowed(randPart))
