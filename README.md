@@ -53,7 +53,7 @@ A ship hull can have ai_beamdraughtlimits() in its param column. ai_beamdraughtl
 The hardcoded values in conquest events are tunable now. `taf_conquest_event_chance_mult_starting_duration` (default 0.01) and `taf_conquest_event_chance_mult_full_duration` (default 0.5) control the displayed chance and are the values used at the start and end of the duration. When it's not a land rebellion, `taf_conquest_event_add_chance` (default 0.66) is added to the chance. (This also fixes a bug where the wrong event type checking is used.) Finally `taf_conquest_event_kill_factor` (default 1.0) is the extent to which soldier kill ratio influences conquest chance.
 
 ### Sprite overriding
-If the file flags.csv exists in the Mods folder, TAF will override the specified sprites. For now, just component type sprites are supported. Example sprites.csv:
+If the file sprites.csv exists in the Mods folder, TAF will override the specified sprites. For now, just component type sprites are supported. Example sprites.csv:
 ```
 #resource name to override,filename,image width,image height
 # For example to override the engine icon with engine.png, make a
