@@ -88,7 +88,6 @@ namespace TweaksAndFixes
                                 Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
                             }
                             f.SetValue(null, eResult);
-                            continue;
                         }
                         else
                         {
@@ -104,19 +103,19 @@ namespace TweaksAndFixes
                                 Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
                             }
                             f.SetValue(null, eResult);
-                            continue;
                         }
                     }
-
-
-                    bool isEnabled;
-                    if (attrib._invertCheck)
-                        isEnabled = param != attrib._checkValue && (attrib._checkValue == attrib._exceptVal || param != attrib._exceptVal);
                     else
-                        isEnabled = param == attrib._checkValue;
-                    f.SetValue(null, isEnabled);
+                    {
+                        bool isEnabled;
+                        if (attrib._invertCheck)
+                            isEnabled = param != attrib._checkValue && (attrib._checkValue == attrib._exceptVal || param != attrib._exceptVal);
+                        else
+                            isEnabled = param == attrib._checkValue;
+                        f.SetValue(null, isEnabled);
+                    }
                 }
-                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {((bool)(f.GetValue(null)) ? "Enabled" : "Disabled")}");
+                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {(f.FieldType.IsEnum ? f.GetValue(null) : ((bool)(f.GetValue(null)) ? "Enabled" : "Disabled"))}");
             }
         }
 
