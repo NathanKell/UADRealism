@@ -324,7 +324,7 @@ namespace TweaksAndFixes
             switch (state)
             {
                 case 0:
-                    //_ship.TAFData().ResetAllGrades();
+                    _ship.TAFData().ResetAllGrades();
                     break;
 
                 case 2:
@@ -925,20 +925,20 @@ namespace TweaksAndFixes
         private void UpdateStoredWeight(float preWeight, Part part)
         {
             float delta = _ship.Weight() - preWeight;
-            bool isHull;
+            //bool isHull;
             switch (part.data.type)
             {
                 case "funnel":
                 case "tower_main":
                 case "tower_sec":
                 case "special":
-                    isHull = true;
+                    //isHull = true;
                     _hullPartsTonnage += delta;
                     break;
 
                 default:
                     _payloadTotalWeight += delta;
-                    isHull = false;
+                    //isHull = false;
                     break;
             }
             //Melon<TweaksAndFixes>.Logger.Msg($"Changed part {part.data.name}, weight delta {delta:F1}, is hull? {isHull}");

@@ -264,21 +264,30 @@ namespace TweaksAndFixes
 
         public void ResetAllGrades()
         {
-            ResetAllGunGrades();
-            ResetTorpGrade();
+            bool guns = ResetAllGunGrades(true);
+            bool torps = ResetTorpGrade(true);
+            if (guns || torps)
+            {
+                _ship.Init();
+                if (!Patch_Ship._GenShipData.IsValid)
+                    _ship.CalcInstability(true);
+                G.ui.Refresh(true);
+            }
         }
 
-        public void ResetAllGunGrades()
+        public bool ResetAllGunGrades(bool resetAll = false)
         {
             // Annoyingly we don't save partdatas
             // so we have to trawl TCs for each GGD.
-            for(int i = _gradeData.Count; i-- > 0;)
+            bool found = false;
+            for (int i = _gradeData.Count; i-- > 0;)
             {
                 var ggd = _gradeData[i];
                 if (ggd.grade < 0)
                     continue;
 
-                for(int j = _ship.shipGunCaliber.Count; j-- > 0;)
+                found = true;
+                for (int j = _ship.shipGunCaliber.Count; j-- > 0;)
                 {
                     var tc = _ship.shipGunCaliber[j];
                     if (tc.isCasemateGun != ggd.isCasemateGun || tc.turretPartData.caliber != ggd.caliber)
@@ -286,28 +295,40 @@ namespace TweaksAndFixes
 
                     var trueGrade = GetTrueGunGrade(tc.turretPartData);
                     if (ggd.grade != trueGrade)
-                        ResetGunGrade(ggd);
+                        ResetGunGrade(ggd, true);
 
                     break;
                 }
             }
+
+            if (found && !resetAll)
+            {
+                _ship.Init();
+                if (!Patch_Ship._GenShipData.IsValid)
+                    _ship.CalcInstability(true);
+                G.ui.Refresh(true);
+            }
+            return found;
         }
 
         public void ResetGunGrade(Ship.TurretCaliber tc)
             => ResetGunGrade(tc.turretPartData.caliber, tc.isCasemateGun);
 
-        public void ResetGunGrade(float caliber, bool casemate)
+        public bool ResetGunGrade(float caliber, bool casemate)
         {
             var ggd = FindGGD(caliber, casemate);
             if (ggd == null)
-                return;
+                return false;
 
-            ResetGunGrade(ggd);
+            return ResetGunGrade(ggd);
         }
 
         [HideFromIl2Cpp]
-        private void ResetGunGrade(GunGradeData ggd)
+        private bool ResetGunGrade(GunGradeData ggd, bool resetAll = false)
         {
+            if (ggd.grade == -1)
+                return false;
+
             //Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, reset grade (was {ggd.grade})");
             ggd.grade = -1; // will be updated next call to TechGunGrade.
 
@@ -355,14 +376,24 @@ namespace TweaksAndFixes
                     tanew.CloneFrom(ta);
 
                 _TempPartStore.Clear();
-                _ship.Init();
-                _ship.CalcInstability(true);
+                if (!resetAll)
+                {
+                    _ship.Init();
+                    if (!Patch_Ship._GenShipData.IsValid)
+                        _ship.CalcInstability(true);
+                }
             }
-            G.ui.Refresh(true);
+            if (!resetAll)
+                G.ui.Refresh(true);
+
+            return true;
         }
 
-        public void ResetTorpGrade()
+        public bool ResetTorpGrade(bool resetAll = false)
         {
+            if (_torpedoGrade == -1)
+                return false;
+
             //Melon<TweaksAndFixes>.Logger.Msg($"For torps, reset grade (was {_torpedoGrade})");
             _torpedoGrade = -1; // will be updated next call to TechTorpedoGrade.
 
@@ -392,9 +423,16 @@ namespace TweaksAndFixes
                 }
             }
             _TempPartStore.Clear();
-            _ship.Init();
-            _ship.CalcInstability(true);
-            G.ui.Refresh(true);
+            if (!resetAll)
+            {
+                _ship.Init();
+                if (!Patch_Ship._GenShipData.IsValid)
+                    _ship.CalcInstability(true);
+
+                G.ui.Refresh(true);
+            }
+
+            return true;
         }
 
         [HideFromIl2Cpp]
