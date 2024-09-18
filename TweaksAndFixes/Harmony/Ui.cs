@@ -53,6 +53,13 @@ namespace TweaksAndFixes
             vt.text = text;
         }
 
+        [HarmonyPatch(nameof(Ui.ChooseComponentType))]
+        [HarmonyPrefix]
+        internal static void Prefix_ChooseComponentType()
+        {
+            SpriteDatabase.Instance.OverrideResources();
+        }
+
         [HarmonyPatch(nameof(Ui.UpdateConstructor))]
         [HarmonyPrefix]
         internal static void Prefix_UpdateConstructor()
@@ -81,6 +88,7 @@ namespace TweaksAndFixes
         internal static void Prefix_RefreshConstructorInfo(Ui __instance)
         {
             ClearAllButtons(__instance);
+            SpriteDatabase.Instance.OverrideResources();
         }
 
         [HarmonyPatch(nameof(Ui.RefreshConstructorInfo))]

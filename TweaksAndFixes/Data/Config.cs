@@ -43,6 +43,7 @@ namespace TweaksAndFixes
 
         internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         internal static readonly string _FlagFile = "flags.csv";
+        internal static readonly string _SpriteFile = "sprites.csv";
 
         public enum OverrideMapOptions
         {

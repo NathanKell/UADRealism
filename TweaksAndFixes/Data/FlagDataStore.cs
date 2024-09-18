@@ -59,7 +59,7 @@ namespace TweaksAndFixes
                     var sprite = Instance.GetSprite(file);
                     if (sprite == null)
                     {
-                        Melon<TweaksAndFixes>.Logger.Msg("Reading flag from disk: " + file);
+                        //Melon<TweaksAndFixes>.Logger.Msg("Reading flag from disk: " + file);
 
                         string basePath = Path.Combine(Config._BasePath, "Flags");
                         if (!Directory.Exists(basePath))
@@ -84,7 +84,7 @@ namespace TweaksAndFixes
                             Melon<TweaksAndFixes>.Logger.Error("Failed to load flag image file " + filePath);
                         }
                         //Debug.Log($"Texture {file} has size {tex.width}x{tex.height}@{tex.format}");
-                        sprite = Sprite.Create(tex, new Rect(0, 0, 256, 128), new Vector2(128, 64));
+                        sprite = Sprite.Create(tex, new Rect(0, 0, 256, 128), new Vector2(0.5f, 0.5f));
                         Instance.AddSprite(file, sprite);
                     }
 
