@@ -52,6 +52,18 @@ A ship hull can have ai_beamdraughtlimits() in its param column. ai_beamdraughtl
 ### Tunable conquest events
 The hardcoded values in conquest events are tunable now. `taf_conquest_event_chance_mult_starting_duration` (default 0.01) and `taf_conquest_event_chance_mult_full_duration` (default 0.5) control the displayed chance and are the values used at the start and end of the duration. When it's not a land rebellion, `taf_conquest_event_add_chance` (default 0.66) is added to the chance. (This also fixes a bug where the wrong event type checking is used.) Finally `taf_conquest_event_kill_factor` (default 1.0) is the extent to which soldier kill ratio influences conquest chance.
 
+### Sprite overriding
+If the file flags.csv exists in the Mods folder, TAF will override the specified sprites. For now, just component type sprites are supported. Example sprites.csv:
+```
+#resource name to override,filename,image width,image height
+# For example to override the engine icon with engine.png, make a
+# 64x64 PNG file and place it in Sprites, and add this line to this
+# file:
+# Components/engine,engine.png,64,64
+@name,file,width,height
+Components/boiler,boiler.png,64,64
+```
+
 ### Flag overriding
 If the file flags.csv exists in the Mods folder, TAF will override the specified flags with the specified flag files (in Mods\Flags). Example flags.csv:
 ```
@@ -69,7 +81,7 @@ Assuming you put a 256x128 png called `britain.png` in the Flags folder under Mo
 While the ports, provinces, etc. TextAssets aren't actually loaded by the game (oddly canals is), TAF allows overriding some port and province data. Add the param `taf_override_map` to params and set it to 2, and TAF will dump the game's built in data for ports and provinces. Make a backup of these dumps, then edit them as desired. Paste the entirety of ports.csv into the ports TextAsset (and same for provinces). Then set `taf_override_map` to 1 in params. This will override port and province data with the data in those assets. This can be combined with editing players, AI admirals, relations matrix, etc, and adding flags (see above) to make other nations playable.
 
 ### Replacement armor generation behavior
-TAF supports replacing the game's existing armor generating, both the defaults when switching to a new hull and the armor the auto designer creates for ships. It works by constraining armor based on a set of rules which are per-shiptype and vary by year. If the design year is between two rules, the values are interpolated between the rules that exist. If the year lies outside the rules, the nearest rule is used. For example, consider a ruleset with a battleship rule for year 1900 and a battleship rule for 1920. Any battleship designed before 1900 would use the 1900 rule, any battleship designed after 1920 would use the 1920 rule, and a battleship designed in 1915 would use numbers 3/4 of the way from the 1900 rule to the 1920 rule. The rules are placed in genarmordata.csv in the Mods folder. The file format is as follows (thicknesses are in inches):
+TAF supports replacing the game's existing armor generating, both the defaults when switching to a new hull and the armor the auto designer creates for ships. It works by constraining armor based on a set of rules which are per-shiptype and vary by year. If the design year is between two rules, the values are interpolated between the rules that exist. If the year lies outside the rules, the nearest rule is used. For example, consider a ruleset with a battleship rule for year 1900 and a battleship rule for 1920. Any battleship designed before 1900 would use the 1900 rule, any battleship designed after 1920 would use the 1920 rule, and a battleship designed in 1915 would use numbers 3/4 of the way from the 1900 rule to alliance_changesthe 1920 rule. The rules are placed in genarmordata.csv in the Mods folder. The file format is as follows (thicknesses are in inches):
 ```
 shipType,year,beltMin,beltMax,beltExtendedMult,turretSideMult,barbetteMult,deckMin,deckMax,deckExtendedMult,turretTopMult,ctMin,ctMax,superMin,superMax,foreAftVariation,citadelMult
 bb,1890,9,14,0.5,1.1,1,2,2.5,0.5,1.2,10,15,2,4,0.1,1
@@ -93,6 +105,9 @@ In main params:
 In shiptype param or hull param, you can add `calCount_main` (or sec or ter). This takes either a single value, which is used always, or a set of year;count pairs, for example `calCount_sec(1890;2;1905;0;1915;1)` or `calCount_main(1)`. Anything in a hull's param will override the shipType value for that battery. Note that the year used is the year the hull unlocks, not the year the ship was designed.
 
 On a per-hull basis, TAF can also limit the maximum caliber the AI autodesigner is allowed to select for each battery. Add `ai_max_caliber_main(X)` (or sec or ter) to the hull's params, where X is the maximum caliber in inches that is allowed. This has no effect on the human player. Limits transfer down, so a main limit of 7in and a sec limit of 10in (or no sec limit at all) will still result in a sec limit of 7in.
+
+### Improved alliance mechanics
+Set taf_alliance_changes to 1 in params to enable modified alliance mechanics: When a nation A goes to war against a nation B, all A's allies declare war on B and B's allies immediately, and all B's allies declare war on A and A's allies immediately. If any nation is an ally of both A and B, it breaks its alliance with both and gets neutral relations with both.
 
 ### Replacement scrapping behavior
 The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships based on their scrap score, which is their age minus (a coefficient times their build time in months). Mothballed ships have a bonus to their score. The target tonnage is determined with a minimum base tonnage (`min_fleet_tonnage_for_scrap`) which is increased by a coefficient times (shipbuilding capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params, then tune using the following values:
