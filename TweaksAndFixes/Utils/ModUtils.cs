@@ -294,6 +294,41 @@ namespace TweaksAndFixes
             return items[Range(0, items.Count - 1, rnd, nativeRnd)];
         }
 
+        public static T RandomByWeights<T>(Il2CppSystem.Collections.Generic.Dictionary<T, float> dictionary, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : notnull
+        {
+            if (dictionary.Count == 0)
+                return default(T);
+            float sum = 0f;
+            foreach (var kvp in dictionary)
+            {
+                if (kvp.Value < 0f)
+                    continue;
+
+                sum += kvp.Value;
+            }
+            if (sum == 0f)
+                return default(T);
+
+            float selector = Range(0f, sum, rnd, nativeRnd);
+            float curSum = 0f;
+            foreach (var kvp in dictionary)
+            {
+                float val = kvp.Value;
+                if (val < 0f)
+                    val = 0f;
+                curSum += val;
+
+                if (selector > curSum)
+                    continue;
+
+                return kvp.Key;
+            }
+
+            // will never hit this, because selector can't be > sum.
+            // But VS complains not all paths return a value without it, heh.
+            return default(T);
+        }
+
         public static T RandomByWeights<T>(Dictionary<T, float> dictionary, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : notnull
         {
             if (dictionary.Count == 0)
