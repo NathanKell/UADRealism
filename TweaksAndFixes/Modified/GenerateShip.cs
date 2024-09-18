@@ -312,6 +312,7 @@ namespace TweaksAndFixes
         {
             _tonnage = _ship.Tonnage();
             _tngRatio = Mathf.InverseLerp(_ship.TonnageMin(), Math.Min(_ship.TonnageMax(), _ship.player.TonnageLimit(_ship.shipType)), _tonnage);
+            //Melon<TweaksAndFixes>.Logger.Msg($"Set tonnage to {_tonnage:N0}, ratio {_tngRatio:F2}");
         }
 
         public void OnPrefix()
@@ -323,7 +324,7 @@ namespace TweaksAndFixes
             switch (state)
             {
                 case 0:
-                    _ship.TAFData().ResetAllGrades();
+                    //_ship.TAFData().ResetAllGrades();
                     break;
 
                 case 2:
@@ -428,12 +429,13 @@ namespace TweaksAndFixes
             // For now, we're going to reset all grades regardless.
             //if (__state == 1 && (!__instance._isRefitMode_5__2 || !__instance.isSimpleRefit))
             //    __instance.__4__this.TAFData().ResetAllGrades();
-            switch (_this.__1__state)
+            switch (origState)
             {
                 case 0:
                     EndInitialStep();
                     break;
 
+                case 2:
                 case 3:
                     PostTonnageUpdate();
                     break;
@@ -449,6 +451,7 @@ namespace TweaksAndFixes
 
         private void OnStartARPN(Ship._AddRandomPartsNew_d__579 coroutine)
         {
+            //Melon<TweaksAndFixes>.Logger.Msg($"Start finding parts");
             _arpnRoutine = coroutine;
             _doneAddingParts = !StartSelectParts();
         }
@@ -479,7 +482,7 @@ namespace TweaksAndFixes
             {
                 _gunInfo.FillFor(_ship);
 
-                if (!G.ui.isConstructorRefitMode)
+                if (!_this._isRefitMode_5__2)
                 {
                     // For now, let each method handle it.
                     _this._savedSpeedMinValue_5__3 = -1f;
@@ -529,7 +532,7 @@ namespace TweaksAndFixes
                     speedKtsMax = 14f;
                     break;
             }
-            float delta = speedKtsMax = speedKtsMin;
+            float delta = speedKtsMax - speedKtsMin;
             float limitDeltaPct = (speedLimiter - (speedKtsMin + delta * 0.5f)) / delta;
             float bias = limitDeltaPct * 0.5f;
 
@@ -540,16 +543,16 @@ namespace TweaksAndFixes
             if (paramMax > 0 && paramMax < speedKtsMax)
                 speedKtsMax = paramMax;
             float speedKts = Mathf.Lerp(speedKtsMin, speedKtsMax, (ModUtils.BiasRange(0.5f, bias) + ModUtils.DistributedRange(0.5f, _this.__8__1.rnd, bias)));
-            speedKts = Mathf.Clamp(_ship.hull.data.shipType.speedMin, _ship.hull.data.shipType.speedMax, speedKts);
-            speedKts = ShipM.RoundSpeedToStep(speedKts);
+            //Melon<TweaksAndFixes>.Logger.Msg($"Speed: {speedKtsMin:F1}->{speedKtsMax:F1}={speedKts:F1}. ST {_ship.hull.data.shipType.speedMin:F1}->{_ship.hull.data.shipType.speedMax:F1}");
+            speedKts = Mathf.Clamp(speedKts, _ship.hull.data.shipType.speedMin, _ship.hull.data.shipType.speedMax);
+            speedKts = ModUtils.RoundToStep(speedKts, 0.1f);
 
             // Figure out a reasoanble beam
-            if (paramMin > 0f)
-                speedKtsMin = paramMin;
-            if (paramMax > 0f)
-                speedKtsMax = paramMax;
-            float speedInRange = Mathf.InverseLerp(speedKtsMin, speedKtsMax, speedKts);
-            float beamVal = Mathf.Lerp(_ship.hull.data.beamMin, _ship.hull.data.beamMax, speedInRange + ModUtils.DistributedRange(0.3f, 3, null, _this.__8__1.rnd));
+            float hullSpeedMin = paramMin > 0f ? paramMin : speedKtsMin;
+            float hullSpeedMax = paramMax > 0f ? paramMax : speedKtsMax;
+            float speedInRange = Mathf.InverseLerp(hullSpeedMin, hullSpeedMax, speedKts);
+            float bT = Mathf.Clamp01(speedInRange + ModUtils.DistributedRange(0.3f, 3, null, _this.__8__1.rnd));
+            float beamVal = ModUtils.LerpCentered(_ship.hull.data.beamMin, _ship.hull.data.beamMax, bT);
 
             bool needRefresh = false;
             // if this is a refit, we'll use this as our goal speed but maybe not hit it.
@@ -573,7 +576,7 @@ namespace TweaksAndFixes
                 }
                 if (ModUtils.Range(0f, 1f, null, _this.__8__1.rnd) > 0.5f)
                 {
-                    _ship.SetDraught(Mathf.Clamp(_ship.draught + ModUtils.Range(0f, (_ship.hull.data.draughtMax - _ship.hull.data.draughtMin) * 0.25f, null, _this.__8__1.rnd), _ship.hull.data.draughtMin, _ship.hull.data.draughtMax), false);
+                    _ship.SetDraught(Mathf.Clamp(_ship.draught + ModUtils.DistributedRange((_ship.hull.data.draughtMax - _ship.hull.data.draughtMin) * 0.25f, _this.__8__1.rnd), _ship.hull.data.draughtMin, _ship.hull.data.draughtMax), false);
                     needRefresh = true;
                 }
             }
@@ -583,7 +586,7 @@ namespace TweaksAndFixes
                 _this._savedSpeedMinValue_5__3 = -1f;
 
                 _ship.SetBeam(beamVal, false);
-                _ship.SetDraught(Mathf.Lerp(_ship.hull.data.draughtMin, _ship.hull.data.draughtMax, ModUtils.DistributedRange(0.5f, 3, null, _this.__8__1.rnd) + 0.5f), false);
+                _ship.SetDraught(ModUtils.LerpCentered(_ship.hull.data.draughtMin, _ship.hull.data.draughtMax, ModUtils.DistributedRange(0.5f, 3, null, _this.__8__1.rnd) + 0.5f), false);
                 needRefresh = true;
             }
             if (needRefresh)
@@ -628,6 +631,8 @@ namespace TweaksAndFixes
                 CleanTCs();
             }
 
+            //Melon<TweaksAndFixes>.Logger.Msg($"Initial setup: kts {speedKtsMin:F1}->{speedKtsMax:F1}={speedKts:F1} (param {paramMin:F1}->{paramMax:F1}), b/t {beamVal:F1}/{_ship.draught:F1}. {_ship.CurrentCrewQuarters}/{_ship.opRange}/{_ship.survivability}");
+
             if (!GameManager.IsCampaign)
                 _ship.CrewTrainingAmount = ModUtils.Range(17f, 100f, null, _this.__8__1.rnd);
         }
@@ -639,6 +644,7 @@ namespace TweaksAndFixes
 
             return (_isCombatant && ndi.m_RequiredType == RequiredType.needs_Part && ndi.needCompOne == "gun")
                     || (_isCombatant && ndi.m_RequiredType == RequiredType.needs_Caliber && _ship.shipType.mainTo * 25.4f >= ndi.floatValueNeed)
+                    || (_isCombatant && ndi.m_RequiredType == RequiredType.needs_Part && ndi.needCompOne == "tower_main")
                     || (_canUseTorps && ndi.m_RequiredType == RequiredType.needs_Part && ndi.needCompOne == "torpedo");
         }
 
@@ -651,7 +657,9 @@ namespace TweaksAndFixes
 
         public void SelectComponents(ComponentSelectionPass pass)
         {
-            List<CompType> compTypes = new List<CompType>();
+            //Melon<TweaksAndFixes>.Logger.Msg($"Select component pass {pass}");
+
+            List <CompType> compTypes = new List<CompType>();
             if (pass == ComponentSelectionPass.PostParts)
             {
                 foreach (var ct in _ship.components.Keys)
@@ -659,6 +667,7 @@ namespace TweaksAndFixes
                     if (!_ship.IsComponentTypeAvailable(ct) || !Ui.NeedComponentsActive(ct, null, _ship, true, false))
                         compTypes.Add(ct);
                 }
+                //Melon<TweaksAndFixes>.Logger.Msg("Uninstalling components: " + string.Join(", ", compTypes.Select(c => ", " + c.name).ToList()));
                 foreach (var ct in compTypes)
                     _ship.UninstallComponent(ct);
 
@@ -779,38 +788,47 @@ namespace TweaksAndFixes
         {
             foreach (var comp in G.GameData.components.Values)
             {
-                if (_ship.IsComponentAvailable(comp, out _) && Ui.NeedComponentsActive(ct, comp, _ship, true, false))
+                if (comp.typex == ct && _ship.IsComponentAvailable(comp, out _) && Ui.NeedComponentsActive(ct, comp, _ship, true, false))
                 {
                     _CompWeights[comp] = ComponentDataM.GetWeight(comp, _ship.shipType);
                 }
             }
             if (_CompWeights.Count == 0)
+            {
+                //Melon<TweaksAndFixes>.Logger.Msg($"Tried to find comp for {ct.name} but 0 weight!");
                 return;
+            }
             var newComp = ModUtils.RandomByWeights(_CompWeights, null, _this.__8__1.rnd);
             if (newComp != null)
+            {
                 _ship.InstallComponent(newComp, true);
+                //Melon<TweaksAndFixes>.Logger.Msg($"Selected {newComp.name} for {ct.name}");
+            }
             _CompWeights.Clear();
         }
 
         private bool CheckSetMaxPayloadWeight()
         {
             float payloadAndArmorTng = _prePartsFreeTngNoPayload - _hullPartsTonnage;
-            if (_payloadBaseWeight > payloadAndArmorTng)
-                return false;
+            if (_payloadBaseWeight <= payloadAndArmorTng)
+            {
+                _maxPayloadWeight = payloadAndArmorTng * _armRatio;
+                _maxPayloadWeight -= _payloadBaseWeight;
 
-            _maxPayloadWeight = payloadAndArmorTng * _armRatio;
-            _maxPayloadWeight -= _payloadBaseWeight;
+                if (_maxPayloadWeight < 0)
+                    _maxPayloadWeight = 0.05f * (payloadAndArmorTng - _payloadBaseWeight);
 
-            if (_maxPayloadWeight < 0)
-                _maxPayloadWeight = 0.05f * (payloadAndArmorTng - _payloadBaseWeight);
-            if (_maxPayloadWeight < 0)
-                return false;
+                //Melon<TweaksAndFixes>.Logger.Msg($"Setpayload. Armor {payloadAndArmorTng:N0}, max payload {_maxPayloadWeight:N0}, ratio {_armRatio:F2}");
 
-            return true;
+                return _maxPayloadWeight >= 0;
+            }
+            //Melon<TweaksAndFixes>.Logger.Msg($"Setpayload, already over base");
+            return false;
         }
 
         public bool IsRPAllowed(RandPart rp)
         {
+            //Melon<TweaksAndFixes>.Logger.Msg($"Check RP {rp.name}: {rp.type}. Done? F={_doneAddingFunnels}, P={_doneAddingParts}");
             if (rp.paramx.ContainsKey("delete_unmounted") || rp.paramx.ContainsKey("delete_refit"))
                 return true;
 
@@ -830,10 +848,10 @@ namespace TweaksAndFixes
 
             _prePartsFreeTngNoPayload = _tonnage - _baseHullWeight;
             _payloadBaseWeight = _prePartsWeight - _baseHullWeight; // mines/DC/etc
+            //Melon<TweaksAndFixes>.Logger.Msg($"tonnage {_tonnage:N0}, baseHull {_baseHullWeight:N0}, preparts {_prePartsFreeTngNoPayload:N0}, payload {_payloadBaseWeight:N0}");
             // If we can't even add towers/funnels, bail
             if (!CheckSetMaxPayloadWeight())
                 return false;
-
 
             // this will increase when towers/funnels are added
             _hullPartsTonnage = 0;
@@ -907,19 +925,23 @@ namespace TweaksAndFixes
         private void UpdateStoredWeight(float preWeight, Part part)
         {
             float delta = _ship.Weight() - preWeight;
+            bool isHull;
             switch (part.data.type)
             {
                 case "funnel":
                 case "tower_main":
                 case "tower_sec":
                 case "special":
+                    isHull = true;
                     _hullPartsTonnage += delta;
                     break;
 
                 default:
                     _payloadTotalWeight += delta;
+                    isHull = false;
                     break;
             }
+            //Melon<TweaksAndFixes>.Logger.Msg($"Changed part {part.data.name}, weight delta {delta:F1}, is hull? {isHull}");
         }
 
         public void OnAddPart(float preWeight, Part part)
@@ -956,7 +978,7 @@ namespace TweaksAndFixes
 
             UpdateStoredWeight(preWeight, part);
 
-            if (CheckSetMaxPayloadWeight() && _payloadTotalWeight < _maxPayloadWeight && _doneAddingParts)
+            if (CheckSetMaxPayloadWeight() && _payloadTotalWeight < _maxPayloadWeight)
                 UnsetOverweight();
         }
 

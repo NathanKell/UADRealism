@@ -268,6 +268,14 @@ namespace TweaksAndFixes
             return stepCount * stepSize;
         }
 
+        public static float LerpCentered(float a, float b, float t)
+        {
+            if (t < 0.5)
+                return a * (0.5f - t) * 2f;
+
+            return b * (t - 0.5f) * 2f;
+        }
+
         public static T RandomOrNull<T>(this List<T> items, System.Random rnd = null, Il2CppSystem.Random nativeRnd = null) where T : class
         {
             int iC = items.Count;
