@@ -59,9 +59,11 @@ If the file flags.csv exists in the Mods folder, TAF will override the specified
 # For example to override the engine icon with engine.png, make a
 # 64x64 PNG file and place it in Sprites, and add this line to this
 # file:
-# Components/engine,engine.png,64,64
+#   Components/engine,engine.png,64,64
+# Note that transparency in PNGs is supported, so any transparent
+# pixels in the PNG will be transparent ingame.
 @name,file,width,height
-Components/boiler,boiler.png,64,64
+Components/boilers,boilers.png,64,64
 ```
 
 ### Flag overriding
