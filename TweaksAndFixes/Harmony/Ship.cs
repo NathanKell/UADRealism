@@ -17,7 +17,7 @@ namespace TweaksAndFixes
         internal static bool _IsLoading = false;
         internal static Ship _ShipForLoading = null;
         internal static Ship.Store _StoreForLoading = null;
-        internal static GenerateShip _GenShipData = null;
+        internal static readonly GenerateShip _GenShipData = new GenerateShip();
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(Ship.ToStore))]
@@ -156,7 +156,7 @@ namespace TweaksAndFixes
         [HarmonyPostfix]
         internal static void Postfix_AddShipTurretArmor(Ship __instance, Part part)
         {
-            if (_GenShipData == null)
+            if (!_GenShipData.IsValid)
                 return;
 
             _GenShipData.OnAddTurretArmor(part);
@@ -169,7 +169,7 @@ namespace TweaksAndFixes
             if (!Config.ShipGenReorder)
                 return true;
 
-            if (_GenShipData == null)
+            if (!_GenShipData.IsValid)
             {
                 Debug.LogWarning("GenShipData null!\n" + NativeStackWalk.NativeStackTrace);
                 return true;
@@ -188,7 +188,7 @@ namespace TweaksAndFixes
         internal static void Prefix_AddPart(Ship __instance, Part part, out float __state)
         {
             __state = -1f;
-            if (_GenShipData == null || !_GenShipData.AddingParts)
+            if (!_GenShipData.IsValid|| !_GenShipData.AddingParts)
                 return;
 
             __state = __instance.Weight();
@@ -209,7 +209,7 @@ namespace TweaksAndFixes
         internal static void Prefix_RemovePart(Ship __instance, Part part, out float __state)
         {
             __state = -1f;
-            if (_GenShipData == null || !_GenShipData.AddingParts)
+            if (!_GenShipData.IsValid || !_GenShipData.AddingParts)
                 return;
 
             __state = __instance.Weight();
@@ -277,7 +277,7 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_GenerateRandomShip_b__562_13(ComponentData c, ref float __result)
         {
-            if (Patch_Ship._GenShipData == null)
+            if (!Patch_Ship._GenShipData.IsValid)
                 return true;
             __result = ComponentDataM.GetWeight(c, Patch_Ship._GenShipData._ship.shipType);
             //if(__result != c.weight)
@@ -322,10 +322,10 @@ namespace TweaksAndFixes
         internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
             //if (__instance.__1__state == 0)
-            if (Patch_Ship._GenShipData == null)
+            if (!Patch_Ship._GenShipData.IsValid)
             {
                 Melon<TweaksAndFixes>.Logger.Msg($"Creating GenShip for {__instance.__4__this.hull.data.name} {__instance.__4__this.vesselName}, state {__instance.__1__state}");
-                Patch_Ship._GenShipData = new GenerateShip(__instance);
+                Patch_Ship._GenShipData.Bind(__instance);
             }
 
             __state = __instance.__1__state;
@@ -345,7 +345,7 @@ namespace TweaksAndFixes
             {
                 Patch_Ship._GenShipData.OnGenerateEnd();
                 Melon<TweaksAndFixes>.Logger.Msg($"*** Done GenShip for {__instance.__4__this.hull.data.name} {__instance.__4__this.vesselName}, state {__instance.__1__state} (passed {__state})");
-                Patch_Ship._GenShipData = null;
+                Patch_Ship._GenShipData.Reset();
             }
 
             Patch_Ship._GenerateShipState = -1;

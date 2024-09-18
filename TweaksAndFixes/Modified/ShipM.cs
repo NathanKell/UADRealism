@@ -1604,6 +1604,13 @@ namespace TweaksAndFixes
                     caliberCounts[i] = new List<int>();
             }
 
+            public void Reset()
+            {
+                isLimited = false;
+                for (int i = maxCounts.Length; i-- > 0;)
+                    caliberCounts[i].Clear();
+            }
+
             public void FillFor(Ship ship)
             {
                 isLimited = false;

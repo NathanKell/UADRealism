@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Il2Cpp;
 using MelonLoader;
+using MelonLoader.CoreClrUtils;
 
 #pragma warning disable CS8600
 #pragma warning disable CS8601
@@ -16,17 +17,26 @@ namespace TweaksAndFixes
 {
     public class GenerateShip
     {
-        public class BeamDraughtData
+        public struct BeamDraughtData
         {
             const string _BDLParamName = "ai_beamdraughtlimits";
 
+            public bool isValid;
             public float beamMin;
             public float beamMax;
             public float draughtMin;
             public float draughtMax;
 
+            public BeamDraughtData()
+            {
+                beamMin = beamMax = draughtMin = draughtMax = 0f;
+                isValid = false;
+            }
+
             public BeamDraughtData(PartData hullData)
             {
+                isValid = true;
+
                 beamMin = hullData.beamMin;
                 beamMax = hullData.beamMax;
                 draughtMin = hullData.draughtMin;
@@ -35,6 +45,8 @@ namespace TweaksAndFixes
 
             public BeamDraughtData(Il2CppSystem.Collections.Generic.List<string> bdlParam, string hName)
             {
+                beamMin = beamMax = draughtMin = draughtMax = 0f;
+                isValid = true;
                 int iC = bdlParam.Count;
                 for (int i = 0; i < iC; ++i)
                 {
@@ -58,14 +70,15 @@ namespace TweaksAndFixes
 
             public static BeamDraughtData FromParam(Ship ship)
             {
+                var bdl = new BeamDraughtData();
                 var hd = ship.hull.data;
                 if (!hd.paramx.TryGetValue(_BDLParamName, out var bdlParam))
-                    return null;
+                    return bdl;
 
                 if (bdlParam.Count != 4)
                 {
                     Melon<TweaksAndFixes>.Logger.Error($"For ship {hd.name}, {_BDLParamName} doesn't have 4 elements. The elements should be beamMin, beamMax, draughtMin, draughtMax. Values of 0 mean keep existing non-AI values.");
-                    return null;
+                    return bdl;
                 }
 
                 return new BeamDraughtData(bdlParam, hd.name);
@@ -79,9 +92,18 @@ namespace TweaksAndFixes
                 hd.draughtMin = draughtMin;
                 hd.draughtMax = draughtMax;
             }
+
+            public void Reset()
+            {
+                beamMin = beamMax = draughtMin = draughtMax = 0f;
+                isValid = false;
+            }
         }
 
         static Dictionary<ComponentData, float> _CompWeights = new Dictionary<ComponentData, float>();
+
+        bool _isValid = false;
+        public bool IsValid => _isValid;
 
         float _hullYear;
         float _designYear;
@@ -98,8 +120,8 @@ namespace TweaksAndFixes
         int _gen;
         float _tngRatio;
         bool _canUseTorps;
-        BeamDraughtData origBDL = null;
-        BeamDraughtData newBDL = null;
+        BeamDraughtData _origBDL = new BeamDraughtData();
+        BeamDraughtData _newBDL = new BeamDraughtData();
 
         float _limitArmor = -1f;
         float _limitSpeed = -1f;
@@ -110,7 +132,7 @@ namespace TweaksAndFixes
         bool _rpIsGun = false;
         ShipM.BatteryType _rpBattery = ShipM.BatteryType.main;
         ShipM.GenGunInfo _gunInfo = new ShipM.GenGunInfo();
-        GenArmorData.GenArmorInfo _armorInfo;
+        GenArmorData.GenArmorInfo _armorInfo = null;
         Ship._AddRandomPartsNew_d__579 _arpnRoutine = null;
         public bool AddingParts => _arpnRoutine != null;
 
@@ -133,7 +155,7 @@ namespace TweaksAndFixes
         int _rpDesiredAmount = 0;
         float _maxFunnelEff;
 
-        public GenerateShip(Ship._GenerateRandomShip_d__562 coroutine)
+        public void Bind(Ship._GenerateRandomShip_d__562 coroutine)
         {
             _this = coroutine;
             _ship = _this.__4__this;
@@ -150,11 +172,9 @@ namespace TweaksAndFixes
 
             _maxFunnelEff = Config.Param("taf_generate_funnel_maxefficiency", 150f);
 
-            newBDL = BeamDraughtData.FromParam(_ship);
-            if (newBDL != null)
-            {
-                origBDL = new BeamDraughtData(_ship.hull.data);
-            }
+            _newBDL = BeamDraughtData.FromParam(_ship);
+            if (_newBDL.isValid)
+                _origBDL = new BeamDraughtData(_ship.hull.data);
 
             if (Patch_BattleManager_d114._ShipGenInfo.isActive)
             {
@@ -163,12 +183,45 @@ namespace TweaksAndFixes
                 _limitArmor = Patch_BattleManager_d114._ShipGenInfo.limitArmor;
                 _customArmor = Patch_BattleManager_d114._ShipGenInfo.customArmor;
             }
+            else
+            {
+                _limitArmor = -1f;
+                _limitSpeed = -1f;
+                _customSpeed = -1f;
+                _customArmor = -1f;
+            }
 
             InitParts();
 
             _armorInfo = GenArmorData.GetInfoFor(this._ship);
 
             _armRatio = GetArmamentRatio(_avgYear);
+        }
+
+        public void Reset()
+        {
+            _isValid = false;
+            _CompWeights.Clear();
+            _this = null;
+            _ship = null;
+            _origBDL.Reset();
+            _newBDL.Reset();
+            _curRP = null;
+            _rpIsGun = false;
+            _gunInfo.Reset();
+            _armorInfo = null;
+            _arpnRoutine = null;
+            _availableParts.Clear();
+            _seenCompTypes.Clear();
+
+            _hullPartsTonnage = 0;
+            _doneAddingFunnels = false;
+            _doneAddingParts = false;
+
+            _limitArmor = -1f;
+            _limitSpeed = -1f;
+            _customSpeed = -1f;
+            _customArmor = -1f;
         }
 
         private void CleanTCs()
@@ -261,8 +314,8 @@ namespace TweaksAndFixes
 
         public void OnPrefix()
         {
-            if (newBDL != null)
-                newBDL.Apply(_ship);
+            if (_newBDL.isValid)
+                _newBDL.Apply(_ship);
 
             int state = _this.__1__state;
             switch (state)
@@ -384,8 +437,8 @@ namespace TweaksAndFixes
                     break;
             }
 
-            if (newBDL != null)
-                origBDL.Apply(_ship);
+            if (_newBDL.isValid)
+                _origBDL.Apply(_ship);
         }
 
         public void OnGenerateEnd()
