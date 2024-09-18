@@ -169,6 +169,11 @@ namespace TweaksAndFixes
             if (!Config.ShipGenReorder)
                 return true;
 
+            if (_GenShipData == null)
+            {
+                Debug.LogWarning("GenShipData null!\n" + NativeStackWalk.NativeStackTrace);
+                return true;
+            }
             if (!_GenShipData.IsRPAllowed(randPart))
             {
                 __result = false;
@@ -316,8 +321,12 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static void Prefix_MoveNext(Ship._GenerateRandomShip_d__562 __instance, out int __state, ref bool __result)
         {
-            if (__instance.__1__state == 0)
+            //if (__instance.__1__state == 0)
+            if (Patch_Ship._GenShipData == null)
+            {
+                Melon<TweaksAndFixes>.Logger.Msg($"Creating GenShip for {__instance.__4__this.hull.data.name} {__instance.__4__this.vesselName}, state {__instance.__1__state}");
                 Patch_Ship._GenShipData = new GenerateShip(__instance);
+            }
 
             __state = __instance.__1__state;
             Patch_Ship._GenerateShipState = __state;
@@ -335,6 +344,7 @@ namespace TweaksAndFixes
             if (__result == false)
             {
                 Patch_Ship._GenShipData.OnGenerateEnd();
+                Melon<TweaksAndFixes>.Logger.Msg($"*** Done GenShip for {__instance.__4__this.hull.data.name} {__instance.__4__this.vesselName}, state {__instance.__1__state} (passed {__state})");
                 Patch_Ship._GenShipData = null;
             }
 
