@@ -335,7 +335,7 @@ namespace TweaksAndFixes
         internal static PartData _BarbetteData = null;
         internal static bool _IsFirstCallofB15 = true;
 
-        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_15))]
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__544_15))]
         [HarmonyPostfix]
         internal static void Postfix_15()
         {
@@ -350,7 +350,7 @@ namespace TweaksAndFixes
             _IsFirstCallofB15 = false;
         }
 
-        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__519_16))]
+        [HarmonyPatch(nameof(Ui.__c._UpdateConstructor_b__544_16))]
         [HarmonyPostfix]
         internal static void Postfix_16()
         {

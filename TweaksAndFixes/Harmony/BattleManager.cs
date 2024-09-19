@@ -6,8 +6,8 @@ using System.Collections.Generic;
 
 namespace TweaksAndFixes
 {
-    [HarmonyPatch(typeof(BattleManager._UpdateLoadingMissionBuild_d__114))]
-    internal class Patch_BattleManager_d114
+    [HarmonyPatch(typeof(BattleManager._UpdateLoadingMissionBuild_d__113))]
+    internal class Patch_BattleManager_d115
     {
 
         // For some reason we can't access native nullables
@@ -26,9 +26,9 @@ namespace TweaksAndFixes
 
         internal static readonly BattleShipGenerationInfo _ShipGenInfo = new BattleShipGenerationInfo();
 
-        [HarmonyPatch(nameof(BattleManager._UpdateLoadingMissionBuild_d__114.MoveNext))]
+        [HarmonyPatch(nameof(BattleManager._UpdateLoadingMissionBuild_d__113.MoveNext))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(BattleManager._UpdateLoadingMissionBuild_d__114 __instance, out int __state)
+        internal static void Prefix_MoveNext(BattleManager._UpdateLoadingMissionBuild_d__113 __instance, out int __state)
         {
             __state = __instance.__1__state;
             if (__state == 3 || __state == 5)
@@ -60,9 +60,9 @@ namespace TweaksAndFixes
             }
         }
 
-        [HarmonyPatch(nameof(BattleManager._UpdateLoadingMissionBuild_d__114.MoveNext))]
+        [HarmonyPatch(nameof(BattleManager._UpdateLoadingMissionBuild_d__113.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(BattleManager._UpdateLoadingMissionBuild_d__114 __instance, int __state)
+        internal static void Postfix_MoveNext(BattleManager._UpdateLoadingMissionBuild_d__113 __instance, int __state)
         {
             _ShipGenInfo.isActive = false;
             _ShipGenInfo.limitArmor = -1f;

@@ -379,13 +379,13 @@ namespace TweaksAndFixes
                       -1,
                       weightTargetRatio,
                       stopFunc,
-                      Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
-                      Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                      Patch_BattleManager_d115._ShipGenInfo.customSpeed <= 0f,
+                      Patch_BattleManager_d115._ShipGenInfo.customArmor <= 0f,
                       true,
                       true,
                       true,
                       __instance.__8__1.rnd,
-                      Patch_BattleManager_d114._ShipGenInfo.limitArmor,
+                      Patch_BattleManager_d115._ShipGenInfo.limitArmor,
                       __instance._savedSpeedMinValue_5__3);
 
                     // We can't do the frame-wait thing easily, let's just advance straight-away
@@ -402,13 +402,13 @@ namespace TweaksAndFixes
                       1,
                       1f,
                       null,
-                      Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
-                      Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                      Patch_BattleManager_d115._ShipGenInfo.customSpeed <= 0f,
+                      Patch_BattleManager_d115._ShipGenInfo.customArmor <= 0f,
                       true,
                       true,
                       true,
                       __instance.__8__1.rnd,
-                      Patch_BattleManager_d114._ShipGenInfo.limitArmor,
+                      Patch_BattleManager_d115._ShipGenInfo.limitArmor,
                       __instance._savedSpeedMinValue_5__3);
 
                     ship.UpdateHullStats();

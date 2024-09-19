@@ -40,14 +40,14 @@ namespace TweaksAndFixes
         }
     }
 
-    [HarmonyPatch(typeof(GameManager._LoadCampaign_d__102))]
-    internal class Patch_GameManager_LoadCampaignd102
+    [HarmonyPatch(typeof(GameManager._LoadCampaign_d__98))]
+    internal class Patch_GameManager_LoadCampaigndCoroutine
     {
         // This method calls CampaignController.PrepareProvinces *before* CampaignMap.PreInit
         // So we patch here and skip the preinit patch.
-        [HarmonyPatch(nameof(GameManager._LoadCampaign_d__102.MoveNext))]
+        [HarmonyPatch(nameof(GameManager._LoadCampaign_d__98.MoveNext))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(GameManager._LoadCampaign_d__102 __instance)
+        internal static void Prefix_MoveNext(GameManager._LoadCampaign_d__98 __instance)
         {
             if (__instance.__1__state == 6 && (Config.OverrideMap != Config.OverrideMapOptions.Disabled))
                 MapData.LoadMapData();

@@ -12,38 +12,13 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(CampaignController))]
     internal class Patch_CampaignController
     {
-        // AI Scrapping patch
-        // We replace the _entirety_ of the scrap logic by:
-        // 1. Prefixing/postfixing AI Manage Fleet's MoveNext to set a bool that we're in that method
-        // 2. Changing the predicate method that determines whether to scrap a ship to always report
-        //      a single true, all others false (using the bool in 1, such that the scrap loop runs
-        //      only once)
-        // 3. Prefixing CampaignController.ScrapShip such that, when it runs, if the bool in 1 is set,
-        //      our new scrap logic runs on the entire fleet of the player in question. To do that,
-        //      we have to add a passthrough bool so we can still call scrap from that method.
-
         internal static bool _IsInManageFleet = false;
-        internal static int _ManageFleetScrapShipsHit = 0;
-        internal static bool _PassthroughScrap = false;
 
         [HarmonyPatch(nameof(CampaignController.GetSharedDesign))]
         [HarmonyPrefix]
         internal static bool Prefix_GetSharedDesign(CampaignController __instance, Player player, ShipType shipType, int year, bool checkTech, bool isEarlySavedShip, ref Ship __result)
         {
             __result = CampaignControllerM.GetSharedDesign(__instance, player, shipType, year, checkTech, isEarlySavedShip);
-            return false;
-        }
-
-        [HarmonyPatch(nameof(CampaignController.ScrapShip))]
-        [HarmonyPrefix]
-        internal static bool Prefix_ScrapShip(CampaignController __instance, Ship ship, bool addCashAndCrew)
-        {
-            if (!Config.ScrappingChange || _PassthroughScrap || !_IsInManageFleet)
-                return true;
-
-            _PassthroughScrap = true;
-            CampaignControllerM.HandleScrapping(__instance, ship.player);
-            _PassthroughScrap = false;
             return false;
         }
 
@@ -213,43 +188,34 @@ namespace TweaksAndFixes
 
             _PassThroughAdjustAttitude = false;
         }
-    }
 
-    [HarmonyPatch(typeof(CampaignController._AiManageFleet_d__169))]
-    internal class Patch_CampaignController_co169
-    {
-        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__169.MoveNext))]
+        [HarmonyPatch(nameof(CampaignController.AiManageFleet))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(CampaignController._AiManageFleet_d__169 __instance)
+        internal static void Prefix_AiManageFleet(CampaignController __instance, Player player, out float __state)
         {
-            Patch_CampaignController._IsInManageFleet = true;
-            Patch_CampaignController._ManageFleetScrapShipsHit = 0;
-        }
-
-        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__169.MoveNext))]
-        [HarmonyPostfix]
-        internal static void Postfix_MoveNext(CampaignController._AiManageFleet_d__169 __instance)
-        {
-            Patch_CampaignController._IsInManageFleet = false;
-        }
-    }
-    
-    [HarmonyPatch(typeof(CampaignController.__c__DisplayClass169_0))]
-    internal class Patch_CampaignController_169
-    {
-        [HarmonyPatch(nameof(CampaignController.__c__DisplayClass169_0._AiManageFleet_b__3))]
-        [HarmonyPrefix]
-        internal static bool Prefix__AiManageFleet_b__3(CampaignController.__c__DisplayClass169_0 __instance, Ship s, ref bool __result)
-        {
-            if (!Config.ScrappingChange)
-                return true;
-
-            if (Patch_CampaignController._ManageFleetScrapShipsHit++ == 0)
-                __result = true;
+            _IsInManageFleet = true;
+            if (Config.ScrappingChange && !player.isDisabled && player.isAi)
+            {
+                CampaignControllerM.HandleScrapping(__instance, player);
+                // we need to disable stock scrapping
+                __state = Config.Param("min_fleet_tonnage_for_scrap", 1f);
+                G.GameData.parms["min_fleet_tonnage_for_scrap"] = float.MaxValue;
+            }
             else
-                __result = false;
+            {
+                __state = 0f;
+            }
+        }
 
-            return false;
+        [HarmonyPatch(nameof(CampaignController.AiManageFleet))]
+        [HarmonyPostfix]
+        internal static void Postfix_AiManageFleet(CampaignController __instance, Player player, float __state)
+        {
+            _IsInManageFleet = false;
+            if (Config.ScrappingChange && !player.isDisabled && player.isAi)
+            {
+                G.GameData.parms["min_fleet_tonnage_for_scrap"] = __state;
+            }
         }
     }
 }
