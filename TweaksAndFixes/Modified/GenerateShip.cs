@@ -178,12 +178,12 @@ namespace TweaksAndFixes
             if (_newBDL.isValid)
                 _origBDL = new BeamDraughtData(_ship.hull.data);
 
-            if (Patch_BattleManager_d114._ShipGenInfo.isActive)
+            if (Patch_BattleManager_d115._ShipGenInfo.isActive)
             {
-                _limitSpeed = Patch_BattleManager_d114._ShipGenInfo.limitSpeed;
-                _customSpeed = Patch_BattleManager_d114._ShipGenInfo.customSpeed;
-                _limitArmor = Patch_BattleManager_d114._ShipGenInfo.limitArmor;
-                _customArmor = Patch_BattleManager_d114._ShipGenInfo.customArmor;
+                _limitSpeed = Patch_BattleManager_d115._ShipGenInfo.limitSpeed;
+                _customSpeed = Patch_BattleManager_d115._ShipGenInfo.customSpeed;
+                _limitArmor = Patch_BattleManager_d115._ShipGenInfo.limitArmor;
+                _customArmor = Patch_BattleManager_d115._ShipGenInfo.customArmor;
             }
             else
             {
@@ -365,13 +365,13 @@ namespace TweaksAndFixes
                           -1,
                           freeTngPortionStarting,
                           stopFunc,
-                          Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
-                          Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                          Patch_BattleManager_d115._ShipGenInfo.customSpeed <= 0f,
+                          Patch_BattleManager_d115._ShipGenInfo.customArmor <= 0f,
                           true,
                           true,
                           true,
                           _this.__8__1.rnd,
-                          Patch_BattleManager_d114._ShipGenInfo.limitArmor,
+                          Patch_BattleManager_d115._ShipGenInfo.limitArmor,
                           _this._savedSpeedMinValue_5__3);
                     }
 
@@ -391,13 +391,13 @@ namespace TweaksAndFixes
                           1,
                           1f,
                           null,
-                          Patch_BattleManager_d114._ShipGenInfo.customSpeed <= 0f,
-                          Patch_BattleManager_d114._ShipGenInfo.customArmor <= 0f,
+                          Patch_BattleManager_d115._ShipGenInfo.customSpeed <= 0f,
+                          Patch_BattleManager_d115._ShipGenInfo.customArmor <= 0f,
                           true,
                           true,
                           true,
                           _this.__8__1.rnd,
-                          Patch_BattleManager_d114._ShipGenInfo.limitArmor,
+                          Patch_BattleManager_d115._ShipGenInfo.limitArmor,
                           _this._savedSpeedMinValue_5__3);
                     }
 
