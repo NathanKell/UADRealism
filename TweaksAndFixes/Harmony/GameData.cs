@@ -97,6 +97,47 @@ namespace TweaksAndFixes
         internal static System.Collections.IEnumerator FillDatabase()
         {
             yield return new WaitForEndOfFrame();
+
+            //var textAsset = Resources.Load<TextAsset>("packedShips");
+            //var packedShips = Util.DeserializeObjectByte<CampaignDesigns.Store>(textAsset.bytes);
+            //string logstr = $"packedShips data, year {packedShips.year}";
+            //foreach (var spy in packedShips.shipsPerYear)
+            //{
+            //    logstr += $"\n{spy.Key}: {spy.Value.shipsPerPlayer.Count} players";
+            //    foreach (var spp in spy.Value.shipsPerPlayer)
+            //    {
+            //        logstr += $"\n\t{spp.Key}: {spp.Value.shipsPerType.Count} types:";
+            //        bool c2 = false;
+            //        foreach (var spt in spp.Value.shipsPerType)
+            //        {
+            //            if (c2)
+            //                logstr += ",";
+            //            c2 = true;
+            //            logstr += " " + spt.Value.Count + " " + spt.Key;
+            //        }
+            //        logstr += ".";
+            //        foreach (var spt in spp.Value.shipsPerType)
+            //        {
+            //            //logstr += $"\n\t\t{spt.Key}: {spt.Value.Count} ships.";
+            //            bool comma = false;
+            //            foreach (var s in spt.Value)
+            //            {
+            //                if (s.YearCreated == spy.Key)
+            //                    continue;
+
+            //                if (comma)
+            //                    logstr += ",";
+            //                comma = true;
+            //                logstr += $" year mismatch: {s.vesselName} ({s.tonnage:N0}t, {s.YearCreated})";
+            //            }
+            //        }
+            //    }
+            //}
+            //Melon<TweaksAndFixes>.Logger.Msg(logstr);
+
+            //var json = Il2CppNewtonsoft.Json.JsonConvert.SerializeObject(packedShips.shipsPerYear[0].Value, Il2CppNewtonsoft.Json.Formatting.Indented, Util.SerializerSettings); //Il2CppNewtonsoft.Json.JsonConvert.SerializeObject(packedObj, Il2CppNewtonsoft.Json.Formatting.Indented, Util.SerializerSettings);
+            //File.WriteAllText(Path.Combine(Config._BasePath, "packedShips.json"), json);
+
             Database.FillDatabase();
             Config.LoadConfig();
             Melon<TweaksAndFixes>.Logger.Msg("**************************************** Loaded database and config");
