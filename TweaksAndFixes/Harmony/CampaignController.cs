@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Il2CppSystem.Linq;
 
 #pragma warning disable CS8602
+#pragma warning disable CS8604
 
 namespace TweaksAndFixes
 {
@@ -215,6 +216,73 @@ namespace TweaksAndFixes
             if (Config.ScrappingChange && !player.isDisabled && player.isAi)
             {
                 G.GameData.parms["min_fleet_tonnage_for_scrap"] = __state;
+            }
+        }
+
+        [HarmonyPatch(nameof(CampaignController.CheckPredefinedDesigns))]
+        [HarmonyPrefix]
+        internal static void Prefix_CheckPredefinedDesigns(CampaignController __instance)
+        {
+            if (__instance._currentDesigns != null)
+                return;
+
+            string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
+            if (!File.Exists(path))
+                return;
+
+            var bytes = File.ReadAllBytes(path);
+            var store = Util.DeserializeObjectByte<CampaignDesigns.Store>(bytes);
+            int dCount = 0;
+            bool isValid = true;
+            if (store.shipsPerYear == null)
+            {
+                isValid = false;
+                Debug.LogError("spy");
+            }
+            else
+            {
+                foreach (var spy in store.shipsPerYear)
+                {
+                    if (spy.Value.shipsPerPlayer == null)
+                    {
+                        isValid = false;
+                        Debug.LogError(spy.Key + ": spp");
+                    }
+                    else
+                    {
+                        foreach (var spp in spy.Value.shipsPerPlayer)
+                        {
+                            if (spp.Value.shipsPerType == null)
+                            {
+                                isValid = false;
+                                Debug.LogError(spp.Key + ": spp");
+                            }
+                            else
+                            {
+                                foreach (var spt in spp.Value.shipsPerType)
+                                {
+                                    if (spt.Value == null)
+                                    {
+                                        isValid = false;
+                                        Debug.LogError(spt.Key + ": spt");
+                                    }
+                                    else
+                                        dCount += spt.Value.Count;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isValid)
+            {
+                __instance._currentDesigns = CampaignDesigns.FromStore(store);
+                Melon<TweaksAndFixes>.Logger.Msg($"Overrode predefined designs by loading {dCount} ships from {Config._PredefinedDesignsFile}");
+            }
+            else
+            {
+                Melon<TweaksAndFixes>.Logger.Error($"Tried to override predefined designs ");
             }
         }
     }

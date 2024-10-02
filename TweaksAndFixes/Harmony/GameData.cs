@@ -6,6 +6,7 @@ using UnityEngine;
 using Il2Cpp;
 
 #pragma warning disable CS8600
+#pragma warning disable CS8604
 
 namespace TweaksAndFixes
 {
@@ -146,7 +147,8 @@ namespace TweaksAndFixes
 
             if (!Directory.Exists(Config._BasePath))
             {
-                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + Config._BasePath);
+                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + Config._BasePath + ". Creating");
+                Directory.CreateDirectory(Config._BasePath);
             }
             else
             {
@@ -155,6 +157,78 @@ namespace TweaksAndFixes
                 {
                     Melon<TweaksAndFixes>.Logger.Warning("Failed to find Flags file " + filePath);
                 }
+            }
+
+            string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
+
+            var bytes = File.ReadAllBytes(path);
+            if (bytes == null)
+                Melon<TweaksAndFixes>.Logger.Msg("null bytes");
+            var store = Util.DeserializeObjectByte<CampaignDesigns.Store>(bytes);
+            if (store == null)
+                Melon<TweaksAndFixes>.Logger.Msg("Null store");
+            else
+            {
+                Melon<TweaksAndFixes>.Logger.Msg("got store");
+                bool isValid = true;
+                int dCount = 0;
+                if (store.shipsPerYear == null)
+                {
+                    isValid = false;
+                    Melon<TweaksAndFixes>.Logger.Error("spy");
+                }
+                else
+                {
+                    Melon<TweaksAndFixes>.Logger.Msg("got spy");
+                    foreach (var spy in store.shipsPerYear)
+                    {
+                        if (spy.Value == null)
+                        {
+                            isValid = false;
+                            Melon<TweaksAndFixes>.Logger.Msg("spy val null, but key " + spy.Key);
+                        }
+                        else if (spy.Value.shipsPerPlayer == null)
+                        {
+                            isValid = false;
+                            Melon<TweaksAndFixes>.Logger.Error(spy.Key + ": spp");
+                        }
+                        else
+                        {
+                            Melon<TweaksAndFixes>.Logger.Msg("got spp");
+                            foreach (var spp in spy.Value.shipsPerPlayer)
+                            {
+                                if (spp.Value == null)
+                                {
+                                    isValid = false;
+                                    Melon<TweaksAndFixes>.Logger.Error("spp value null, but key " + spp.Key);
+                                }
+                                else if (spp.Value.shipsPerType == null)
+                                {
+                                    isValid = false;
+                                    Melon<TweaksAndFixes>.Logger.Error(spp.Key + ": spt");
+                                }
+                                else
+                                {
+                                    Melon<TweaksAndFixes>.Logger.Msg("got spt");
+                                    foreach (var spt in spp.Value.shipsPerType)
+                                    {
+                                        if (spt.Value == null)
+                                        {
+                                            isValid = false;
+                                            Melon<TweaksAndFixes>.Logger.Error(spt.Key + ": spt");
+                                        }
+                                        else
+                                        {
+                                            dCount += spt.Value.Count;
+                                            Melon<TweaksAndFixes>.Logger.Msg("got list");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Melon<TweaksAndFixes>.Logger.Msg($"valid? {isValid} : {dCount}");
             }
 
             //foreach (var f in typeof(Part).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic))
@@ -167,44 +241,44 @@ namespace TweaksAndFixes
             //    if (hull.isHull)
             //        hull.nameUi = Patch_Ship.GetHullModelKey(hull);
 
-                //var playerToShips = new Dictionary<PlayerData, Dictionary<ShipType, List<Tuple<PartData, int>>>>();
-                //foreach (var hull in G.GameData.parts.Values)
-                //{
-                //    if (!hull.isHull)
-                //        continue;
+            //var playerToShips = new Dictionary<PlayerData, Dictionary<ShipType, List<Tuple<PartData, int>>>>();
+            //foreach (var hull in G.GameData.parts.Values)
+            //{
+            //    if (!hull.isHull)
+            //        continue;
 
-                //    foreach (var pd in hull.countriesx)
-                //    {
-                //        var year = Database.GetYear(hull);
-                //        if (year < 0)
-                //            continue;
-                //        playerToShips.ValueOrNew(pd).ValueOrNew(hull.shipType).Add(new Tuple<PartData, int>(hull, year));
-                //    }
-                //}
+            //    foreach (var pd in hull.countriesx)
+            //    {
+            //        var year = Database.GetYear(hull);
+            //        if (year < 0)
+            //            continue;
+            //        playerToShips.ValueOrNew(pd).ValueOrNew(hull.shipType).Add(new Tuple<PartData, int>(hull, year));
+            //    }
+            //}
 
-                //string logstr = "\nname,nameUi,type,year,model,scale,country,tonnageMin,tonnageMax,speedLimiter,param";
-                //foreach (var kvp in playerToShips)
-                //{
-                //    foreach (var list in kvp.Value.Values)
-                //    {
-                //        list.Sort((a, b) => b.Item2.CompareTo(a.Item2));
-                //        foreach (var tpl in list)
-                //        {
-                //            var hull = tpl.Item1;
-                //            var year = tpl.Item2;
-                //            string countries = kvp.Key.name;
-                //            if (hull.countriesx.Count > 1)
-                //            {
-                //                foreach (var c in hull.countriesx)
-                //                    if (c != kvp.Key)
-                //                        countries += ", " + c.name;
-                //                countries = "\"" + countries + "\"";
-                //            }
-                //            logstr += $"\n{hull.name},{hull.nameUi},{hull.shipType.name},{year},{hull.model},{hull.scale:F2},{countries},{hull.tonnageMin:F0},{hull.tonnageMax:F0},{hull.speedLimiter:F1},\"{hull.param}\"";
-                //        }
-                //    }
-                //}
-                //Debug.Log(logstr);
+            //string logstr = "\nname,nameUi,type,year,model,scale,country,tonnageMin,tonnageMax,speedLimiter,param";
+            //foreach (var kvp in playerToShips)
+            //{
+            //    foreach (var list in kvp.Value.Values)
+            //    {
+            //        list.Sort((a, b) => b.Item2.CompareTo(a.Item2));
+            //        foreach (var tpl in list)
+            //        {
+            //            var hull = tpl.Item1;
+            //            var year = tpl.Item2;
+            //            string countries = kvp.Key.name;
+            //            if (hull.countriesx.Count > 1)
+            //            {
+            //                foreach (var c in hull.countriesx)
+            //                    if (c != kvp.Key)
+            //                        countries += ", " + c.name;
+            //                countries = "\"" + countries + "\"";
+            //            }
+            //            logstr += $"\n{hull.name},{hull.nameUi},{hull.shipType.name},{year},{hull.model},{hull.scale:F2},{countries},{hull.tonnageMin:F0},{hull.tonnageMax:F0},{hull.speedLimiter:F1},\"{hull.param}\"";
+            //        }
+            //    }
+            //}
+            //Debug.Log(logstr);
         }
     }
 }

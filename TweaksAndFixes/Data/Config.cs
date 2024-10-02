@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Reflection;
 using MelonLoader;
 
+#pragma warning disable CS8604
 #pragma warning disable CS8605
 #pragma warning disable CS8618
 
@@ -44,6 +45,7 @@ namespace TweaksAndFixes
         internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         internal static readonly string _FlagFile = "flags.csv";
         internal static readonly string _SpriteFile = "sprites.csv";
+        internal static readonly string _PredefinedDesignsFile = "predefinedDesigns.bin";
 
         public enum OverrideMapOptions
         {

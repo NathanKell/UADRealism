@@ -12,6 +12,7 @@ using Il2Cpp;
 using TweaksAndFixes;
 
 #pragma warning disable CS8600
+#pragma warning disable CS8604
 
 namespace TweaksAndFixes
 {
