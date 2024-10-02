@@ -159,77 +159,77 @@ namespace TweaksAndFixes
                 }
             }
 
-            string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
+            //string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
 
-            var bytes = File.ReadAllBytes(path);
-            if (bytes == null)
-                Melon<TweaksAndFixes>.Logger.Msg("null bytes");
-            var store = Util.DeserializeObjectByte<CampaignDesigns.Store>(bytes);
-            if (store == null)
-                Melon<TweaksAndFixes>.Logger.Msg("Null store");
-            else
-            {
-                Melon<TweaksAndFixes>.Logger.Msg("got store");
-                bool isValid = true;
-                int dCount = 0;
-                if (store.shipsPerYear == null)
-                {
-                    isValid = false;
-                    Melon<TweaksAndFixes>.Logger.Error("spy");
-                }
-                else
-                {
-                    Melon<TweaksAndFixes>.Logger.Msg("got spy");
-                    foreach (var spy in store.shipsPerYear)
-                    {
-                        if (spy.Value == null)
-                        {
-                            isValid = false;
-                            Melon<TweaksAndFixes>.Logger.Msg("spy val null, but key " + spy.Key);
-                        }
-                        else if (spy.Value.shipsPerPlayer == null)
-                        {
-                            isValid = false;
-                            Melon<TweaksAndFixes>.Logger.Error(spy.Key + ": spp");
-                        }
-                        else
-                        {
-                            Melon<TweaksAndFixes>.Logger.Msg("got spp");
-                            foreach (var spp in spy.Value.shipsPerPlayer)
-                            {
-                                if (spp.Value == null)
-                                {
-                                    isValid = false;
-                                    Melon<TweaksAndFixes>.Logger.Error("spp value null, but key " + spp.Key);
-                                }
-                                else if (spp.Value.shipsPerType == null)
-                                {
-                                    isValid = false;
-                                    Melon<TweaksAndFixes>.Logger.Error(spp.Key + ": spt");
-                                }
-                                else
-                                {
-                                    Melon<TweaksAndFixes>.Logger.Msg("got spt");
-                                    foreach (var spt in spp.Value.shipsPerType)
-                                    {
-                                        if (spt.Value == null)
-                                        {
-                                            isValid = false;
-                                            Melon<TweaksAndFixes>.Logger.Error(spt.Key + ": spt");
-                                        }
-                                        else
-                                        {
-                                            dCount += spt.Value.Count;
-                                            Melon<TweaksAndFixes>.Logger.Msg("got list");
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Melon<TweaksAndFixes>.Logger.Msg($"valid? {isValid} : {dCount}");
-            }
+            //var bytes = File.ReadAllBytes(path);
+            //if (bytes == null)
+            //    Melon<TweaksAndFixes>.Logger.Msg("null bytes");
+            //var store = Util.DeserializeObjectByte<CampaignDesigns.Store>(bytes);
+            //if (store == null)
+            //    Melon<TweaksAndFixes>.Logger.Msg("Null store");
+            //else
+            //{
+            //    Melon<TweaksAndFixes>.Logger.Msg("got store");
+            //    bool isValid = true;
+            //    int dCount = 0;
+            //    if (store.shipsPerYear == null)
+            //    {
+            //        isValid = false;
+            //        Melon<TweaksAndFixes>.Logger.Error("spy");
+            //    }
+            //    else
+            //    {
+            //        Melon<TweaksAndFixes>.Logger.Msg("got spy");
+            //        foreach (var spy in store.shipsPerYear)
+            //        {
+            //            if (spy.Value == null)
+            //            {
+            //                isValid = false;
+            //                Melon<TweaksAndFixes>.Logger.Msg("spy val null, but key " + spy.Key);
+            //            }
+            //            else if (spy.Value.shipsPerPlayer == null)
+            //            {
+            //                isValid = false;
+            //                Melon<TweaksAndFixes>.Logger.Error(spy.Key + ": spp");
+            //            }
+            //            else
+            //            {
+            //                Melon<TweaksAndFixes>.Logger.Msg("got spp");
+            //                foreach (var spp in spy.Value.shipsPerPlayer)
+            //                {
+            //                    if (spp.Value == null)
+            //                    {
+            //                        isValid = false;
+            //                        Melon<TweaksAndFixes>.Logger.Error("spp value null, but key " + spp.Key);
+            //                    }
+            //                    else if (spp.Value.shipsPerType == null)
+            //                    {
+            //                        isValid = false;
+            //                        Melon<TweaksAndFixes>.Logger.Error(spp.Key + ": spt");
+            //                    }
+            //                    else
+            //                    {
+            //                        Melon<TweaksAndFixes>.Logger.Msg("got spt");
+            //                        foreach (var spt in spp.Value.shipsPerType)
+            //                        {
+            //                            if (spt.Value == null)
+            //                            {
+            //                                isValid = false;
+            //                                Melon<TweaksAndFixes>.Logger.Error(spt.Key + ": spt");
+            //                            }
+            //                            else
+            //                            {
+            //                                dCount += spt.Value.Count;
+            //                                Melon<TweaksAndFixes>.Logger.Msg("got list");
+            //                            }
+            //                        }
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+            //    Melon<TweaksAndFixes>.Logger.Msg($"valid? {isValid} : {dCount}");
+            //}
 
             //foreach (var f in typeof(Part).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic))
             //{

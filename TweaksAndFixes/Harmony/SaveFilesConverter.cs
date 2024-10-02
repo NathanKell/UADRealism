@@ -74,113 +74,77 @@ namespace TweaksAndFixes
         {
             int count = 0;
 
-            var predefs = new CampaignDesigns.Store();
-            predefs.year = 0;
             if (G.GameData.sharedDesignsPerNation == null || G.GameData.sharedDesignsPerNation.Count == 0)
                 G.GameData.LoadSharedDesigns();
 
-            Dictionary<int, Dictionary<string, Dictionary<string, List<Ship.Store>>>> predefBase = new Dictionary<int, Dictionary<string, Dictionary<string, List<Ship.Store>>>>();
             int sCount = 0;
+
+            // For some very strange reason, we can't create the KVPs
+            // in the store directly. So we make a real object and
+            // add ships to it, then call ToStore.
+            var cd = new CampaignDesigns();
+
             foreach (var kvp in G.GameData.sharedDesignsPerNation)
             {
                 foreach (var tuple in kvp.Value)
                 {
                     var ship = tuple.Item1;
-
-                    predefBase.ValueOrNew(ship.YearCreated).ValueOrNew(kvp.Key).ValueOrNew(ship.shipType).Add(ship);
+                    cd.AddShip(ship);
                     ++sCount;
                 }
             }
-            //Melon<TweaksAndFixes>.Logger.Msg($"Seen {sCount} ships");
-
-            predefs.shipsPerYear = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.KeyValuePair<int, ShipsPerYear.Store>>(predefBase.Count);
-            foreach (var spyB in predefBase)
-            {
-                var spy = new ShipsPerYear.Store();
-                spy.year = 0; // stock uses 0, not the actual year
-                spy.shipsPerPlayer = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.KeyValuePair<string, ShipsPerPlayer.Store>>(spyB.Value.Count);
-                foreach (var sppB in spyB.Value)
-                {
-                    var spp = new ShipsPerPlayer.Store();
-                    spp.shipsPerType = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.KeyValuePair<string, Il2CppSystem.Collections.Generic.List<Ship.Store>>>(sppB.Value.Count);
-                    foreach (var sptB in sppB.Value)
-                    {
-                        var list = new Il2CppSystem.Collections.Generic.List<Ship.Store>(sptB.Value.Count);
-                        foreach (var s in sptB.Value)
-                            list.Add(s);
-                        int tC = spp.shipsPerType.Count;
-                        spp.shipsPerType.Add(new Il2CppSystem.Collections.Generic.KeyValuePair<string, Il2CppSystem.Collections.Generic.List<Ship.Store>>(sptB.Key, list));
-                        spp.shipsPerType[tC].key = sptB.Key;
-                        spp.shipsPerType[tC].value = list;
-                    }
-                    int pC = spy.shipsPerPlayer.Count;
-                    spy.shipsPerPlayer.Add(new Il2CppSystem.Collections.Generic.KeyValuePair<string, ShipsPerPlayer.Store>(sppB.Key, spp));
-                    spy.shipsPerPlayer[pC].key = sppB.Key;
-                    spy.shipsPerPlayer[pC].value = spp;
-                }
-                int yC = predefs.shipsPerYear.Count;
-                predefs.shipsPerYear.Add(new Il2CppSystem.Collections.Generic.KeyValuePair<int, ShipsPerYear.Store>(spyB.Key, spy));
-                predefs.shipsPerYear[yC].key = spyB.Key;
-                predefs.shipsPerYear[yC].value = spy;
-                Debug.Log($"Null? {(predefs.shipsPerYear[predefs.shipsPerYear.Count - 1] == null)} with key {predefs.shipsPerYear[predefs.shipsPerYear.Count - 1].Key} and val null? {(predefs.shipsPerYear[predefs.shipsPerYear.Count-1].Value == null)}. Desired: {spyB.Key} / {spy == null}");
-            }
-
+            var predefs = cd.ToStore();
             if (predefs == null)
-                Melon<TweaksAndFixes>.Logger.Msg("Null store");
+                Melon<TweaksAndFixes>.Logger.Error("Could not convert CampaignDesigns to store");
             else
             {
-                Melon<TweaksAndFixes>.Logger.Msg("got store");
                 bool isValid = true;
                 int dCount = 0;
                 if (predefs.shipsPerYear == null)
                 {
                     isValid = false;
-                    Melon<TweaksAndFixes>.Logger.Error("spy");
+                    Melon<TweaksAndFixes>.Logger.Error("Store has null ShipsPerYear");
                 }
                 else
                 {
-                    Melon<TweaksAndFixes>.Logger.Msg("got spy");
                     foreach (var spy in predefs.shipsPerYear)
                     {
                         if (spy.Value == null)
                         {
                             isValid = false;
-                            Melon<TweaksAndFixes>.Logger.Msg("spy val null, but key " + spy.Key);
+                            Melon<TweaksAndFixes>.Logger.Msg("ShipsPerYear has null spp, key" + spy.Key);
                         }
                         else if (spy.Value.shipsPerPlayer == null)
                         {
                             isValid = false;
-                            Melon<TweaksAndFixes>.Logger.Error(spy.Key + ": spp");
+                            Melon<TweaksAndFixes>.Logger.Error(spy.Key + ": null shipsPerPlayer");
                         }
                         else
                         {
-                            Melon<TweaksAndFixes>.Logger.Msg("got spp");
                             foreach (var spp in spy.Value.shipsPerPlayer)
                             {
                                 if (spp.Value == null)
                                 {
                                     isValid = false;
-                                    Melon<TweaksAndFixes>.Logger.Error("spp value null, but key " + spp.Key);
+                                    Melon<TweaksAndFixes>.Logger.Error("shipsPerPlayer has null spt, but key " + spp.Key);
                                 }
                                 else if (spp.Value.shipsPerType == null)
                                 {
                                     isValid = false;
-                                    Melon<TweaksAndFixes>.Logger.Error(spp.Key + ": spt");
+                                    Melon<TweaksAndFixes>.Logger.Error(spp.Key + ": null shipsPerType");
                                 }
                                 else
                                 {
-                                    Melon<TweaksAndFixes>.Logger.Msg("got spt");
                                     foreach (var spt in spp.Value.shipsPerType)
                                     {
                                         if (spt.Value == null)
                                         {
                                             isValid = false;
-                                            Melon<TweaksAndFixes>.Logger.Error(spt.Key + ": spt");
+                                            Melon<TweaksAndFixes>.Logger.Error(spt.Key + ": null shiplist");
                                         }
                                         else
                                         {
                                             dCount += spt.Value.Count;
-                                            Melon<TweaksAndFixes>.Logger.Msg("got list");
                                         }
                                     }
                                 }
@@ -188,7 +152,12 @@ namespace TweaksAndFixes
                         }
                     }
                 }
-                Melon<TweaksAndFixes>.Logger.Msg($"valid? {isValid} : {dCount}");
+                if (!isValid || sCount != dCount)
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Error generating predefined designs. Valid? {isValid}, input count {sCount}, output count {dCount}");
+                    return 0;
+                }
+                count = dCount;
             }
 
             var bytes = Util.SerializeObjectByte<CampaignDesigns.Store>(predefs);
