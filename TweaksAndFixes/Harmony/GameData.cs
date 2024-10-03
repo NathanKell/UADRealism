@@ -100,8 +100,9 @@ namespace TweaksAndFixes
             yield return new WaitForEndOfFrame();
 
             //var textAsset = Resources.Load<TextAsset>("packedShips");
-            //var packedShips = Util.DeserializeObjectByte<CampaignDesigns.Store>(textAsset.bytes);
-            //string logstr = $"packedShips data, year {packedShips.year}";
+            //var packedShipsStore = Util.DeserializeObjectByte<CampaignDesigns.Store>(textAsset.bytes);
+            //var packedShips = packedShipsStore; //CampaignDesigns.FromStore(packedShipsStore);
+            //string logstr = $"packedShips data";
             //foreach (var spy in packedShips.shipsPerYear)
             //{
             //    logstr += $"\n{spy.Key}: {spy.Value.shipsPerPlayer.Count} players";

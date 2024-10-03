@@ -231,6 +231,23 @@ namespace TweaksAndFixes
                     }
                     else
                     {
+                        foreach (var p in G.GameData.playersMajor.Values)
+                        {
+                            bool missing = true;
+                            foreach (var spp2 in spy.Value.shipsPerPlayer)
+                            {
+                                if (spp2.Key == p.name)
+                                {
+                                    missing = false;
+                                    break;
+                                }
+                            }
+                            if (missing)
+                            {
+                                isValid = false;
+                                Melon<TweaksAndFixes>.Logger.Error($"preamdeDesigns: Year {spy.Key} lacks nation {p.name}");
+                            }
+                        }
                         foreach (var spp in spy.Value.shipsPerPlayer)
                         {
                             if (spp.Value.shipsPerType == null)
