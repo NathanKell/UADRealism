@@ -23,19 +23,29 @@ namespace TweaksAndFixes
             return true;
         }
 
-        //[HarmonyPatch(nameof(Player.InitCrewPool))]
-        //[HarmonyPostfix]
-        //internal static void Postfix_InitCrewPool(Player __instance)
-        //{
-        //    Melon<TweaksAndFixes>.Logger.Msg($"Player {__instance.data.name}: Init crew pool. Pop {__instance.TotalPopulation:N0}, crew {__instance.crewPool}");
-        //}
+        // These are done as postfix so that TotalPopulation gets set properly
+        [HarmonyPatch(nameof(Player.InitCrewPool))]
+        [HarmonyPostfix]
+        internal static void Postfix_InitCrewPool(Player __instance)
+        {
+            if (Config.UseColonyInCrewPool)
+                PlayerM.InitCrewPool(__instance);
+        }
 
-        //[HarmonyPatch(nameof(Player.CrewPoolIncome))]
-        //[HarmonyPostfix]
-        //internal static void Postfix_CrewPoolIncome(Player __instance, int __result)
-        //{
-        //    Melon<TweaksAndFixes>.Logger.Msg($"Player {__instance.data.name}: Crew pool income reports {__result}");
-        //    Melon<TweaksAndFixes>.Logger.Msg($"**** Our calc is {PlayerM.CrewPoolincome(__instance)}");
-        //}
+        [HarmonyPatch(nameof(Player.GetBaseCrewPool))]
+        [HarmonyPostfix]
+        internal static void Postfix_GetBaseCrewPool(Player __instance, ref int __result)
+        {
+            if (Config.UseColonyInCrewPool)
+                __result = PlayerM.GetBaseCrewPool(__instance);
+        }
+
+        [HarmonyPatch(nameof(Player.CrewPoolIncome))]
+        [HarmonyPostfix]
+        internal static void Postfix_CrewPoolIncome(Player __instance, ref int __result)
+        {
+            if (Config.UseColonyInCrewPool)
+                __result = PlayerM.CrewPoolincome(__instance);
+        }
     }
 }

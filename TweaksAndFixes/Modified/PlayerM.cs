@@ -41,22 +41,37 @@ namespace TweaksAndFixes
             }
         }
 
+        private static float PopWithColonies(Player _this)
+        {
+            float ratio = Config.Param("taf_crew_pool_colony_pop_ratio", 0f);
+
+            float pop = 0f;
+            var provs = _this.provinces;
+            foreach (var p in provs)
+                pop += p.GetPopulation(false) * ((p.Type == "home" && (p.ControllerPlayer == _this || p.InitialController == _this.data)) ? 1f : ratio);
+            return pop;
+        }
+
+        public static void InitCrewPool(Player _this)
+        {
+            int pool = GetBaseCrewPool(_this);
+            _this.crewPool = pool;
+            _this.baseCrewPool = pool;
+        }
+
+        public static int GetBaseCrewPool(Player _this)
+        {
+            var modifier = MonoBehaviourExt.Param("crew_pool_modifier", 0.01f);
+            return (int)(PopWithColonies(_this) * modifier);
+        }
+
         public static int CrewPoolincome(Player _this)
         {
-            var provs = _this.homeProvinces;
-            float homePop = 0;
-            foreach (var p in provs)
-            {
-                float pop = p.GetPopulation();
-                if (pop == 0)
-                    Melon<TweaksAndFixes>.Logger.Msg($"Province {p.Id} has 0 pop!");
-                homePop += pop;
-            }
+            float pop = PopWithColonies(_this);
             float mult = MonoBehaviourExt.Param("crew_pool_income_modifier_max", 0.005f);
-            float existingPoolMult = Mathf.Lerp(2f, 0.13f, _this.crewPool / 90000);
-            float portionOfHomePop = Mathf.Clamp01(_this.crewPool * 25000 / homePop);
-            Melon<TweaksAndFixes>.Logger.Msg($"Player {_this.data.name} crew pool {_this.crewPool}, pop {_this.TotalPopulation:N0} (we say {homePop:N0}), budget {_this.trainingBudget:N2}, existingMult {existingPoolMult:F3}, portion {portionOfHomePop:F3}. AI would be {(CampaignController.Instance.AiIncomeMultiplier * 1.15f):F2}x");
-            float val = Mathf.Lerp(1f, 0.1f, portionOfHomePop) * _this.trainingBudget * homePop * mult * existingPoolMult;
+            float existingPoolMult = Mathf.Lerp(2f, 0.13f, _this.crewPool / 90000f); // stock appears to do integer division here, which is probably a typo.
+            float popPortion = Mathf.Clamp01(_this.crewPool * 25000f / pop);
+            float val = Mathf.Lerp(1f, 0.1f, popPortion) * _this.trainingBudget * pop * mult * existingPoolMult;
             if (_this.isAi)
                 val *= CampaignController.Instance.AiIncomeMultiplier * 1.15f;
 

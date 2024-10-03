@@ -63,6 +63,8 @@ namespace TweaksAndFixes
         public static bool ShipGenTweaks = true;
         [ConfigParse("Alliance Behavior Tweaks", "alliance_changes")]
         public static bool AllianceTweaks = false;
+        [ConfigParse("Use Non-Home Population for Crew", "crew_pool_colony_pop_ratio")]
+        public static bool UseColonyInCrewPool = false;
 
         public static void LoadConfig()
         {
