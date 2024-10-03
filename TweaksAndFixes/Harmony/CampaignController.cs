@@ -13,8 +13,6 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(CampaignController))]
     internal class Patch_CampaignController
     {
-        internal static bool _IsInManageFleet = false;
-
         [HarmonyPatch(nameof(CampaignController.GetSharedDesign))]
         [HarmonyPrefix]
         internal static bool Prefix_GetSharedDesign(CampaignController __instance, Player player, ShipType shipType, int year, bool checkTech, bool isEarlySavedShip, ref Ship __result)
@@ -190,33 +188,16 @@ namespace TweaksAndFixes
             _PassThroughAdjustAttitude = false;
         }
 
-        [HarmonyPatch(nameof(CampaignController.AiManageFleet))]
+        [HarmonyPatch(nameof(CampaignController.ScrapOldAiShips))]
         [HarmonyPrefix]
-        internal static void Prefix_AiManageFleet(CampaignController __instance, Player player, out float __state)
+        internal static bool Prefix_ScrapOldAiShips(CampaignController __instance, Player player)
         {
-            _IsInManageFleet = true;
-            if (Config.ScrappingChange && !player.isDisabled && player.isAi)
+            if (Config.ScrappingChange)
             {
                 CampaignControllerM.HandleScrapping(__instance, player);
-                // we need to disable stock scrapping
-                __state = Config.Param("min_fleet_tonnage_for_scrap", 1f);
-                G.GameData.parms["min_fleet_tonnage_for_scrap"] = float.MaxValue;
+                return false;
             }
-            else
-            {
-                __state = 0f;
-            }
-        }
-
-        [HarmonyPatch(nameof(CampaignController.AiManageFleet))]
-        [HarmonyPostfix]
-        internal static void Postfix_AiManageFleet(CampaignController __instance, Player player, float __state)
-        {
-            _IsInManageFleet = false;
-            if (Config.ScrappingChange && !player.isDisabled && player.isAi)
-            {
-                G.GameData.parms["min_fleet_tonnage_for_scrap"] = __state;
-            }
+            return true;
         }
 
         [HarmonyPatch(nameof(CampaignController.CheckPredefinedDesigns))]

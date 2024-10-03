@@ -27,6 +27,9 @@ namespace TweaksAndFixes
 
         public static void HandleScrapping(CampaignController _this, Player player)
         {
+            if (!player.isAi)
+                return;
+
             Melon<TweaksAndFixes>.Logger.Msg($"Starting scrapping for player {player.data.name}");
             List<ShipScrapInfo> scrapCandidates = new List<ShipScrapInfo>();
 
