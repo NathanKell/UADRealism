@@ -20,8 +20,10 @@ namespace TweaksAndFixes
         {
             const string jsonName = "SharedToJSON";
             const string predefName = "SharedToPredefineds";
+            const string predefToName = "PredefinedsToShared";
             var upperButtons = __instance.DeleteAllShared.transform.parent.gameObject;
-
+            var hlg = upperButtons.GetComponent<HorizontalLayoutGroup>();
+            hlg.spacing = 40;
             // For some reason the gameobjects stick around but the text/listeners don't, during scene transitions
             Button? sharedToJson = upperButtons.GetChild(jsonName, true)?.GetComponent<Button>();
             if (sharedToJson == null)
@@ -29,6 +31,9 @@ namespace TweaksAndFixes
             Button? sharedToPredefs = upperButtons.GetChild(predefName, true)?.GetComponent<Button>();
             if (sharedToPredefs == null)
                 sharedToPredefs = GameObject.Instantiate(__instance.DeleteAllCampaign, upperButtons.transform); ;
+            Button? predefsToShared = upperButtons.GetChild(predefToName, true)?.GetComponent<Button>();
+            if (predefsToShared == null)
+                predefsToShared = GameObject.Instantiate(__instance.DeleteAllCampaign, upperButtons.transform);
 
             sharedToJson.name = jsonName;
             sharedToJson.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Designs to JSON";
@@ -45,7 +50,16 @@ namespace TweaksAndFixes
             sharedToPredefs.onClick.AddListener(new System.Action(() =>
             {
                 int count = DesignsToPredefs();
-                MessageBoxUI.Show("Saved Predefined Designs", $"Saved {count} Shared Design ships to {Config._PredefinedDesignsFile}");
+                MessageBoxUI.Show("Exported Predefined Designs", $"Exported {count} Shared Design ships to {Config._PredefinedDesignsFile}");
+            }));
+
+            predefsToShared.name = predefName;
+            predefsToShared.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Predefined to Designs";
+            predefsToShared.onClick.RemoveAllListeners();
+            predefsToShared.onClick.AddListener(new System.Action(() =>
+            {
+                int count = PredefsToDesigns();
+                MessageBoxUI.Show("Saved Predefined Designs", $"Saved {count} predefined ships to Shared Designs");
             }));
         }
 
@@ -68,6 +82,75 @@ namespace TweaksAndFixes
             }
 
             return count;
+        }
+
+        private static int PredefsToDesigns()
+        {
+            var prefix = Storage.designsPrefix;
+            if (!Directory.Exists(prefix))
+                return 0;
+
+            bool useStock = false;
+            if (!CampaignControllerM.TryLoadOverridePredefs(out var predefs, out int dCount) || predefs == null)
+            {
+                useStock = true;
+                var textAsset = Resources.Load<TextAsset>("packedShips");
+                predefs = Util.DeserializeObjectByte<CampaignDesigns.Store>(textAsset.bytes);
+            }
+
+
+            int sCount = 0;
+
+            G.GameData.LoadSharedDesigns();
+
+            foreach (var spy in predefs.shipsPerYear)
+            {
+                foreach (var spp in spy.Value.shipsPerPlayer)
+                {
+                    foreach (var spt in spp.Value.shipsPerType)
+                    {
+                        foreach (var s in spt.Value)
+                        {
+                            if (G.GameData.sharedDesignsPerNation != null)
+                            {
+                                foreach (var kvp in G.GameData.sharedDesignsPerNation)
+                                {
+                                    for (int i = kvp.Value.Count; i-- > 0;)
+                                    {
+                                        var des = kvp.Value[i].Item1;
+                                        if (des.id == s.id)
+                                        {
+                                            // The game's way of deleting these is bugged, we do it ourselves
+                                            string baseName = $"{des.YearCreated} {des.playerName} {des.vesselName}";
+                                            string path = Path.Combine(prefix, baseName + ".bindesign");
+                                            Storage.EraseFilePath(path);
+                                            path = Path.Combine(prefix, baseName + ".design");
+                                            Storage.EraseFilePath(path);
+
+                                            kvp.Value.RemoveAt(i);
+
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            ++sCount;
+                            if (useStock)
+                                s.vesselName += " " + sCount; // stock reuses names, which would clobber files
+                            string pName = s.playerName;
+                            if (G.GameData.players.TryGetValue(s.playerName, out var data))
+                                pName = Player.GetNameUI(null, data, s.YearCreated);
+                            string fName = $"{s.YearCreated} {pName} {s.vesselName}.bindesign";
+                            string fPath = Path.Combine(prefix, fName);
+                            Storage.SaveSharedDesignShipByte(fPath, Util.SerializeObjectByte(s));
+                        }
+                    }
+                }
+            }
+            if (sCount > 0)
+                G.GameData.LoadSharedDesigns();
+
+            return sCount;
         }
 
         private static int DesignsToPredefs()

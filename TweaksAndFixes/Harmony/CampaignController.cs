@@ -207,80 +207,17 @@ namespace TweaksAndFixes
             if (__instance._currentDesigns != null)
                 return;
 
-            string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
-            if (!File.Exists(path))
-                return;
-
-            var bytes = File.ReadAllBytes(path);
-            var store = Util.DeserializeObjectByte<CampaignDesigns.Store>(bytes);
-            int dCount = 0;
-            bool isValid = true;
-            if (store.shipsPerYear == null)
+            if (CampaignControllerM.TryLoadOverridePredefs(out var store, out int dCount))
             {
-                isValid = false;
-                Debug.LogError("spy");
-            }
-            else
-            {
-                foreach (var spy in store.shipsPerYear)
+                if (store != null)
                 {
-                    if (spy.Value.shipsPerPlayer == null)
-                    {
-                        isValid = false;
-                        Debug.LogError(spy.Key + ": spp");
-                    }
-                    else
-                    {
-                        foreach (var p in G.GameData.playersMajor.Values)
-                        {
-                            bool missing = true;
-                            foreach (var spp2 in spy.Value.shipsPerPlayer)
-                            {
-                                if (spp2.Key == p.name)
-                                {
-                                    missing = false;
-                                    break;
-                                }
-                            }
-                            if (missing)
-                            {
-                                isValid = false;
-                                Melon<TweaksAndFixes>.Logger.Error($"preamdeDesigns: Year {spy.Key} lacks nation {p.name}");
-                            }
-                        }
-                        foreach (var spp in spy.Value.shipsPerPlayer)
-                        {
-                            if (spp.Value.shipsPerType == null)
-                            {
-                                isValid = false;
-                                Debug.LogError(spp.Key + ": spp");
-                            }
-                            else
-                            {
-                                foreach (var spt in spp.Value.shipsPerType)
-                                {
-                                    if (spt.Value == null)
-                                    {
-                                        isValid = false;
-                                        Debug.LogError(spt.Key + ": spt");
-                                    }
-                                    else
-                                        dCount += spt.Value.Count;
-                                }
-                            }
-                        }
-                    }
+                    __instance._currentDesigns = CampaignDesigns.FromStore(store);
+                    Melon<TweaksAndFixes>.Logger.Msg($"Overrode predefined designs by loading {dCount} ships from {Config._PredefinedDesignsFile}");
                 }
             }
-
-            if (isValid)
-            {
-                __instance._currentDesigns = CampaignDesigns.FromStore(store);
-                Melon<TweaksAndFixes>.Logger.Msg($"Overrode predefined designs by loading {dCount} ships from {Config._PredefinedDesignsFile}");
-            }
             else
             {
-                Melon<TweaksAndFixes>.Logger.Error($"Tried to override predefined designs ");
+                Melon<TweaksAndFixes>.Logger.Error($"Tried to override predefined designs but failed to load {Config._PredefinedDesignsFile} correctly.");
             }
         }
     }
