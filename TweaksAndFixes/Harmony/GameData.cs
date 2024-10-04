@@ -17,6 +17,12 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(GameData.LoadVersionAndData))]
         internal static void Postfix_LoadVersionAndData(GameData __instance)
         {
+            if (!Directory.Exists(Config._BasePath))
+            {
+                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + Config._BasePath + ". Creating.");
+                Directory.CreateDirectory(Config._BasePath);
+            }
+
             GameDataM.LoadData(__instance);
             Patch_Ui.UpdateVersionString(G.ui);
         }        
@@ -28,6 +34,12 @@ namespace TweaksAndFixes
             Patch_PlayerData.PatchPlayerMaterials();
             //Serializer.CSV.TestNative();
 
+            // We have to load Config (from params) before postprocess runs
+            // because some other systems require Config to be live. This
+            Config.LoadConfig();
+            // TODO: Add a multicast delegate to run post-load config
+
+            Melon<TweaksAndFixes>.Logger.Msg("************************************************** Loading TAF data:");
             GradeExtensions.LoadData();
             GenArmorData.LoadData();
         }
@@ -63,7 +75,7 @@ namespace TweaksAndFixes
                     rp.paramx["and"] = lst;
                 }
                 lst.Add(newVal);
-                Melon<TweaksAndFixes>.Logger.Msg($"Fixing Randpart {rp.name} with param {rp.param}, invalid key {key}. New value {newVal}");
+                //Melon<TweaksAndFixes>.Logger.Msg($"Fixing Randpart {rp.name} with param {rp.param}, invalid key {key}. New value {newVal}");
             }
             _FixKeys.Clear();
         }
@@ -141,24 +153,10 @@ namespace TweaksAndFixes
             //File.WriteAllText(Path.Combine(Config._BasePath, "packedShips.json"), json);
 
             Database.FillDatabase();
-            Config.LoadConfig();
+
             Melon<TweaksAndFixes>.Logger.Msg("**************************************** Loaded database and config");
             if (Config.Param("taf_hot_reload", 0f) > 0f)
                 GameDataReloader.Create();
-
-            if (!Directory.Exists(Config._BasePath))
-            {
-                Melon<TweaksAndFixes>.Logger.Error("Failed to find Mods directory: " + Config._BasePath + ". Creating");
-                Directory.CreateDirectory(Config._BasePath);
-            }
-            else
-            {
-                string filePath = Path.Combine(Config._BasePath, Config._FlagFile);
-                if (!File.Exists(filePath))
-                {
-                    Melon<TweaksAndFixes>.Logger.Warning("Failed to find Flags file " + filePath);
-                }
-            }
 
             //string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
 

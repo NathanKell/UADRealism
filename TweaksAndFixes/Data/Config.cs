@@ -45,6 +45,7 @@ namespace TweaksAndFixes
         internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         internal static readonly string _FlagFile = "flags.csv";
         internal static readonly string _SpriteFile = "sprites.csv";
+        internal static readonly string _GenArmorDataFile = "genarmordata.csv";
         internal static readonly string _PredefinedDesignsFile = "predefinedDesigns.bin";
 
         public enum OverrideMapOptions
@@ -65,6 +66,8 @@ namespace TweaksAndFixes
         public static bool AllianceTweaks = false;
         [ConfigParse("Use Non-Home Population for Crew", "crew_pool_colony_pop_ratio")]
         public static bool UseColonyInCrewPool = false;
+        [ConfigParse("Use Improved Armor Generation Defaults", "genarmor_use_defaults")]
+        public static bool UseGenArmorDefaults = false;
 
         public static void LoadConfig()
         {

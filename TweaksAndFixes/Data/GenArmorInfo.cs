@@ -9,8 +9,6 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
-using Il2CppInterop.Runtime.Attributes;
-using Il2CppSystem.Runtime.Remoting.Messaging;
 
 #pragma warning disable CS0649
 #pragma warning disable CS8600
@@ -81,16 +79,24 @@ namespace TweaksAndFixes
 
         public static void LoadData()
         {
-            string filename = "genarmordata.csv";
-            string path = Path.Combine(Config._BasePath, filename);
-            if (!File.Exists(path))
+            string path = Path.Combine(Config._BasePath, Config._GenArmorDataFile);
+            string armorText;
+            if (File.Exists(path))
             {
-                Melon<TweaksAndFixes>.Logger.Warning($"Skipped loading armor generation rules, `{filename}` note found.");
-                return;
+                armorText = File.ReadAllText(path);
+            }
+            else
+            {
+                if (!Config.UseGenArmorDefaults)
+                {
+                    Melon<TweaksAndFixes>.Logger.Warning($"Skipped loading armor generation rules, `{Config._GenArmorDataFile}` not found.");
+                    return;
+                }
+                armorText = Properties.Resources.genArmor;
             }
 
             List<GenArmorData> list = new List<GenArmorData>();
-            Serializer.CSV.Read<List<GenArmorData>, GenArmorData>(list, path, true);
+            Serializer.CSV.Read<List<GenArmorData>, GenArmorData>(armorText, list, true);
             foreach (var lst in _Data.Values)
                 lst.Sort((a, b) => a.year.CompareTo(b.year));
 
