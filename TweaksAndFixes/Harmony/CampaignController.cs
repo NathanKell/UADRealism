@@ -218,6 +218,12 @@ namespace TweaksAndFixes
                 {
                     Melon<TweaksAndFixes>.Logger.Error($"Tried to override predefined designs but failed to load {Config._PredefinedDesignsFile} correctly.");
                 }
+                if (store == null && Config.DontClobberTechForPredefs)
+                {
+                    var textAsset = Resources.Load<TextAsset>("packedShips");
+                    store = Util.DeserializeObjectByte<CampaignDesigns.Store>(textAsset.bytes);
+                    __instance._currentDesigns = CampaignDesigns.FromStore(store);
+                }
             }
 
             if (Config.DontClobberTechForPredefs)
@@ -225,10 +231,12 @@ namespace TweaksAndFixes
                 // we need to force the game not to check techs
                 int startYear;
                 int year;
+                Melon<TweaksAndFixes>.Logger.Msg("check pw: " + prewarm);
                 if (prewarm)
                     startYear = __instance.StartYear;
                 else
                     startYear = __instance.CurrentDate.AsDate().Year;
+                Melon<TweaksAndFixes>.Logger.Msg("checked, get year");
                 __instance._currentDesigns.GetNearestYear(startYear, out year);
                 __instance.initedForYear = year;
             }

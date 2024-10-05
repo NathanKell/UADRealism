@@ -51,8 +51,8 @@ namespace TweaksAndFixes
                 case LogType.Warning: Melon<TweaksAndFixes>.Logger.Warning(logStr); break;
                 case LogType.Error:
                 case LogType.Exception:
-                    //Melon<TweaksAndFixes>.Logger.Error($"[Unity]: {condition}\n{stackTrace}");
-                    Melon<TweaksAndFixes>.Logger.Error(logStr);
+                    Melon<TweaksAndFixes>.Logger.Error($"[Unity]: {condition}\n{stackTrace}");
+                    //Melon<TweaksAndFixes>.Logger.Error(logStr);
                     break;
             }
         }
