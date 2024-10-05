@@ -4,6 +4,7 @@ using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using Il2Cpp;
+using UnityEngine.UI;
 
 namespace TweaksAndFixes
 {
@@ -37,6 +38,45 @@ namespace TweaksAndFixes
             }
 
             return true;
+        }
+
+
+        internal static GameObject? _Batcher = null;
+        [HarmonyPatch(nameof(GameManager.EnterMainMenu))]
+        [HarmonyPostfix]
+        internal static void Postfix_EnterMainMenu()
+        {
+            //if (_Batcher != null)
+            //{
+            //    GameObject.DestroyImmediate(_Batcher);
+            //    _Batcher = null;
+            //}
+
+            //_Batcher = new GameObject("BatchShipGenerator");
+            //var rootRect = _Batcher.AddComponent<RectTransform>();
+            //var rootVLG = _Batcher.AddComponent<VerticalLayoutGroup>();
+            //var bsg = _Batcher.AddComponent<BatchShipGenerator>();
+            
+            /*
+             * public Button yearsButton { get; set; }
+        public Toggle yearTemplate { get; set; }
+        public Button closeYearsPanel { get; set; }
+        public Transform yearToggleParent { get; set; }
+        public GameObject yearsPanel { get; set; }
+        public Button startButton { get; set; }
+        public int startYear { get; set; }
+        public TMP_InputField shipsAmount { get; set; }
+        public TMP_Dropdown shipTypeDropdown { get; set; }
+        public GameObject InitRoot { get; set; }
+        public GameObject UIRoot { get; set; }
+        public GameObject levelMainMenu { get; set; }
+        public int maxYear { get; set; }
+        public List<Toggle> yearsSelected { get; set; }
+        public List<string> info { get; set; }
+        public List<string> errors { get; set; }
+        public TMP_Dropdown nationDropdown { get; set; }
+        public TMP_Text progress { get; set; }
+             */
         }
     }
 

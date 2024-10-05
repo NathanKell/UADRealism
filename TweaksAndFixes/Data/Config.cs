@@ -40,6 +40,10 @@ namespace TweaksAndFixes
         }
 
         public static int MaxGunGrade = 5;
+        // TODO: support extending? Support finding?
+        public static int MaxTorpGrade = 5;
+        public static int MaxTorpBarrels = 5;
+
         public static int StartingYear = 1890;
 
         internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
@@ -56,9 +60,9 @@ namespace TweaksAndFixes
             LogDifferences
         }
 
-        [ConfigParse("New Scrapping behavior", "scrap_enable")]
+        [ConfigParse("New Scrapping Behavior", "scrap_enable")]
         public static bool ScrappingChange = false;
-        [ConfigParse("Ports/Provinces overriding", "override_map")]
+        [ConfigParse("Ports/Provinces Overriding", "override_map")]
         public static OverrideMapOptions OverrideMap = OverrideMapOptions.Disabled;
         [ConfigParse("Ship Autodesign Tweaks", "shipgen_tweaks")]
         public static bool ShipGenTweaks = true;
@@ -68,6 +72,8 @@ namespace TweaksAndFixes
         public static bool UseColonyInCrewPool = false;
         [ConfigParse("Use Improved Armor Generation Defaults", "genarmor_use_defaults")]
         public static bool UseGenArmorDefaults = false;
+        [ConfigParse("Don't Force AI Tech with Predefined Designs", "no_force_tech_with_predefs")]
+        public static bool DontClobberTechForPredefs = false;
 
         public static void LoadConfig()
         {

@@ -24,11 +24,23 @@ namespace TweaksAndFixes
         private static readonly Dictionary<string, HashSet<string>> _ParamToHulls = new Dictionary<string, HashSet<string>>();
         private static readonly Dictionary<string, HashSet<string>> _PartToHulls = new Dictionary<string, HashSet<string>>();
         private static readonly List<string> _AllHulls = new List<string>();
+        private static readonly HashSet<string> _TechRequiredForShip = new HashSet<string>();
+        private static readonly HashSet<string> _TechImprovementForShip = new HashSet<string>();
+        private static readonly HashSet<string> _StartingTechs = new HashSet<string>();
+
+        private static string[] _TorpGradeTechs;
+        private static int[] _TorpGradeYears;
+        private static string[] _TorpTubeTechs;
+        private static int[] _TorpTubeYears;
 
         public static void FillDatabase()
         {
             _GunGradeTechs = new string[21, Config.MaxGunGrade + 1];
             _GunGradeYears = new int[21, Config.MaxGunGrade + 1];
+            _TorpGradeTechs = new string[Config.MaxTorpGrade + 1];
+            _TorpGradeYears = new int[Config.MaxTorpGrade + 1];
+            _TorpTubeTechs = new string[Config.MaxTorpBarrels + 1];
+            _TorpTubeYears = new int[Config.MaxTorpBarrels + 1];
             _PartYears.Clear();
             _PartTechs.Clear();
             _TechParts.Clear();
@@ -46,10 +58,15 @@ namespace TweaksAndFixes
         {
             foreach (var kvpT in G.GameData.technologies)
             {
+                bool isRequired = false;
+                bool isImprovement = false;
                 foreach (var kvpE in kvpT.Value.effects)
                 {
                     switch (kvpE.Key)
                     {
+                        case "start":
+                            _StartingTechs.Add(kvpT.Key);
+                            break;
                         case "unlock":
                             foreach (var effList in kvpE.Value)
                             {
@@ -71,6 +88,7 @@ namespace TweaksAndFixes
                             }
                             break;
                         case "unlockpart":
+                            // TODO: should we care about these as improvement techs?
                             foreach (var effList in kvpE.Value)
                             {
                                 foreach (var v in effList)
@@ -93,6 +111,7 @@ namespace TweaksAndFixes
                             }
                             break;
                         case "gun":
+                            isImprovement = true;
                             foreach (var effList in kvpE.Value)
                             {
                                 if (effList.Count < 2 || !float.TryParse(effList[0], System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowThousands, ModUtils._InvariantCulture, out var calF))
@@ -105,14 +124,78 @@ namespace TweaksAndFixes
                                 _GunGradeYears[cal, grade] = kvpT.Value.year;
                             }
                             break;
+
+                        case "torp_mark":
+                            isImprovement = true;
+                            foreach (var effList in kvpE.Value)
+                            {
+                                if (effList.Count < 1)
+                                    continue;
+                                if (!int.TryParse(effList[0], out var grade))
+                                    continue;
+                                _TorpGradeTechs[grade] = kvpT.Key;
+                                _TorpGradeYears[grade] = kvpT.Value.year;
+                            }
+                            break;
+                        case "torpedo_tubes":
+                            isImprovement = true;
+                            foreach (var effList in kvpE.Value)
+                            {
+                                if (effList.Count < 1)
+                                    continue;
+                                if (!int.TryParse(effList[0], out var tubes))
+                                    continue;
+                                _TorpTubeTechs[tubes] = kvpT.Key;
+                                _TorpTubeYears[tubes] = kvpT.Value.year;
+                            }
+                            break;
+
+                        default:
+                            // if not specifically handled, just check if it's a required tech for a design
+                            switch (kvpE.Key)
+                            {
+                                case "tonnage":
+                                    isImprovement = true;
+                                    break;
+                                case "var":
+                                case "obsolete":
+                                case "max_crew_training":
+                                case "training_efficiency":
+                                case "flagship_bonus":
+                                case "naval_bombardment":
+                                case "power_projection":
+                                case "escort_power":
+                                case "invade_power":
+                                case "minesweeping_tech":
+                                case "minefieldmax":
+                                case "armed_transports":
+                                case "ship_crew_group_limit":
+                                    break;
+                                default:
+                                    if (!kvpE.Key.StartsWith("submarine") && !kvpE.Key.StartsWith("sub_"))
+                                    {
+                                        isImprovement = true;
+                                        isRequired = true;
+                                    }
+                                    break;
+                            }
+                            break;
                     }
                 }
+                
                 if (kvpT.Value.componentx != null)
                 {
+                    isImprovement = true;
                     //Melon<TweaksAndFixes>.Logger.Msg($"Component {kvpT.Value.componentx.name} needs tech {kvpT.key} of year {kvpT.Value.year}");
                     _ComponentTechs[kvpT.Value.componentx.name] = kvpT.Key;
                     _ComponentYears[kvpT.Value.componentx.name] = kvpT.Value.year;
                 }
+                else if (isRequired)
+                    _TechRequiredForShip.Add(kvpT.Key);
+
+                if (isImprovement)
+                    _TechImprovementForShip.Add(kvpT.Key);
+
             }
         }
 
@@ -263,9 +346,9 @@ namespace TweaksAndFixes
             }
         }
 
-        public static int GetYear(PartData data)
+        public static int GetYear(string dataName)
         {
-            if (!_PartYears.TryGetValue(data.name, out var year))
+            if (!_PartYears.TryGetValue(dataName, out var year))
                 return -1;
 
             return year;
@@ -291,18 +374,18 @@ namespace TweaksAndFixes
             return _GunGradeTechs[caliberInch, grade];
         }
 
-        public static bool CanHullMountPart(PartData part, PartData hull)
+        public static bool CanHullMountPart(string partDataName, string hullDataName)
         {
-            if (!_PartToHulls.TryGetValue(part.name, out var hulls))
+            if (!_PartToHulls.TryGetValue(partDataName, out var hulls))
                 return false;
 
-            return hulls.Contains(hull.name);
+            return hulls.Contains(hullDataName);
         }
 
-        public static List<PartData> GetHullsForPart(PartData part)
+        public static List<PartData> GetHullsForPart(string partDataName)
         {
             var lst = new List<PartData>();
-            if (!_PartToHulls.TryGetValue(part.name, out var hulls))
+            if (!_PartToHulls.TryGetValue(partDataName, out var hulls))
                 return lst;
 
             foreach (var h in hulls)
@@ -311,22 +394,82 @@ namespace TweaksAndFixes
             return lst;
         }
 
-        public static HashSet<string> GetHullNamesForPart(PartData part)
+        public static HashSet<string> GetHullNamesForPart(string partDataName)
         {
-            _PartToHulls.TryGetValue(part.name, out var hulls);
+            _PartToHulls.TryGetValue(partDataName, out var hulls);
             return hulls;
         }
 
-        public static List<string> GetPartNamesForTech(TechnologyData tech)
+        public static List<string> GetPartNamesForTech(string techName)
         {
-            _TechParts.TryGetValue(tech.name, out var lst);
+            _TechParts.TryGetValue(techName, out var lst);
             return lst;
         }
 
-        public static string GetPartTech(PartData part)
+        public static string GetPartTech(string partDataName)
         {
-            _PartTechs.TryGetValue(part.name, out var tech);
+            _PartTechs.TryGetValue(partDataName, out var tech);
             return tech == null ? string.Empty : tech;
+        }
+
+        public static string GetCompTech(string compName)
+        {
+            _ComponentTechs.TryGetValue(compName, out var tech);
+            return tech == null ? string.Empty : tech;
+        }
+
+        public static string GetTorpGradeTech(int grade)
+        {
+            if(grade < 0 || grade >= _TorpGradeTechs.Length)
+            {
+                Melon<TweaksAndFixes>.Logger.Error($"Tried to get Torp Grade Tech for grade {grade}");
+                return string.Empty;
+            }
+            return _TorpGradeTechs[grade];
+        }
+
+        public static string GetTorpTubeTech(int tubes)
+        {
+            if (tubes < 0 || tubes >= _TorpTubeTechs.Length)
+            {
+                Melon<TweaksAndFixes>.Logger.Error($"Tried to get Torp Tube Tech for tube count {tubes}");
+                return string.Empty;
+            }
+            return _TorpTubeTechs[tubes];
+        }
+
+        public static bool IsTechRequiredForShipDesign(string techName)
+        {
+            return _TechRequiredForShip.Contains(techName);
+        }
+
+        public static bool IsTechImprovementForShipDesign(string techName)
+        {
+            return _TechImprovementForShip.Contains(techName);
+        }
+
+        public static int MaxGunGradeFromTechs(int cal, HashSet<string> techs, out string? techFound)
+        {
+            techFound = null;
+            for (int i = 1; i <= Config.MaxGunGrade; ++i)
+                if (techs.Contains(_GunGradeTechs[cal, i]))
+                    techFound = _GunGradeTechs[cal, i];
+                else
+                    return i - 1;
+
+            return Config.MaxGunGrade;
+        }
+
+        public static int MaxTorpGradeFromTechs(HashSet<string> techs, out string? techFound)
+        {
+            techFound = null;
+            for (int i = 1; i <= Config.MaxTorpGrade; ++i)
+                if (techs.Contains(_TorpGradeTechs[i]))
+                    techFound = _TorpGradeTechs[i];
+                else
+                    return i - 1;
+
+            return Config.MaxTorpGrade;
         }
     }
 }

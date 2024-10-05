@@ -144,7 +144,7 @@ namespace TweaksAndFixes
         public static bool GetParamValueByYear<TValue>(Ship _this, string pName, out TValue value, bool hullYear = true)
         {
             int year;
-            if (hullYear && Database.GetYear(_this.hull.data) is int hy && hy > 0)
+            if (hullYear && Database.GetYear(_this.hull.data.name) is int hy && hy > 0)
                 year = hy;
             else
                 year = Mathf.RoundToInt(_this.GetYear(_this));

@@ -213,6 +213,9 @@ namespace TweaksAndFixes
             }
             //Melon<TweaksAndFixes>.Logger.Msg($"Counts now {newerShips.Count} / {olderShips.Count} ships");
 
+            if (checkTech)
+                CachePlayerTechs(player);
+
             for (int i = 0; i < newerShips.Count; ++i)
             {
                 var ship = Ship.Create(null, null, false, false, false);
@@ -241,7 +244,8 @@ namespace TweaksAndFixes
                 float techVal;
                 if (checkTech)
                 {
-                    techVal = TechMatchRatio(ship, player);
+                    //TODO: Swap to store-based tech match
+                    techVal = TechMatchRatio(ship);
                 }
                 else
                 {
@@ -262,6 +266,8 @@ namespace TweaksAndFixes
 
                 ship.Erase();
             }
+            CleanupSDCaches();
+
             List<int> indices = new List<int>();
             List<int> indicesMed = new List<int>();
             List<int> indicesLow = new List<int>();
@@ -318,13 +324,11 @@ namespace TweaksAndFixes
                     return TechRelevance.None;
 
                 // Assume if the player hasn't selected any component for this type, they don't want
-                // any component, so newer options aren't relevant. If they didn't have any choice,
-                // then it counts as an improvement (note that it will only be available
-                // as a type 
+                // any component, so newer options aren't relevant. If it wasn't contained in the
+                // components that were available to the ship, then the tech counts as an improvement
                 if (!ship.components.TryGetValue(tech.componentx.typex, out var comp))
                     return availableTypes.Contains(tech.componentx.typex) ? TechRelevance.None : TechRelevance.Improvement;
-
-                if (comp == tech.componentx)
+                else if (comp == tech.componentx)
                     return TechRelevance.Required;
 
                 
@@ -353,7 +357,7 @@ namespace TweaksAndFixes
                 }
             }
 
-            var partsUnlocked = Database.GetPartNamesForTech(tech);
+            var partsUnlocked = Database.GetPartNamesForTech(tech.name);
             if (partsUnlocked != null)
             {
                     foreach (var part in ship.parts)
@@ -370,7 +374,7 @@ namespace TweaksAndFixes
                 {
                     case "start": break;
                     // handled above.
-                    case "unlockparts": break;
+                    case "unlockpart": break;
                     case "unlock": break;
                     case "gun": break;
                     case "tonnage": break; // handled in main method
@@ -409,29 +413,164 @@ namespace TweaksAndFixes
         private static TechRelevance Max(TechRelevance a, TechRelevance b) => a > b ? a : b;
 
 
-        private static readonly HashSet<TechnologyData> _TechsPlayer = new HashSet<TechnologyData>();
-        private static readonly HashSet<TechnologyData> _TechsShip = new HashSet<TechnologyData>();
+        private static readonly HashSet<TechnologyData> _TechDatasPlayer = new HashSet<TechnologyData>();
+        private static readonly HashSet<string> _TechsPlayer = new HashSet<string>();
+        private static readonly HashSet<string> _TechsShip = new HashSet<string>();
+        private static readonly HashSet<string> _ExtraReqTechs = new HashSet<string>();
         private static readonly HashSet<CompType> _CompTypes = new HashSet<CompType>();
+        private static readonly HashSet<string> _UsedComps = new HashSet<string>();
         private static readonly int[] _TechRelevanceCountsPlayer = new int[(int)TechRelevance.COUNT];
         private static readonly int[] _TechRelevanceCountsShip = new int[(int)TechRelevance.COUNT];
 
-        public static float TechMatchRatio(Ship design, Player player)
+        public static void CleanupSDCaches()
         {
+            _TechDatasPlayer.Clear();
             _TechsPlayer.Clear();
             _TechsShip.Clear();
+            _ExtraReqTechs.Clear();
             _CompTypes.Clear();
+            _UsedComps.Clear();
+        }
+
+        public static void CachePlayerTechs(Player player)
+        {
+            _TechDatasPlayer.Clear();
+            _TechsPlayer.Clear();
+            foreach (var tech in player.technologies)
+            {
+                if (tech.progress == 100f || tech.IsEndTechResearched && tech.Index > 0)
+                {
+                    _TechDatasPlayer.Add(tech.data);
+                    _TechsPlayer.Add(tech.data.name);
+                }
+            }
+        }
+
+        public static float TechMatchRatio(Ship.Store store)
+        {
+            _TechsShip.Clear();
+            _UsedComps.Clear();
+            _CompTypes.Clear();
+            _ExtraReqTechs.Clear();
+            foreach (var t in store.techs)
+            {
+                if (Database.IsTechRequiredForShipDesign(t)
+                    && !_TechsPlayer.Contains(t))
+                    return -1f;
+
+                _TechsShip.Add(t);
+            }
+
+            int maxTubeCount = -1;
+            foreach (var p in store.parts)
+            {
+                if (!G.GameData.parts.TryGetValue(p.name, out var part))
+                    return -1f;
+                var tech = Database.GetPartTech(p.name);
+                if (!string.IsNullOrEmpty(tech))
+                {
+                    if (!_TechsPlayer.Contains(tech))
+                        return -1f;
+                    _ExtraReqTechs.Add(tech);
+                }
+
+                if (part.type != "torpedo")
+                    continue;
+                var bar = part.name.Contains("x0") ? 0 : part.barrels;
+                if (maxTubeCount < bar)
+                    maxTubeCount = bar;
+            }
+
+            foreach (var kvp in store.components)
+            {
+                var tech = Database.GetCompTech(kvp.Value);
+                if (!string.IsNullOrEmpty(tech))
+                {
+                    if (!_TechsPlayer.Contains(tech))
+                        return -1f;
+                    _ExtraReqTechs.Add(tech);
+                }
+            }
+
+            foreach (var tcs in store.turretCalibers)
+            {
+                int grade = TAFShipData.GunGradeData.GradeFromTCSDataName(tcs.turretPartDataName, out string baseName);
+                int cal = Mathf.RoundToInt(G.GameData.parts[baseName].caliber * (1f / 25.4f));
+                string tech;
+                if (grade < 1)
+                {
+                    grade = Database.MaxGunGradeFromTechs(cal, _TechsShip, out tech);
+                }
+                else
+                {
+                    tech = Database.GetGunTech(cal, grade);
+                }
+                if (!_TechsPlayer.Contains(tech))
+                    return -1f;
+                _ExtraReqTechs.Add(tech);
+                for (int i = grade - 1; i > 0; --i)
+                    _ExtraReqTechs.Add(Database.GetGunTech(cal, i));
+            }
+
+            if (maxTubeCount >= 0)
+            {
+                string tubeTech = Database.GetTorpTubeTech(maxTubeCount);
+                if (!_TechsPlayer.Contains(tubeTech))
+                    return -1f;
+                _ExtraReqTechs.Add(tubeTech);
+                for (int i = maxTubeCount - 1; i-- > 0;)
+                    _ExtraReqTechs.Add(Database.GetTorpTubeTech(i));
+
+                int grade = TAFShipData.TorpGradeFromStore(store, false);
+                string tech;
+                if (grade < 0)
+                    grade = Database.MaxTorpGradeFromTechs(_TechsShip, out tech);
+                else
+                    tech = Database.GetTorpGradeTech(grade);
+                if (!_TechsPlayer.Contains(tech))
+                    return -1f;
+                _ExtraReqTechs.Add(tech);
+                for (int i = grade - 1; i > 0; --i)
+                    _ExtraReqTechs.Add(Database.GetTorpGradeTech(i));
+            }
+
+            int reqTechsShared = 0;
+            int impTechsPlayer = 0;
+            foreach (var pt in _TechsPlayer)
+            {
+                if (_TechsShip.Contains(pt))
+                {
+                    if (Database.IsTechRequiredForShipDesign(pt) || _ExtraReqTechs.Contains(pt))
+                        ++reqTechsShared;
+                }
+                // We will be slightly wrong here: we will count techs that
+                // unlock components that are not available to this shiptype.
+                // But they will be uniformly unavailable, so the ordering of
+                // tech match scores should remain unchanged.
+                else if (Database.IsTechImprovementForShipDesign(pt))
+                    ++impTechsPlayer;
+            }
+
+            return reqTechsShared / (float)(reqTechsShared + impTechsPlayer);
+        }
+
+        public static float TechMatchRatio(Ship design)
+        {
+            _TechsShip.Clear();
             for (int i = (int)TechRelevance.COUNT; i-- > 0;)
             {
                 _TechRelevanceCountsPlayer[i] = 0;
                 _TechRelevanceCountsShip[i] = 0;
             }
 
-            int torpedoTubes = -1;
+            int maxTubeCount = -1;
             foreach (var p in design.parts)
             {
+                if (!p.data.isTorpedo)
+                    continue;
                 var bar = p.data.name.Contains("x0") ? 0 : p.data.barrels;
-                if (p.data.isTorpedo && torpedoTubes < bar)
-                    torpedoTubes = bar;
+                if (maxTubeCount < bar)
+                    maxTubeCount = bar;
             }
             //Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: torps {torpedoTubes}");
             // Kinda slow, but eh.
@@ -439,26 +578,22 @@ namespace TweaksAndFixes
                 if (design.IsComponentAvailable(c))
                     _CompTypes.Add(c.typex);
 
-            foreach (var tech in player.technologies)
+            foreach (var tech in _TechDatasPlayer)
             {
-                if (tech.progress == 100f || tech.IsEndTechResearched && tech.Index > 0)
-                {
-                    _TechsPlayer.Add(tech.data);
-                    // Don't bother counting it if the ship already uses it
-                    if (design.techs.Contains(tech.data))
-                        continue;
-                    var rel = GetTechRelevance(design, tech.data, false, _CompTypes, torpedoTubes);
-                    ++_TechRelevanceCountsPlayer[(int)rel];
-                }
+                // Don't bother counting it if the ship already uses it
+                if (design.techs.Contains(tech))
+                    continue;
+                var rel = GetTechRelevance(design, tech, false, _CompTypes, maxTubeCount);
+                ++_TechRelevanceCountsPlayer[(int)rel];
             }
             //Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: Found {_TechsPlayer.Count} player techs, {design.techs.Count} ship techs");
 
             foreach (var tech in design.techs)
             {
-                var rel = GetTechRelevance(design, tech, true, _CompTypes, torpedoTubes);
+                var rel = GetTechRelevance(design, tech, true, _CompTypes, maxTubeCount);
                 //Melon<TweaksAndFixes>.Logger.Msg($"Tech ratio: {design.vesselName} ({design.hull.name}: tech {tech.name} has relevance {rel}");
                 ++_TechRelevanceCountsShip[(int)rel];
-                if (rel == TechRelevance.Required && !_TechsPlayer.Contains(tech))
+                if (rel == TechRelevance.Required && !_TechDatasPlayer.Contains(tech))
                     return -1f;
             }
 

@@ -202,22 +202,35 @@ namespace TweaksAndFixes
 
         [HarmonyPatch(nameof(CampaignController.CheckPredefinedDesigns))]
         [HarmonyPrefix]
-        internal static void Prefix_CheckPredefinedDesigns(CampaignController __instance)
+        internal static void Prefix_CheckPredefinedDesigns(CampaignController __instance, bool prewarm)
         {
-            if (__instance._currentDesigns != null)
-                return;
-
-            if (CampaignControllerM.TryLoadOverridePredefs(out var store, out int dCount))
+            if (__instance._currentDesigns == null)
             {
-                if (store != null)
+                if (CampaignControllerM.TryLoadOverridePredefs(out var store, out int dCount))
                 {
-                    __instance._currentDesigns = CampaignDesigns.FromStore(store);
-                    Melon<TweaksAndFixes>.Logger.Msg($"Overrode predefined designs by loading {dCount} ships from {Config._PredefinedDesignsFile}");
+                    if (store != null)
+                    {
+                        __instance._currentDesigns = CampaignDesigns.FromStore(store);
+                        Melon<TweaksAndFixes>.Logger.Msg($"Overrode predefined designs by loading {dCount} ships from {Config._PredefinedDesignsFile}");
+                    }
+                }
+                else
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Tried to override predefined designs but failed to load {Config._PredefinedDesignsFile} correctly.");
                 }
             }
-            else
+
+            if (Config.DontClobberTechForPredefs)
             {
-                Melon<TweaksAndFixes>.Logger.Error($"Tried to override predefined designs but failed to load {Config._PredefinedDesignsFile} correctly.");
+                // we need to force the game not to check techs
+                int startYear;
+                int year;
+                if (prewarm)
+                    startYear = __instance.StartYear;
+                else
+                    startYear = __instance.CurrentDate.AsDate().Year;
+                __instance._currentDesigns.GetNearestYear(startYear, out year);
+                __instance.initedForYear = year;
             }
         }
     }

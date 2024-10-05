@@ -61,21 +61,44 @@ namespace TweaksAndFixes
                 isCasemateGun = tcs.isCasemateGun;
             }
 
+            public static int GradeFromTCSDataName(string inputName, out string baseName)
+            {
+                baseName = inputName;
+                int grade = -1;
+                int idx = inputName.IndexOf(';');
+                if (idx >= 0)
+                {
+                    if (idx < inputName.Length - 1 && int.TryParse(inputName.Substring(idx + 1), out var g))
+                        grade = g;
+
+                    baseName = inputName.Substring(0, idx);
+                }
+                return grade;
+            }
+
+            public static int GradeFromTCS(Ship.TurretCaliber.Store tcs, bool cleanStore)
+            {
+                int grade = -1;
+                int idx = tcs.turretPartDataName.IndexOf(';');
+                if (idx >= 0)
+                {
+                    if (idx < tcs.turretPartDataName.Length - 1 && int.TryParse(tcs.turretPartDataName.Substring(idx + 1), out var g))
+                        grade = g;
+
+                    if (cleanStore)
+                        tcs.turretPartDataName = tcs.turretPartDataName.Substring(0, idx);
+                }
+                return grade;
+            }
+
             public GunGradeData(Ship.TurretCaliber.Store tcs)
             {
-                string partName = tcs.turretPartDataName;
-
-                if (tcs.turretPartDataName.Contains(';'))
-                {
-                    var split = partName.Split(';', StringSplitOptions.RemoveEmptyEntries);
-                    partName = split[0];
-                    tcs.turretPartDataName = partName;
-
-                    if (split.Length > 1 && int.TryParse(split[1], out var g))
-                        grade = g;
-                }
+                grade = GradeFromTCS(tcs, true);
+                
                 if (G.GameData.parts.TryGetValue(tcs.turretPartDataName, out var turretPartData))
                     caliber = turretPartData.caliber;
+
+                isCasemateGun = tcs.isCasemateGun;
             }
 
             public static GunGradeData ProcessTCS(Ship.TurretCaliber.Store tcs)
@@ -84,17 +107,8 @@ namespace TweaksAndFixes
 
                 ggd.isCasemateGun = tcs.isCasemateGun;
 
-                string partName = tcs.turretPartDataName;
+                ggd.grade = GradeFromTCS(tcs, true);
 
-                if (tcs.turretPartDataName.Contains(';'))
-                {
-                    var split = partName.Split(';', StringSplitOptions.RemoveEmptyEntries);
-                    partName = split[0];
-                    tcs.turretPartDataName = partName;
-
-                    if (split.Length > 1 && int.TryParse(split[1], out var g))
-                        ggd.grade = g;
-                }
                 if (G.GameData.parts.TryGetValue(tcs.turretPartDataName, out var turretPartData))
                     ggd.caliber = turretPartData.caliber;
 
@@ -422,34 +436,58 @@ namespace TweaksAndFixes
         {
             foreach (var tcs in store.turretCalibers)
             {
-                string pName = tcs.turretPartDataName;
-                if (tcs.turretPartDataName.Contains(';'))
-                {
-                    var split = tcs.turretPartDataName.Split(';', StringSplitOptions.RemoveEmptyEntries);
-                    pName = split[0];
-                }
+                // this cleans the part data name
+                GunGradeData.GradeFromTCS(tcs, true);
 
-                var data = G.GameData.parts[pName];
+                var data = G.GameData.parts[tcs.turretPartDataName];
                 var ggd = FindGGD(data.caliber, tcs.isCasemateGun);
                 if (ggd == null)
                     ggd = new GunGradeData(tcs, _ship);
                 else if (ggd.grade < 0)
-                    ggd.grade = _ship.TechGunGrade(data);
+                    ggd.grade = GetTrueGunGrade(data);
 
                 //Melon<TweaksAndFixes>.Logger.Msg($"For caliber {ggd.caliber:F0}, casemate {ggd.isCasemateGun}, saved grade {ggd.grade}");
-                tcs.turretPartDataName = pName + ";" + ggd.grade.ToString();
+                tcs.turretPartDataName = tcs.turretPartDataName + ";" + ggd.grade.ToString();
             }
+        }
+
+        public static int TorpGradeFromStore(Ship.Store store, bool cleanStore)
+        {
+            int grade = -1;
+            // back-compat
+            if (store.hullName.Contains(';'))
+            {
+                var split = store.hullName.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                if (cleanStore)
+                    store.hullName = split[0];
+                if (split.Length > 1 && int.TryParse(split[1], out var g))
+                    grade = g;
+            }
+            else if (store.ForSaleTo != null && store.ForSaleTo.IndexOf(';') is int idx && idx >= 0)
+            {
+                string? gradeStr = null;
+                if (idx == 0)
+                {
+                    gradeStr = store.ForSaleTo.Substring(1);
+                    if (cleanStore)
+                        store.ForSaleTo = null;
+                }
+                else
+                {
+                    if (idx < store.ForSaleTo.Length - 1)
+                        gradeStr = store.ForSaleTo.Substring(idx + 1);
+                    if (cleanStore)
+                        store.ForSaleTo = store.ForSaleTo.Substring(0, idx);
+                }
+                if (gradeStr != null && int.TryParse(gradeStr, out var g))
+                    grade = g;
+            }
+            return grade;
         }
 
         private void LoadTorpGrade(Ship.Store store)
         {
-            if (store.hullName.Contains(';'))
-            {
-                var split = store.hullName.Split(';', StringSplitOptions.RemoveEmptyEntries);
-                store.hullName = split[0];
-                if (split.Length > 1 && int.TryParse(split[1], out var g))
-                    _torpedoGrade = g;
-            }
+            TorpGradeFromStore(store, true);
             //Melon<TweaksAndFixes>.Logger.Msg($"Loaded torpedo grade {_torpedoGrade}");
         }
 
@@ -466,17 +504,17 @@ namespace TweaksAndFixes
             if (torpData == null)
                 return;
 
-            string hName = store.hullName;
-            if (hName.Contains(';'))
-            {
-                var split = hName.Split(';', StringSplitOptions.RemoveEmptyEntries);
-                hName = split[0];
-            }
+            string fst = store.ForSaleTo;
+            if (fst == null)
+                fst = string.Empty;
+            else if (fst.IndexOf(';') is int idx && idx >= 0)
+                fst = fst.Substring(0, idx);
+
             if (_torpedoGrade < 0)
-                _torpedoGrade = _ship.TechTorpedoGrade(torpData);
+                _torpedoGrade = GetTrueTorpGrade(torpData);
 
             //Melon<TweaksAndFixes>.Logger.Msg($"Saved torpedo grade {_torpedoGrade}");
-            store.hullName = hName + ";" + _torpedoGrade;
+            store.ForSaleTo = fst + ";" + _torpedoGrade;
         }
     }
 }
