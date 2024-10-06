@@ -77,6 +77,10 @@
       <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>..\..\..\..\..\..\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\MelonLoader\Il2CppAssemblies\UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

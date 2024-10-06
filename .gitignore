@@ -255,3 +255,7 @@ ModelManifest.xml
 
 #zip
 *.zip
+
+# Unity
+UAD_UI_Test/Temp/
+UAD_UI_Test/Library/

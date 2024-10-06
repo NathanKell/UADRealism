@@ -4,6 +4,10 @@ using UnityEngine;
 using Il2Cpp;
 using System.Collections.Generic;
 using Il2CppSystem.Linq;
+using UnityEngine.UI;
+using Il2CppCoffee.UIExtensions;
+using Il2CppTMPro;
+using System.Collections;
 
 #pragma warning disable CS8602
 #pragma warning disable CS8604
@@ -240,6 +244,126 @@ namespace TweaksAndFixes
                 __instance._currentDesigns.GetNearestYear(startYear, out year);
                 __instance.initedForYear = year;
             }
+        }
+
+        internal static GameObject? _Batcher = null;
+        [HarmonyPatch(nameof(CampaignController.OnLoadingScreenHide))]
+        [HarmonyPostfix]
+        internal static void Postfix_OnLoadingScreenHide()
+        {
+            if (!GameManager.IsMainMenu)
+                return;
+
+            if (_Batcher != null)
+            {
+                GameObject.DestroyImmediate(_Batcher);
+                _Batcher = null;
+            }
+
+            _Batcher = GameObject.Instantiate(G.ui.popupUi.FindDeepChild("FileConverter").gameObject);
+            GameObject.Destroy(_Batcher.GetComponent<SaveFilesConverter>());
+            GameObject.Destroy(_Batcher.GetComponent<CanvasRenderer>());
+            GameObject.Destroy(_Batcher.GetComponent<Image>());
+            _Batcher.transform.SetParent(null);
+            var root = _Batcher.transform.Find("Root").gameObject;
+            root.transform.Find("JsonFiles").gameObject.SetActive(false);
+
+            var years = root.transform.Find("BinFiles").gameObject;
+            years.name = "YearsList";
+            var yearsList = years.transform.Find("Viewport").Find("List").gameObject;
+            yearsList.DestroyAllChilds();
+            var listVLG = yearsList.GetOrAddComponent<VerticalLayoutGroup>();
+            var fsmNew = GameObject.Instantiate(G.ui.gameObject.FindDeepChild("Fullscreen Mode"));
+            var toggleTemplate = fsmNew.GetComponentInChildren<Toggle>();
+            var label = fsmNew.transform.Find("Label");
+            label.SetParent(toggleTemplate.gameObject);
+            GameObject.Destroy(label.GetComponent<LocalizeText>());
+            GameObject.Destroy(label.GetComponent<LayoutElement>());
+            toggleTemplate.SetParent(yearsList);
+            toggleTemplate.gameObject.AddComponent<HorizontalLayoutGroup>();
+            var go = new GameObject("dummy");
+            go.AddComponent<RectTransform>();
+            go.transform.SetParent(toggleTemplate.transform);
+            var bg = toggleTemplate.transform.Find("Background").gameObject;
+            var le = bg.AddComponent<LayoutElement>();
+            le.minWidth = 20f;
+            toggleTemplate.SetActive(false);
+            GameObject.DestroyImmediate(fsmNew);
+
+            var buttons = root.transform.Find("Buttons");
+            var start = buttons.transform.Find("Close").GetComponent<Button>();
+            start.onClick.RemoveAllListeners();
+            var yearsO = buttons.transform.Find("Convert").GetComponent<Button>();
+            yearsO.onClick.RemoveAllListeners();
+            var yearsC = buttons.transform.Find("Delete").GetComponent<Button>();
+            yearsC.onClick.RemoveAllListeners();
+
+            var upperRow = root.transform.Find("UpperButtons").gameObject;
+            upperRow.DestroyAllChilds();
+            var res = G.ui.gameObject.FindDeepChild("Resolution");
+            var nationDropObj = GameObject.Instantiate(res, upperRow.transform);
+            var typeDropObj = GameObject.Instantiate(res, upperRow.transform);
+            var bugT = G.ui.popupUi.FindDeepChild("BugReport").FindDeepChild("Title");
+            var numInputObj = GameObject.Instantiate(bugT, upperRow.transform);
+
+            var progressBox = root.transform.Find("CheckingSaves").gameObject;
+            progressBox.SetParent(_Batcher);
+            var pcv = progressBox.AddComponent<Canvas>();
+            var pcs = progressBox.AddComponent<CanvasScaler>();
+            
+            var rcv = root.AddComponent<Canvas>();
+            var rcs = root.AddComponent<CanvasScaler>();
+
+            var ucv = G.ui.GetComponent<Canvas>();
+            var ucs = G.ui.GetComponent<CanvasScaler>();
+            var ugr = G.ui.GetComponent<GraphicRaycaster>();
+
+            pcv.renderMode = rcv.renderMode = ucv.renderMode;
+            pcv.worldCamera = rcv.worldCamera = ucv.worldCamera;
+            pcs.referenceResolution = rcs.referenceResolution = ucs.referenceResolution;
+            pcs.screenMatchMode = rcs.screenMatchMode = ucs.screenMatchMode;
+            pcs.uiScaleMode = rcs.uiScaleMode = ucs.uiScaleMode;
+            var pgr = progressBox.AddComponent<GraphicRaycaster>();
+            var rgr = root.AddComponent<GraphicRaycaster>();
+
+
+
+            progressBox.SetActive(false);
+            root.SetActive(false);
+
+            _Batcher.SetActive(true);
+
+            Melon<TweaksAndFixes>.Logger.Msg("Created batcher");
+
+            var bsg = _Batcher.AddComponent<BatchShipGenerator>();
+            bsg.yearsButton = yearsO;
+            bsg.yearsPanel = years;
+            bsg.yearToggleParent = yearsList.transform;
+            bsg.yearTemplate = toggleTemplate;
+            bsg.closeYearsPanel = yearsC;
+            bsg.startButton = start;
+            bsg.shipsAmount = numInputObj.GetComponentInChildren<TMP_InputField>();
+            bsg.shipTypeDropdown = typeDropObj.GetComponentInChildren<TMP_Dropdown>();
+            bsg.nationDropdown = nationDropObj.GetComponentInChildren<TMP_Dropdown>();
+            bsg.InitRoot = root;
+            bsg.UIRoot = progressBox;
+            bsg.progress = progressBox.GetComponentInChildren<TextMeshProUGUI>();
+            MelonCoroutines.Start(FixText(numInputObj, typeDropObj, nationDropObj));
+        }
+
+        internal static System.Collections.IEnumerator FixText(GameObject numInputObj, GameObject typeDropObj, GameObject nationDropObj)
+        {
+            yield return new WaitForEndOfFrame();
+            var bsg = _Batcher.GetComponent<BatchShipGenerator>();
+            var root = bsg.InitRoot;
+            root.transform.Find("Header").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Batch Ship Generator";
+            root.transform.Find("Note").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Note: Generation may take a long time and will generate many Shared Designs. Clear your designs first!";
+            bsg.startButton.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Generate";
+            bsg.yearsButton.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Show Years";
+            bsg.closeYearsPanel.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Hide Years";
+            nationDropObj.transform.Find("Label").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Nations";
+            typeDropObj.transform.Find("Label").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Types";
+            numInputObj.FindDeepChild("Placeholder").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Num Ships Per";
         }
     }
 }
