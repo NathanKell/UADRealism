@@ -38,6 +38,9 @@ namespace TweaksAndFixes
             sharedToJson.name = jsonName;
             sharedToJson.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Designs to JSON";
             sharedToJson.onClick.RemoveAllListeners();
+            var loc = sharedToJson.GetComponentInChildren<LocalizeText>(true);
+            if (loc != null)
+                GameObject.Destroy(loc);
             sharedToJson.onClick.AddListener(new System.Action(() =>
             {
                 int count = DesignsToJSON();
@@ -47,6 +50,9 @@ namespace TweaksAndFixes
             sharedToPredefs.name = predefName;
             sharedToPredefs.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Designs to Predefined";
             sharedToPredefs.onClick.RemoveAllListeners();
+            loc = sharedToPredefs.GetComponentInChildren<LocalizeText>(true);
+            if (loc != null)
+                GameObject.Destroy(loc);
             sharedToPredefs.onClick.AddListener(new System.Action(() =>
             {
                 int count = DesignsToPredefs();
@@ -56,6 +62,9 @@ namespace TweaksAndFixes
             predefsToShared.name = predefName;
             predefsToShared.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Predefined to Designs";
             predefsToShared.onClick.RemoveAllListeners();
+            loc = predefsToShared.GetComponentInChildren<LocalizeText>(true);
+            if (loc != null)
+                GameObject.Destroy(loc);
             predefsToShared.onClick.AddListener(new System.Action(() =>
             {
                 int count = PredefsToDesigns();

@@ -277,7 +277,6 @@ namespace TweaksAndFixes
             var toggleTemplate = fsmNew.GetComponentInChildren<Toggle>();
             var label = fsmNew.transform.Find("Label");
             label.SetParent(toggleTemplate.gameObject);
-            GameObject.Destroy(label.GetComponent<LocalizeText>());
             GameObject.Destroy(label.GetComponent<LayoutElement>());
             toggleTemplate.SetParent(yearsList);
             toggleTemplate.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -333,7 +332,7 @@ namespace TweaksAndFixes
 
             _Batcher.SetActive(true);
 
-            Melon<TweaksAndFixes>.Logger.Msg("Created batcher");
+            //Melon<TweaksAndFixes>.Logger.Msg("Created batcher UI");
 
             var bsg = _Batcher.AddComponent<BatchShipGenerator>();
             bsg.yearsButton = yearsO;
@@ -348,6 +347,7 @@ namespace TweaksAndFixes
             bsg.InitRoot = root;
             bsg.UIRoot = progressBox;
             bsg.progress = progressBox.GetComponentInChildren<TextMeshProUGUI>();
+            //Melon<TweaksAndFixes>.Logger.Msg("Setup BSG");
             MelonCoroutines.Start(FixText(numInputObj, typeDropObj, nationDropObj));
         }
 
@@ -356,6 +356,12 @@ namespace TweaksAndFixes
             yield return new WaitForEndOfFrame();
             var bsg = _Batcher.GetComponent<BatchShipGenerator>();
             var root = bsg.InitRoot;
+
+            var locs = bsg.gameObject.GetComponentsInChildren<LocalizeText>(true);
+            for (int i = locs.Length; i-- > 0;)
+                GameObject.Destroy(locs[i]);
+            yield return new WaitForEndOfFrame();
+
             root.transform.Find("Header").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Batch Ship Generator";
             root.transform.Find("Note").GetComponent<Il2CppTMPro.TextMeshProUGUI>().text = "Note: Generation may take a long time and will generate many Shared Designs. Clear your designs first!";
             bsg.startButton.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Generate";
