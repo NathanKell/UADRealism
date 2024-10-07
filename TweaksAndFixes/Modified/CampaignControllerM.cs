@@ -432,18 +432,23 @@ namespace TweaksAndFixes
             _UsedComps.Clear();
         }
 
-        public static void CachePlayerTechs(Player player)
+        public static int CachePlayerTechs(Player player, bool noRandomYearOffset = false)
         {
             _TechDatasPlayer.Clear();
             _TechsPlayer.Clear();
+            int maxYear = -1;
             foreach (var tech in player.technologies)
             {
                 if (tech.progress == 100f || tech.IsEndTechResearched && tech.Index > 0)
                 {
                     _TechDatasPlayer.Add(tech.data);
                     _TechsPlayer.Add(tech.data.name);
+                    int year = GameManager.GetTechYear(tech.data, true, noRandomYearOffset);
+                    if (year > maxYear)
+                        maxYear = year;
                 }
             }
+            return maxYear;
         }
 
         public static float TechMatchRatio(Ship.Store store)
@@ -601,73 +606,6 @@ namespace TweaksAndFixes
             // FIXME ignore older components, and ignore mismatch in requireds (which should never happen).
             // Also completely ignore any ship improvement techs that aren't relevant to the ship.
             return _TechRelevanceCountsShip[(int)TechRelevance.Required] / (float)(_TechRelevanceCountsShip[(int)TechRelevance.Required] + _TechRelevanceCountsPlayer[(int)TechRelevance.Improvement]);
-        }
-
-        public static bool TryLoadOverridePredefs(out CampaignDesigns.Store? store, out int dCount)
-        {
-            store = null;
-            dCount = 0;
-
-            string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
-            if (!File.Exists(path))
-                return true;
-
-            var bytes = File.ReadAllBytes(path);
-            store = Util.DeserializeObjectByte<CampaignDesigns.Store>(bytes);
-            
-            if (store.shipsPerYear == null)
-            {
-                Debug.LogError("spy");
-                return false;
-            }
-
-            foreach (var spy in store.shipsPerYear)
-            {
-                if (spy.Value.shipsPerPlayer == null)
-                {
-                    Debug.LogError(spy.Key + ": spp");
-                    return false;
-                }
-
-                foreach (var p in G.GameData.playersMajor.Values)
-                {
-                    bool missing = true;
-                    foreach (var spp2 in spy.Value.shipsPerPlayer)
-                    {
-                        if (spp2.Key == p.name)
-                        {
-                            missing = false;
-                            break;
-                        }
-                    }
-                    if (missing)
-                    {
-                        Melon<TweaksAndFixes>.Logger.Error($"preamdeDesigns: Year {spy.Key} lacks nation {p.name}");
-                        return false;
-                    }
-                }
-                foreach (var spp in spy.Value.shipsPerPlayer)
-                {
-                    if (spp.Value.shipsPerType == null)
-                    {
-                        Debug.LogError(spp.Key + ": spp");
-                        return false;
-                    }
-
-                    foreach (var spt in spp.Value.shipsPerType)
-                    {
-                        if (spt.Value == null)
-                        {
-                            Debug.LogError(spt.Key + ": spt");
-                            return false;
-                        }
-
-                        dCount += spt.Value.Count;
-                    }
-                }
-            }
-
-            return true;
         }
     }
 }

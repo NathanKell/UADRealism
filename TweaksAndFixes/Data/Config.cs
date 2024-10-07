@@ -51,6 +51,7 @@ namespace TweaksAndFixes
         internal static readonly string _SpriteFile = "sprites.csv";
         internal static readonly string _GenArmorDataFile = "genarmordata.csv";
         internal static readonly string _PredefinedDesignsFile = "predefinedDesigns.bin";
+        internal static readonly string _PredefinedDesignsDataFile = "predefinedDesignsData.csv";
 
         public enum OverrideMapOptions
         {

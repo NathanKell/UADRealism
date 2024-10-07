@@ -6,12 +6,13 @@ using UnityEngine;
 using Il2Cpp;
 using UnityEngine.UI;
 
+#pragma warning disable CS8625
+
 namespace TweaksAndFixes
 {
     [HarmonyPatch(typeof(ShipsPerPlayer))]
     internal class Patch_ShipsPerPlayer
     {
-        private static bool _PassthroughRandomShip = false;
         private static readonly List<Ship.Store> _ShipOptions = new List<Ship.Store>();
 
         // Patching this rather than PlayerController.CampaignCanUsePredefinedDesign
@@ -20,39 +21,23 @@ namespace TweaksAndFixes
         [HarmonyPostfix]
         internal static void Postfix_RandomShipOfType(ShipsPerPlayer __instance, Player player, ShipType shipType, ref Ship.Store __result)
         {
-            if (!Config.DontClobberTechForPredefs || _PassthroughRandomShip)
+            if (!Config.DontClobberTechForPredefs || __result == null)
                 return;
 
-            CampaignControllerM.CachePlayerTechs(player);
             if (CampaignControllerM.TechMatchRatio(__result) < 0)
             {
-                _PassthroughRandomShip = true;
-                int year = __result.YearCreated;
-                Ship.Store? newShip = null;
-                do
+                _ShipOptions.Clear();
+                foreach (var s in __instance.validDesigns)
                 {
-                    newShip = PickShipFromSPP(__instance);
-                    if (newShip != null || year == CampaignController.Instance._currentDesigns.years[0])
-                        break;
-                    CampaignController.Instance._currentDesigns.GetNearestYear(year - 1, out year);
-                    CampaignController.Instance._currentDesigns.shipsPerYear[year].shipsPerPlayer[player.data.name].RandomShipOfType(player, shipType);
-                } while (true);
+                    if (s == __result || CampaignControllerM.TechMatchRatio(s) < 0)
+                        continue;
+                    _ShipOptions.Add(s);
+                }
+                if (_ShipOptions.Count > 0)
+                    __result = _ShipOptions.Random();
+                else
+                    __result = null;
             }
-            _ShipOptions.Clear();
-            CampaignControllerM.CleanupSDCaches();
-            _PassthroughRandomShip = false;
-        }
-
-        private static Ship.Store PickShipFromSPP(ShipsPerPlayer __instance)
-        {
-            _ShipOptions.Clear();
-            foreach (var s in __instance.validDesigns)
-            {
-                if (CampaignControllerM.TechMatchRatio(s) < 0)
-                    continue;
-                _ShipOptions.Add(s);
-            }
-            return _ShipOptions.RandomOrNull();
         }
     }
 }

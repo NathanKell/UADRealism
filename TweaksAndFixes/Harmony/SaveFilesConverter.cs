@@ -100,11 +100,11 @@ namespace TweaksAndFixes
                 return 0;
 
             bool useStock = false;
-            if (!CampaignControllerM.TryLoadOverridePredefs(out var predefs, out int dCount) || predefs == null)
+            if (!PredefinedDesignsData.LoadPredefs(Path.Combine(Config._BasePath, Config._PredefinedDesignsFile), out var predefs, out int dCount, false) || predefs == null)
             {
                 useStock = true;
-                var textAsset = Resources.Load<TextAsset>("packedShips");
-                predefs = Util.DeserializeObjectByte<CampaignDesigns.Store>(textAsset.bytes);
+                PredefinedDesignsData.LoadPredefs(null, out predefs, out dCount, false);
+                Melon<TweaksAndFixes>.Logger.Warning("Using vanilla predefined designs to save to shared designs");
             }
 
 
