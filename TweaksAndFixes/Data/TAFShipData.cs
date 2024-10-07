@@ -43,6 +43,13 @@ namespace TweaksAndFixes
 
             public GunGradeData() { }
 
+            public GunGradeData(GunGradeData other)
+            {
+                grade = other.grade;
+                caliber = other.caliber;
+                isCasemateGun = other.isCasemateGun;
+            }
+
             public GunGradeData(Ship.TurretCaliber tc, Ship ship)
             {
                 caliber = tc.turretPartData.caliber;
@@ -417,13 +424,7 @@ namespace TweaksAndFixes
             _torpedoGrade = other._torpedoGrade;
             _gradeData.Clear();
             foreach (var gdO in other._gradeData)
-            {
-                var gd = new GunGradeData();
-                gd.grade = gdO.grade;
-                gd.caliber = gdO.caliber;
-                gd.isCasemateGun = gdO.isCasemateGun;
-                _gradeData.Add(gd);
-            }
+                _gradeData.Add(new GunGradeData(gdO));
         }
 
         private void LoadTCs(Ship.Store store)
