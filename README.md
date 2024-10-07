@@ -173,4 +173,67 @@ If `taf_versiontext` is set, the version text in the lower right corner of the s
 TAF includes a serialization library for reading and writing CSV files to managed data, as well as the ability to read to BaseData formats on demand from arbitrary files/strings. In addition, a number of the HumanXtoY methods have been reimplemented in managed code, and support exists to read a set of params and update indexed dictionaries (as used by guns, torpedos, and partModels).
 
 # UADRealism
-Realism modding for Ultimate Admiral: Dreadnoughts
+Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
+
+### TAF Changelog
+3.14.1 - Fix another super dumb typo: actually save the copied gun mark data when refitting ships
+3.14.0 - New Feature: Support overlaying predefined ships sets. See readme for details (updated description of the overriding predefined ships feature). Update to 1.6.0.7 Optx2
+3.13.0 - New Feature: Enable Batch Ship Generator. Press G in main menu, see Readme for further details
+3.12.0 - New Features: Support overriding and exporting predefined designs. Support non-home (colony) population used for crew pool. Support not forcing AI tech to be in lockstep with the year when in Fast mode for AI design usage. Support using fallback improved armor generation rules (for vanilla or DIP) thanks to @brothermunro . Updated for 1.6.0.7.
+3.11.2 - Updated for 1.6.0.6 Opt x5.
+3.11.1 - Fixed an exception on startup.
+3.11.0 - New feature: sprite overriding. For now, just component icons. See readme for details. Also fixed an oversight with the alliance changes, where a nation's allies wouldn't declare war on the other nation's allies, only the other nation. Now allies declare war on each other too.
+3.10.0 - New feature: Set taf_alliance_changes to 1 and when one nation goes to war, all its allies will join the war immediately. Any nation allied to both sides when two nations go to war will break its alliance with both of them and have relations reset to neutral with both of them.
+3.9.2 - Fixed a bug where the mines changes would never activate
+3.9.1 - Fixed guns not being upgraded on instances of refitted ships even if the refit design had upgraded guns. Recompiled for 1.6.0.6, not that anything changed.
+3.9.0 - Now displays UAD log/error messages in console, if Unity Explorer is not installed. Rewrote scrapping. Updated for 1.6.0.5Optx2 to fix a new incompatibility with that update.
+3.8.3 - Changed how version text is replaced. Now there is only the taf_versiontext param (no more taf_versiontext_mode). Set both the value and the str columns of it.
+3.8.2 - Rewrote per-shiptype component weights for speed. Added support for ai_beamdraughtlimits. See readme for details.
+3.8.1 - Fixed some cases where serializing numbers to disk would not serialize in InvariantCulture
+3.8.0 - Allow overriding of localization tokens in lng files by placing lng files in the Mods folder. See readme for details.
+3.7.3 - [Modder Support] New Feature: read the "surv_min" param in shipTypes. It works like range_min. Rework caliber-limiting feature so it now applies per battery like caliber count limits. Params have changed, see the readme. Recompile for 1.6.0.5 (though that doesn't seem to have been necessary).
+3.7.2 - [Modder Support] New Feature: allow replacing the version text in the lower right corner of the screen.
+3.7.1 - Allow ai_max_caliber(X) in hull params.
+3.7.0 - [Modder Support] New Feature: allow limiting the count of distinct calibers (per battery, i.e. main/secondary/tertiary) the autodesigner will use. Turning this feature on will slow down ship generation slightly. See readme for details.
+3.6.0 - Implemented score-based scrapping per suggestion from @XerMGGW-2 where age of ship is weighed against its build time to determine its scrapping score. See updated scrapping section of readme for details.
+3.5.4 - Fixed an exception generating armor. No longer allow DD/TB bulkheads to go below the second-highest value when ship generation tweaks are enabled. Fix an issue with Custom Battle flag selection where years were being compared incorrectly (and log error messages when the list of goverments-by-year is formatted incorrectly).  Describe per-shiptype speed params in the readme. Recompile for 1.6.0.4 (no changes seem needed).
+3.5.3 - [Modder Support] New Feature: control min and max multipliers (to speedLimiter) for speed for ship types and for hulls. Fixed a bug where secondary turret armor could fail to be clamped to main gun values.
+3.5.2 - Fixed an issue with turret armor generation when using the armor generation feature.
+3.5.1 - Use invariant culture when parsing numbers. This means . is used for decimals and , as a thousands separator regardless of the user's country. This means that mod files will be loaded consistently.
+3.5.0 - Rewrote asset replacing/overriding/extending and fixed some issues parsing double-quotes in CSV files. The feature is now simpler to use as well as much safer and cleaner code.
+3.4.9 - [Modder Support] Support overriding as well as replacing the game's TextAssets, i.e. support parts_override.csv as well as parts.csv. See Readme for details.
+3.4.8 - Fix some issues with ship generation (including zero turret armor) due to wrong stop conditions when varying speed and armor.
+3.4.7 - Fix for 1.6.0.3R
+3.4.6 - Rewrote barbette patch, should allow rotation and highlight properly now.
+3.4.5 - Fixed a bug in task force mine damaging where it could break on subsequent runs when vessels sunk.
+3.4.4 - Reworked barbette patch and fixed crash. Now no part changes are needed; barbettes behave exactly as they used to in terms of hull requirements and what is needed in their mountPoints and params, but they can be placed freely on the deck. The crash with funnels is also fixed. If it's desired to restrict barbettes to the centerline (like the old behavior), put `center` in the barbette's param column.
+3.4.3 - [Modder Support] New Feature: when a barbette has `free` in its mountPoints (e.g. "free, si_barbette") then it can mount freely like a gun. Note that it will need excluding from old hulls via adding need/exclude tags to its params.
+3.4.2 - Fixed a typo in AdjustHullStats leading to weird initial speeds when manually choosing a hull.
+3.4.1 - New Feature: minor tweaks to ship autodesign, including making speed selection saner.
+3.4.0 - [Modder Support] New Feature: allow changing the ship armor generation behavior (see readme).
+3.3.0 - New Feature: Reimplement some ship autodesign methods, fixing some bugs
+3.2.0 - Update to UAD 1.6.0.2
+3.1.4 - Performance increase via changing how GameData is patched in the allow-override-csv-files patch
+3.1.3 - Fixed highlight color not being assigned for new major nations.
+3.1.2 - Typo fix. The ports/province overriding was loading portsDump and provincesDump and writing to ports and provinces. Oops. Fixed the reversal.
+3.1.1 - Fixed a bug with config loading
+3.1.0 - [Modder Support] New AI fleet scrapping behavior (disabled by default). Also fixed a bug with flags not showing in battle results and fixed a bug override-loading the relations matrix 
+3.0.1 - Better fix for the bug where length/diameter and armor settings would be lost from guns when upgrading their mark on refit.
+3.0.0 - [Modder Support] New Features: Support Mark 6+ guns, and support loading from csv files in Mods rather than requiring distribution of an entire resource.assets file. See Source link for readme details on these features.
+2.5.0 - Fixed a bug where length/diameter and armor settings would be lost from guns when upgrading their mark on refit. Changed serialization behavior to fix some serializer bugs.
+2.4.1 - Fixed an issue with map overriding on campaign start. Allow outputting map data (set taf_override_map to 2).
+2.4.0 - [Modder Support] when taf_override_map is added to params and set to 1, the ports and provinces TextAssets will be used by the game. This allows for map modding.
+2.3.0 - [Modder Support] New Feature: Overriding flags. Just edit a text file and add images and you're good. See here for docs.
+2.2.0 - [Modder Support] New Feature: Allow tuning of mine behavior by means of adding params to the params file
+2.1.1,2.1.2 - Keep torpedo marks as well, and fix an issue where the AI would keep old marks on refit.
+2.1.0 - New feature: Keep gun marks as they are when refitting ships until the player chooses to upgrade them.
+2.0.5 (and previous) - improvements to serializer. Supports loading BaseData (i.e. the game's own csv-format serialized data) and supports leaving default values in place if no value specified (managed serializer)
+2.0.0 - [Modder Support] New feature: Add a CSV serializer/deserializer which works with managed (rather than Il2Cpp) classes. Code is from my KSP work.
+1.3.2 - Enforce setting a part's CaliberInch during game load. Otherwise there's a chance that the first time it's run, it will set the wrong value (based on rounding rather than flooring the caliber), leading to, say, a 5.7in gun being treated as a 6in instead of 5in for stats/grade (mark) purposes.
+1.3.1 - Fix typos in RandPart listings. Stock has a few of these, but the fix here will also fix most mods' typos if there are typos there too.
+1.3.0 - When 1890 is selected in the Shared Designs constructor, only 'start' techs will be available, not techs that, while dated 1890, must be unlocked in campaign. This makes it so that the player can create shared designs the AI will use when starting an 1890 campaign.
+1.2.2 - Fixed a bug with shared designs where ships would not be properly erased during selection
+1.2.1 - Make shared design selection outside of campaign depend only on year, since tech matching is less reliable here (the game doesn't do it at all, for example).
+1.2.0 - [Modder Support] New Feature: Added tunable conquest (with bugfix)
+1.1.0 - New Feature: Added submarine movement range fix
+1.0.0 - Initial release. Better shared design handling, per-shiptype component weights
