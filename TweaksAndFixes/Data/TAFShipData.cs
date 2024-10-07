@@ -414,8 +414,6 @@ namespace TweaksAndFixes
         [HideFromIl2Cpp]
         private void CopyGradeData(TAFShipData other)
         {
-            _ship.techGunGradeCache.Clear();
-            _ship.techTorpedoGradeCache.Clear();
             _torpedoGrade = other._torpedoGrade;
             _gradeData.Clear();
             foreach (var gdO in other._gradeData)
