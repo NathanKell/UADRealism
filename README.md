@@ -32,6 +32,9 @@ Submarines can now travel across the map border normally rather than their opera
 ### Typo fixes for RandParts
 Stock has some typos in its randParts and randPartsRefit assets, and moddders can sometimes have typos too. This detects some of those cases and fixes them.
 
+### Fix too-large Message Boxes
+For example, the War Erupts message is too long when there are new nations added. This fix will move text into a scrollbox.
+
 
 ## Modder Features
 ### Replace/Extend/Override assets with CSV files
@@ -176,6 +179,7 @@ TAF includes a serialization library for reading and writing CSV files to manage
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+3.14.2 - Fix too-large messageboxes (for example, the War Erupts message) by putting some text in the scrollbox
 3.14.1 - Fix another super dumb typo: actually save the copied gun mark data when refitting ships
 3.14.0 - New Feature: Support overlaying predefined ships sets. See readme for details (updated description of the overriding predefined ships feature). Update to 1.6.0.7 Optx2
 3.13.0 - New Feature: Enable Batch Ship Generator. Press G in main menu, see Readme for further details
