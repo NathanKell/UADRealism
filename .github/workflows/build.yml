@@ -1,0 +1,50 @@
+# This is a basic workflow to help you get started with Actions
+
+name: build
+
+# Controls when the action will run.
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 100
+
+      - name: Build mod solution
+        run: |
+          mkdir /tmp/Mods/
+          cp -v ${GITHUB_WORKSPACE}/TweaksAndFixes/bin/Release/net6.0/TweaksAndFixes.dll /tmp/Mods/TweaksAndFixes.dll
+          cp -v -R ${GITHUB_WORKSPACE}/TweaksAndFixes/Assets/* /tmp/Mods
+          
+      - name: Assemble release
+        id: assemble-release
+        run: |
+          RELEASE_DIR="${RUNNER_TEMP}/release"
+          echo "Release dir: ${RELEASE_DIR}"
+          mkdir -v "${RELEASE_DIR}"
+          echo "::set-output name=release-dir::${RELEASE_DIR}"
+          cp -v -R "/tmp/Mods" "${RELEASE_DIR}"
+          cp -v "${GITHUB_WORKSPACE}/README.md" "${RELEASE_DIR}"
+          ARCHIVENAME="$(grep -E Supported.UAD.Version\:.+[0-9]\.[0-9]+\.[0-9]+\..* README.md | sed -e s/.*Version\:./TweaksAndFixes_nightly_UAD/g)"
+          echo "::set-output name=artifact-name::${ARCHIVENAME}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.assemble-release.outputs.artifact-name }}
+          path: ${{ steps.assemble-release.outputs.release-dir }}
+          overwrite: true
