@@ -39,7 +39,7 @@ jobs:
           echo "::set-output name=release-dir::${RELEASE_DIR}"
           cp -v -R "/tmp/Mods" "${RELEASE_DIR}"
           cp -v "${GITHUB_WORKSPACE}/README.md" "${RELEASE_DIR}"
-          ARCHIVENAME="$(grep -E Supported.UAD.Version\:.+[0-9]\.[0-9]+\.[0-9]+\..* README.md | sed -e s/.*Version\:./TweaksAndFixes_nightly_UAD/g)"
+          ARCHIVENAME="$(grep -E Supported.UAD.Version\:.+[0-9]\.[0-9]+\.[0-9]+\..* README.md | sed -e s/.*Version\:./TweaksAndFixes_nightly_UAD_/g)"
           echo "Archive name: $(ARCHIVENAME)"
           echo "::set-output name=artifact-name::${ARCHIVENAME}"
 

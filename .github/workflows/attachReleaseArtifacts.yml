@@ -25,12 +25,6 @@ jobs:
           echo "Found branch ${releaseBranch}"
           echo "tagged_branch=${releaseBranch}" >> $GITHUB_ENV
 
-      - name: Copy files
-        run: |
-          mkdir /tmp/Mods/
-          cp -v ${GITHUB_WORKSPACE}/TweaksAndFixes/bin/Release/net6.0/TweaksAndFixes.dll /tmp/Mods/TweaksAndFixes.dll
-          cp -v -R ${GITHUB_WORKSPACE}/TweaksAndFixes/Assets/* /tmp/Mods
-          
       - name: Assemble release
         id: assemble-release
         run: |
@@ -38,14 +32,17 @@ jobs:
           echo "Release dir: ${RELEASE_DIR}"
           mkdir -v "${RELEASE_DIR}"
           echo "::set-output name=release-dir::${RELEASE_DIR}"
-          cp -v -R "/tmp/Mods" "${RELEASE_DIR}"
+          mkdir -v "${RELEASE_DIR}/Mods"
+          cp -v "${GITHUB_WORKSPACE}/TweaksAndFixes/bin/Release/net6.0/TweaksAndFixes.dll" "${RELEASE_DIR}/Mods/TweaksAndFixes.dll"
+          cp -v -R ${GITHUB_WORKSPACE}/TweaksAndFixes/Assets/* "${RELEASE_DIR}/Mods"
           cp -v "${GITHUB_WORKSPACE}/README.md" "${RELEASE_DIR}"
-          UADVERSION="$(grep -E Supported.UAD.Version\:.+[0-9]\.[0-9]+\.[0-9]+\..* README.md | sed -e s/.*Version\:./TweaksAndFixes_nightly_UAD/g)"
-          echo "UAD Version: $(UADVERSION)"
-          ARCHIVENAME=TweaksAndFixes_${{ github.event.release.tag_name }}_for_$(UADVERSION).zip
+          UADVERSION="$(grep -E Supported.UAD.Version\:.+[0-9]\.[0-9]+\.[0-9]+\..* README.md | sed -e s/.*Version\:./UAD_/g)"
+          echo $UADVERSION
+          ARCHIVENAME=TweaksAndFixes_${{ github.event.release.tag_name }}_for_$UADVERSION.zip
           echo "::set-output name=artifact-name::${ARCHIVENAME}"
-          cd $(RELEASE_DIR)
-          zip -r $(ARCHIVENAME) *
+          echo $ARCHIVENAME
+          cd $RELEASE_DIR
+          zip -r $ARCHIVENAME *
 
       - name: Upload package to release
         uses: actions/upload-release-asset@v1
