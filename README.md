@@ -63,6 +63,9 @@ The name is unused and simply for descriptive purposes. The filenmae is the file
 
 Note that you can specify a filename of `--` which means to use the built-in predefined designs asset. This lets you layer a small set of custom, high-quality predefined designs on top of the large set of built-in designs. Referencing this file will cause issues if mod(s) are installed that change ship parts and stats such that stock designs are no longer legal or working.
 
+### Disallow predefined designs
+For mods that don't want to provide predefined designs, TAF supports the new param `taf_force_no_predef_designs`. Set that to 1 and no mode except Slow can be set on the New Game screen, meaning campaigns will work correctly even with no predefined design overrides.
+
 ### Batch ship generation
 To ease in creating predefined designs, TAF reimplements the UI for the built-in batch ship generator. In the main menu, press G. You can then show the years panel and toggle on the years you wish to generate ships for, set the nation(s) to generate for, set the ship type(s), and set the number of ships per nation and per type. When you press Generate, the specified designs will be generated. At the end, you will need to quit the game and relaunch it to get back to the main menu.
 
@@ -181,6 +184,7 @@ TAF includes a serialization library for reading and writing CSV files to manage
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.15.0 - Include TAFData folder, which includes localization strings for the mod. These can be overridden in <Language name>.lng in the Mods folder, like usual for loc overrides. In addition, support forcing players to only be able to choose AI Design Usage: Slow when creating campaigns, allowing mods to be used with 1.6.0.7 even without predefined designs. Starting from this version, TAF must be downloaded as an archive, not just a dll (see revised installation instructions).
 * 3.14.2 - Fix too-large messageboxes (for example, the War Erupts message) by putting some text in the scrollbox
 * 3.14.1 - Fix another super dumb typo: actually save the copied gun mark data when refitting ships
 * 3.14.0 - New Feature: Support overlaying predefined ships sets. See readme for details (updated description of the overriding predefined ships feature). Update to 1.6.0.7 Optx2

@@ -80,6 +80,8 @@ namespace TweaksAndFixes
         public static bool UseGenArmorDefaults = false;
         [ConfigParse("Don't Force AI Tech with Predefined Designs", "no_force_tech_with_predefs")]
         public static bool DontClobberTechForPredefs = false;
+        [ConfigParse("Disallow Predefined Designs in New Campaigns", "force_no_predef_designs")]
+        public static bool ForceNoPredefsInNewGames = true;
 
         public static void LoadConfig()
         {

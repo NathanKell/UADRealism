@@ -17,6 +17,14 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(CampaignController))]
     internal class Patch_CampaignController
     {
+        [HarmonyPatch(nameof(CampaignController.Init))]
+        [HarmonyPrefix]
+        internal static void Prefix_Init(ref int campaignDesignsUsage)
+        {
+            if (Config.ForceNoPredefsInNewGames)
+                campaignDesignsUsage = 0;
+        }
+
         [HarmonyPatch(nameof(CampaignController.GetSharedDesign))]
         [HarmonyPrefix]
         internal static bool Prefix_GetSharedDesign(CampaignController __instance, Player player, ShipType shipType, int year, bool checkTech, bool isEarlySavedShip, ref Ship __result)

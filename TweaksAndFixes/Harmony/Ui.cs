@@ -98,6 +98,15 @@ namespace TweaksAndFixes
             EnsureAllButtons(__instance);
         }
 
+        [HarmonyPatch(nameof(Ui.NewGameUI))]
+        [HarmonyPostfix]
+        internal static void Postfix_NewGameUI(Ui __instance)
+        {
+            if (!GameManager.IsNewGame)
+                return;
+            Patch_CampaignNewGame.FixDesignUsage(__instance.NewGameWindow);
+        }
+
         private static void ClearAllButtons(Ui ui)
         {
             if (ui == null || ui.gameObject == null)
