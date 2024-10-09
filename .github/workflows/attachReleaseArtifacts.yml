@@ -25,19 +25,6 @@ jobs:
           echo "Found branch ${releaseBranch}"
           echo "tagged_branch=${releaseBranch}" >> $GITHUB_ENV
 
-      - name: Download required assemblies
-        id: download-assemblies
-        shell: bash
-        env:
-          KSP_ZIP_PASSWORD: ${{ secrets.KSP_ZIP_PASSWORD }}
-        run: |
-          curl https://ksp-ro.s3-us-west-2.amazonaws.com/KSPAssemblies-1.12.zip --output /tmp/bins.zip
-          KSP_DLL_PATH="/opt/ksp/assembly"
-          echo "::set-output name=ksp-dll-path::${KSP_DLL_PATH}"
-          mkdir -p "${KSP_DLL_PATH}"
-          unzip -P "${KSP_ZIP_PASSWORD}" '/tmp/bins.zip' -d "${KSP_DLL_PATH}"
-          rm '/tmp/bins.zip'
-
       - name: Copy files
         run: |
           mkdir /tmp/Mods/
