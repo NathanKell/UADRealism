@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 100
 
-      - name: Build mod solution
+      - name: Copy files
         run: |
           mkdir /tmp/Mods/
           cp -v ${GITHUB_WORKSPACE}/TweaksAndFixes/bin/Release/net6.0/TweaksAndFixes.dll /tmp/Mods/TweaksAndFixes.dll
@@ -40,6 +40,7 @@ jobs:
           cp -v -R "/tmp/Mods" "${RELEASE_DIR}"
           cp -v "${GITHUB_WORKSPACE}/README.md" "${RELEASE_DIR}"
           ARCHIVENAME="$(grep -E Supported.UAD.Version\:.+[0-9]\.[0-9]+\.[0-9]+\..* README.md | sed -e s/.*Version\:./TweaksAndFixes_nightly_UAD/g)"
+          echo "Archive name: $(ARCHIVENAME)"
           echo "::set-output name=artifact-name::${ARCHIVENAME}"
 
       - name: Upload artifacts
