@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Reflection;
 using MelonLoader;
 
+#pragma warning disable CS8601
 #pragma warning disable CS8604
 #pragma warning disable CS8605
 #pragma warning disable CS8618
@@ -46,12 +47,16 @@ namespace TweaksAndFixes
 
         public static int StartingYear = 1890;
 
-        internal static readonly string? _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-        internal static readonly string _FlagFile = "flags.csv";
-        internal static readonly string _SpriteFile = "sprites.csv";
-        internal static readonly string _GenArmorDataFile = "genarmordata.csv";
-        internal static readonly string _PredefinedDesignsFile = "predefinedDesigns.bin";
-        internal static readonly string _PredefinedDesignsDataFile = "predefinedDesignsData.csv";
+        internal static readonly string _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        internal const string _DataDir = "TAFData";
+        internal static readonly string _DataPath = Path.Combine(_BasePath, _DataDir);
+        internal const string _FlagFile = "flags.csv";
+        internal const string _SpriteFile = "sprites.csv";
+        internal const string _GenArmorDataFile = "genarmordata.csv";
+        internal const string _GenArmorDefaultsFile = "genArmorDefaults.csv";
+        internal const string _PredefinedDesignsFile = "predefinedDesigns.bin";
+        internal const string _PredefinedDesignsDataFile = "predefinedDesignsData.csv";
+        internal const string _LocFile = "locText.lng";
 
         public enum OverrideMapOptions
         {

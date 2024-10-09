@@ -553,12 +553,15 @@ namespace TweaksAndFixes
                 return File.ReadAllText(filePath);
             }
 
-            public static string[] GetLinesFromFile(string filename)
+            public static string[] GetLinesFromFile(string filename, bool useDataPath = false)
             {
                 if (!Directory.Exists(Config._BasePath))
                     return null;
 
-                string filePath = Path.Combine(Config._BasePath, filename);
+                if (useDataPath && !Directory.Exists(Config._DataPath))
+                    return null;
+
+                string filePath = Path.Combine(useDataPath ? Config._DataPath : Config._BasePath, filename);
                 if (!File.Exists(filePath))
                     return null;
 

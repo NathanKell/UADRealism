@@ -174,7 +174,6 @@ namespace TweaksAndFixes
             if (ship == null)
                 return;
 
-            // Would be faster to drill down but this works.
             var objTCs = ui.gameObject.Get("TurretCalibers");
             if (objTCs == null)
                 return;
@@ -270,7 +269,7 @@ namespace TweaksAndFixes
             textNew.transform.SetParent(buttonNew.transform, true);
             textNew.name = "Text";
             var text = textNew.GetComponent<Text>();
-            text.text = "Upgrade Mark";
+            text.text = LocalizeManager.Localize("$TAF_Ui_Constr_UpgradeMark");
             var trf = textNew.GetComponent<RectTransform>();
             trf.sizeDelta = new Vector2(150, 40);
             text.fontSize = 35;
@@ -313,7 +312,7 @@ namespace TweaksAndFixes
             le.preferredHeight = 75;
             le.preferredWidth = 53;
             var text = buttonNew.transform.GetChild("Text").GetComponent<Text>();
-            text.text = "Upgrade\nTorpedo\nMark";
+            text.text = text.text = LocalizeManager.Localize("$TAF_Ui_Constr_UpgradeTorpMark");
             text.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
             text.resizeTextMinSize = text.resizeTextMaxSize = 10;
             text.rectTransform.anchorMax = new Vector2(1f, 1f);

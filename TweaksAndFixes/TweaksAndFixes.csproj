@@ -84,22 +84,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Properties\Resources.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Update="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
+    <Folder Include="Properties\" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /y $(TargetPath) &quot;C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Mods\TweaksAndFixes.dll&quot;" />
+    <Exec Command="copy /Y $(TargetPath) &quot;C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Mods\TweaksAndFixes.dll&quot;&#xD;&#xA;rd /Q /S &quot;C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Mods\TAFData&quot;&#xD;&#xA;xcopy /Y /S $(ProjectDir)\Assets\* &quot;C:\Games\Steam\steamapps\common\Ultimate Admiral Dreadnoughts\Mods\&quot;" />
   </Target>
 
 </Project>

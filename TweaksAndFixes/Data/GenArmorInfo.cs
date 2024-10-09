@@ -80,23 +80,23 @@ namespace TweaksAndFixes
         public static void LoadData()
         {
             string path = Path.Combine(Config._BasePath, Config._GenArmorDataFile);
-            string armorText;
-            if (File.Exists(path))
-            {
-                armorText = File.ReadAllText(path);
-            }
-            else
+            if (!File.Exists(path))
             {
                 if (!Config.UseGenArmorDefaults)
                 {
                     Melon<TweaksAndFixes>.Logger.Warning($"Skipped loading armor generation rules, `{Config._GenArmorDataFile}` not found.");
                     return;
                 }
-                armorText = Properties.Resources.genArmor;
+                path = Path.Combine(Config._DataPath, Config._GenArmorDefaultsFile);
+                if (!File.Exists(path))
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Failed to find data file {Config._GenArmorDefaultsFile} in {Config._DataDir}!");
+                    return;
+                }
             }
 
             List<GenArmorData> list = new List<GenArmorData>();
-            Serializer.CSV.Read<List<GenArmorData>, GenArmorData>(armorText, list, true);
+            Serializer.CSV.Read<List<GenArmorData>, GenArmorData>(list, path, true);
             foreach (var lst in _Data.Values)
                 lst.Sort((a, b) => a.year.CompareTo(b.year));
 

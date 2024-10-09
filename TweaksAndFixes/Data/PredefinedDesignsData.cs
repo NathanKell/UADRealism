@@ -452,6 +452,7 @@ namespace TweaksAndFixes
 
         internal static System.Collections.IEnumerator FixBSGText(GameObject numInputObj, GameObject typeDropObj, GameObject nationDropObj)
         {
+            // TODO: We could just keep the LocalizeText component?
             yield return new WaitForEndOfFrame();
             var bsg = _BatchGenUI.GetComponent<BatchShipGenerator>();
             var root = bsg.InitRoot;
@@ -461,14 +462,14 @@ namespace TweaksAndFixes
                 GameObject.Destroy(locs[i]);
             yield return new WaitForEndOfFrame();
 
-            root.transform.Find("Header").GetComponent<TextMeshProUGUI>().text = "Batch Ship Generator";
-            root.transform.Find("Note").GetComponent<TextMeshProUGUI>().text = "Note: Generation may take a long time and will generate many Shared Designs. Clear your designs first!";
-            bsg.startButton.GetComponentInChildren<TextMeshProUGUI>().text = "Generate";
-            bsg.yearsButton.GetComponentInChildren<TextMeshProUGUI>().text = "Show Years";
-            bsg.closeYearsPanel.GetComponentInChildren<TextMeshProUGUI>().text = "Hide Years";
-            nationDropObj.transform.Find("Label").GetComponent<TextMeshProUGUI>().text = "Nations";
-            typeDropObj.transform.Find("Label").GetComponent<TextMeshProUGUI>().text = "Types";
-            numInputObj.FindDeepChild("Placeholder").GetComponent<TextMeshProUGUI>().text = "Num Ships Per";
+            root.transform.Find("Header").GetComponent<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_Title");
+            root.transform.Find("Note").GetComponent<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_Note");
+            bsg.startButton.GetComponentInChildren<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_Generate");
+            bsg.yearsButton.GetComponentInChildren<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_ShowYears");
+            bsg.closeYearsPanel.GetComponentInChildren<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_HideYears");
+            nationDropObj.transform.Find("Label").GetComponent<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_Nations");
+            typeDropObj.transform.Find("Label").GetComponent<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_Types");
+            numInputObj.FindDeepChild("Placeholder").GetComponent<TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_BatchShipGenerator_NumShips");
         }
     }
 }

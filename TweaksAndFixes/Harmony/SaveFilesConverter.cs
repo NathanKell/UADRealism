@@ -36,19 +36,20 @@ namespace TweaksAndFixes
                 predefsToShared = GameObject.Instantiate(__instance.DeleteAllCampaign, upperButtons.transform);
 
             sharedToJson.name = jsonName;
-            sharedToJson.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Designs to JSON";
+            sharedToJson.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_Convert_ConvertedToJSON");
             sharedToJson.onClick.RemoveAllListeners();
+            // TODO: We could just keep the LocalizeText component?
             var loc = sharedToJson.GetComponentInChildren<LocalizeText>(true);
             if (loc != null)
                 GameObject.Destroy(loc);
             sharedToJson.onClick.AddListener(new System.Action(() =>
             {
                 int count = DesignsToJSON();
-                MessageBoxUI.Show("Converted Designs to JSON", $"Converted {count} designs");
+                MessageBoxUI.Show(LocalizeManager.Localize("$TAF_Ui_Convert_ConvertedToJSON_Title"), LocalizeManager.Localize("$TAF_Ui_Convert_ConvertedToJSON_Text", count));
             }));
 
             sharedToPredefs.name = predefName;
-            sharedToPredefs.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Designs to Predefined";
+            sharedToPredefs.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_Convert_Exported");
             sharedToPredefs.onClick.RemoveAllListeners();
             loc = sharedToPredefs.GetComponentInChildren<LocalizeText>(true);
             if (loc != null)
@@ -56,11 +57,11 @@ namespace TweaksAndFixes
             sharedToPredefs.onClick.AddListener(new System.Action(() =>
             {
                 int count = DesignsToPredefs();
-                MessageBoxUI.Show("Exported Predefined Designs", $"Exported {count} Shared Design ships to {Config._PredefinedDesignsFile}");
+                MessageBoxUI.Show(LocalizeManager.Localize("$TAF_Ui_Convert_Exported_Title"), LocalizeManager.Localize("$TAF_Ui_Convert_Exported_Text", count, Config._PredefinedDesignsFile));
             }));
 
             predefsToShared.name = predefName;
-            predefsToShared.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = "Predefined to Designs";
+            predefsToShared.GetComponentInChildren<Il2CppTMPro.TextMeshProUGUI>().text = LocalizeManager.Localize("$TAF_Ui_Convert_PredefToDesigns");
             predefsToShared.onClick.RemoveAllListeners();
             loc = predefsToShared.GetComponentInChildren<LocalizeText>(true);
             if (loc != null)
@@ -68,7 +69,7 @@ namespace TweaksAndFixes
             predefsToShared.onClick.AddListener(new System.Action(() =>
             {
                 int count = PredefsToDesigns();
-                MessageBoxUI.Show("Saved Predefined Designs", $"Saved {count} predefined ships to Shared Designs");
+                MessageBoxUI.Show(LocalizeManager.Localize("$TAF_Ui_Convert_PredefToDesigns_Title"), LocalizeManager.Localize("$TAF_Ui_Convert_PredefToDesigns_Text", count));
             }));
         }
 
