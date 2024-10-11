@@ -11,7 +11,7 @@ using MelonLoader;
 
 namespace TweaksAndFixes
 {
-    public struct FilePath
+    public class FilePath
     {
         public enum DirType
         {
@@ -64,6 +64,19 @@ namespace TweaksAndFixes
 
         public bool Exists => Directory.Exists(directory) && File.Exists(path);
         public bool ExistsIfRequired => !required || Exists;
+
+        public void PrintError()
+        {
+            Melon<TweaksAndFixes>.Logger.Error($"Could not open file {name} under {subDir}, full path {path}");
+        }
+
+        public bool VerifyOrLog()
+        {
+            if (Exists)
+                return true;
+            PrintError();
+            return false;
+        }
     }
 
     public class Config
@@ -105,14 +118,14 @@ namespace TweaksAndFixes
         internal static readonly string _BasePath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         internal const string _DataDir = "TAFData";
         internal static readonly string _DataPath = Path.Combine(_BasePath, _DataDir);
-        internal const string _FlagFile = "flags.csv";
-        internal const string _SpriteFile = "sprites.csv";
-        internal const string _GenArmorDataFile = "genarmordata.csv";
-        internal const string _GenArmorDefaultsFile = "genArmorDefaults.csv";
-        internal static readonly FilePath _GenArmorDefaults = new FilePath(FilePath.DirType.DataDir, "genArmorDefaults.csv", true);
-        internal const string _PredefinedDesignsFile = "predefinedDesigns.bin";
-        internal const string _PredefinedDesignsDataFile = "predefinedDesignsData.csv";
-        internal const string _LocFile = "locText.lng";
+
+        internal static readonly FilePath _FlagFile = new FilePath(FilePath.DirType.ModsDir, "flags.csv");
+        internal static readonly FilePath _SpriteFile = new FilePath(FilePath.DirType.ModsDir, "sprites.csv");
+        internal static readonly FilePath _GenArmorDataFile = new FilePath(FilePath.DirType.ModsDir, "genarmordata.csv");
+        internal static readonly FilePath _GenArmorDefaultsFile = new FilePath(FilePath.DirType.DataDir, "genArmorDefaults.csv", true);
+        internal static readonly FilePath _PredefinedDesignsFile = new FilePath(FilePath.DirType.ModsDir, "predefinedDesigns.bin");
+        internal static readonly FilePath _PredefinedDesignsDataFile = new FilePath(FilePath.DirType.ModsDir, "predefinedDesignsData.csv");
+        internal static readonly FilePath _LocFile = new FilePath(FilePath.DirType.DataDir, "locText.lng");
 
         public static bool RequiredFilesExist()
         {
@@ -122,7 +135,9 @@ namespace TweaksAndFixes
             {
                 if (f.FieldType != typeof(FilePath))
                     continue;
-                FilePath fp = (FilePath)f.GetValue(null);
+                FilePath? fp = f.GetValue(null) as FilePath;
+                if (fp == null)
+                    continue;
                 if (!fp.ExistsIfRequired)
                 {
                     success = false;

@@ -12,11 +12,12 @@ namespace TweaksAndFixes
     {
         private static readonly HashSet<string> _SeenKeys = new HashSet<string>();
 
-        private static int LoadLocFromFile(LocalizeManager.LanguagesData __result, string filename, bool underData, bool clobber)
+        private static int LoadLocFromFile(LocalizeManager.LanguagesData __result, FilePath file, bool clobber)
         {
-            var lines = Serializer.CSV.GetLinesFromFile(filename, underData);
-            if (lines == null)
+            if (!file.Exists)
                 return -1;
+
+            var lines = File.ReadAllLines(file.path);
 
             for (int j = 0; j < lines.Length; ++j)
             {
@@ -24,14 +25,14 @@ namespace TweaksAndFixes
                 var split = line.Split(';');
                 if (split.Length < 2)
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"Error loading language file {filename}, line {j + 1} `{line}` lacks key or value");
+                    Melon<TweaksAndFixes>.Logger.Error($"Error loading language file {file.name}, line {j + 1} `{line}` lacks key or value");
                     continue;
                 }
 
                 string key = split[0];
                 if (_SeenKeys.Contains(key))
                 {
-                    Melon<TweaksAndFixes>.Logger.Error($"Error loading language file {filename}, line {j + 1} `{line}` is a duplicate key");
+                    Melon<TweaksAndFixes>.Logger.Error($"Error loading language file {file.name}, line {j + 1} `{line}` is a duplicate key");
                     continue;
                 }
                 _SeenKeys.Add(key);
@@ -53,11 +54,11 @@ namespace TweaksAndFixes
         [HarmonyPatch(nameof(LocalizeManager.LoadLanguage))]
         internal static void Postfix_LoadLanguage(LocalizeManager __instance, string currentLanguage, ref LocalizeManager.LanguagesData __result)
         {
-            int overrideCount = LoadLocFromFile(__result, currentLanguage + ".lng", false, true);
+            int overrideCount = LoadLocFromFile(__result, new FilePath(FilePath.DirType.ModsDir, currentLanguage + ".lng"), true);
             if(overrideCount >= 0)
                 Melon<TweaksAndFixes>.Logger.Msg($"Overriding language {currentLanguage} with {overrideCount} lines");
 
-            if (LoadLocFromFile(__result, Config._LocFile, true, false) < 0)
+            if (LoadLocFromFile(__result, Config._LocFile, false) < 0)
                 Melon<TweaksAndFixes>.Logger.Error($"Unable to find base TAF loc file {Config._LocFile} in {Config._DataDir}");
         }
     }

@@ -57,7 +57,7 @@ namespace TweaksAndFixes
             sharedToPredefs.onClick.AddListener(new System.Action(() =>
             {
                 int count = DesignsToPredefs();
-                MessageBoxUI.Show(LocalizeManager.Localize("$TAF_Ui_Convert_Exported_Title"), LocalizeManager.Localize("$TAF_Ui_Convert_Exported_Text", count, Config._PredefinedDesignsFile));
+                MessageBoxUI.Show(LocalizeManager.Localize("$TAF_Ui_Convert_Exported_Title"), LocalizeManager.Localize("$TAF_Ui_Convert_Exported_Text", count, Config._PredefinedDesignsFile.name));
             }));
 
             predefsToShared.name = predefName;
@@ -101,7 +101,7 @@ namespace TweaksAndFixes
                 return 0;
 
             bool useStock = false;
-            if (!PredefinedDesignsData.LoadPredefs(Path.Combine(Config._BasePath, Config._PredefinedDesignsFile), out var predefs, out int dCount, false) || predefs == null)
+            if (!PredefinedDesignsData.LoadPredefs(Path.Combine(Config._BasePath, Config._PredefinedDesignsFile.name), out var predefs, out int dCount, false) || predefs == null)
             {
                 useStock = true;
                 PredefinedDesignsData.LoadPredefs(null, out predefs, out dCount, false);
@@ -254,10 +254,9 @@ namespace TweaksAndFixes
             }
 
             var bytes = Util.SerializeObjectByte<CampaignDesigns.Store>(predefs);
-            string path = Path.Combine(Config._BasePath, Config._PredefinedDesignsFile);
-            if (File.Exists(path))
-                File.Delete(path);
-            File.WriteAllBytes(path, bytes);
+            if (Config._PredefinedDesignsFile.Exists)
+                File.Delete(Config._PredefinedDesignsFile.path);
+            File.WriteAllBytes(Config._PredefinedDesignsFile.path, bytes);
             return count;
         }
     }

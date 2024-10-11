@@ -97,10 +97,9 @@ namespace TweaksAndFixes
             _localLoc["$TAF_LoadError_DataFail_Title"] = "TAF Installation Error";
             _localLoc["$TAF_LoadError_DataFail_Text"] = "<b>Tweaks and Fixes</b> was not installed properly and your game will not function. Please make sure you unzip the correct release of TAF to your Ultimate Admiral: Dreadnoughts folder and overwrite files if prompted. It is not enough to just copy the DLL.";
 
-            string path = Path.Combine(Config._DataPath, Config._LocFile);
-            if (Directory.Exists(Config._DataPath) && File.Exists(path))
+            if(Config._LocFile.Exists)
             {
-                var lines = File.ReadAllLines(path);
+                var lines = File.ReadAllLines(Config._LocFile.path);
                 foreach (var l in lines)
                 {
                     int idx = l.IndexOf(';');

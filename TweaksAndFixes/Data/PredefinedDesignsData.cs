@@ -78,12 +78,11 @@ namespace TweaksAndFixes
         {
             _predefFileData.Clear();
 
-            string filePath = Path.Combine(Config._BasePath, Config._PredefinedDesignsDataFile);
             string text;
-            if (File.Exists(filePath))
+            if (Config._PredefinedDesignsDataFile.Exists)
             {
                 _noFile = false;
-                text = File.ReadAllText(filePath);
+                text = File.ReadAllText(Config._PredefinedDesignsDataFile.path);
             }
             else
             {

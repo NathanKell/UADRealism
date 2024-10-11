@@ -512,6 +512,15 @@ namespace TweaksAndFixes
                 return Read<TList, TItem>(text, output, useComments);
             }
 
+            public static bool Read<TList, TItem>(TList output, FilePath file, bool useComments = true) where TList : IList<TItem>
+            {
+                if (!file.VerifyOrLog())
+                    return false;
+                
+                var text = File.ReadAllText(file.path);
+                return Read<TList, TItem>(text, output, useComments);
+            }
+
             public static bool Read<TDict, TKey, TValue>(TDict output, string path, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
             {
                 if (!File.Exists(path))
@@ -520,6 +529,15 @@ namespace TweaksAndFixes
                     return false;
                 }
                 var text = File.ReadAllText(path);
+                return Read<TDict, TKey, TValue>(text, output, keyName, useComments);
+            }
+
+            public static bool Read<TDict, TKey, TValue>(TDict output, FilePath file, string keyName = null, bool useComments = true) where TDict : IDictionary<TKey, TValue>
+            {
+                if (!file.VerifyOrLog())
+                    return false;
+
+                var text = File.ReadAllText(file.path);
                 return Read<TDict, TKey, TValue>(text, output, keyName, useComments);
             }
 
@@ -551,21 +569,6 @@ namespace TweaksAndFixes
                     return null;
 
                 return File.ReadAllText(filePath);
-            }
-
-            public static string[] GetLinesFromFile(string filename, bool useDataPath = false)
-            {
-                if (!Directory.Exists(Config._BasePath))
-                    return null;
-
-                if (useDataPath && !Directory.Exists(Config._DataPath))
-                    return null;
-
-                string filePath = Path.Combine(useDataPath ? Config._DataPath : Config._BasePath, filename);
-                if (!File.Exists(filePath))
-                    return null;
-
-                return File.ReadAllLines(filePath);
             }
 
             public static readonly string _TempTextAssetName = "tafTempTA";

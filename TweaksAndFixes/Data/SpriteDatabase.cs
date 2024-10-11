@@ -128,12 +128,11 @@ namespace TweaksAndFixes
 
         private void LoadData()
         {
-            string filePath = Path.Combine(Config._BasePath, Config._SpriteFile);
-            if (!File.Exists(filePath))
+            if (!Config._SpriteFile.Exists)
                 return;
 
             Melon<TweaksAndFixes>.Logger.Msg("Loading sprites database");
-            Serializer.CSV.Read<Dictionary<string, SpriteData>, string, SpriteData>(_spriteData, filePath, "name", true);
+            Serializer.CSV.Read<Dictionary<string, SpriteData>, string, SpriteData>(_spriteData, Config._SpriteFile, "name", true);
         }
 
         public void OverrideResources()

@@ -158,12 +158,11 @@ namespace TweaksAndFixes
 
             public void Load()
             {
-                string filePath = Path.Combine(Config._BasePath, Config._FlagFile);
-                if (!File.Exists(filePath))
+                if (!Config._FlagFile.Exists)
                     return;
 
                 Melon<TweaksAndFixes>.Logger.Msg("Loading flags database");
-                Serializer.CSV.Read<Dictionary<string, NationalFlag>, string, NationalFlag>(_flagsByCountry, filePath, "name", true);
+                Serializer.CSV.Read<Dictionary<string, NationalFlag>, string, NationalFlag>(_flagsByCountry, Config._FlagFile, "name", true);
             }
 
             public Sprite GetFlag(PlayerData data, bool naval = false, Player player = null, int newYear = 0)
