@@ -1,7 +1,7 @@
 # Tweaks And Fixes
 A collection of tweaks, fixes, and moddability support features for Ultimate Admiral: Dreadnoughts.
 
-## Supported UAD Version: 1.6.0.7
+## Supported UAD Version: 1.6.0.7Optx4
 
 ## Installation
 * [Download MelonLoader 0.6.4](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.4/MelonLoader.x64.zip) and unzip it to your UAD folder.

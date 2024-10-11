@@ -55,7 +55,7 @@ namespace TweaksAndFixes
         {
             int overrideCount = LoadLocFromFile(__result, currentLanguage + ".lng", false, true);
             if(overrideCount >= 0)
-                Melon<TweaksAndFixes>.Logger.Error($"Unable to find base TAF loc file {Config._LocFile} in {Config._DataDir}");
+                Melon<TweaksAndFixes>.Logger.Msg($"Overriding language {currentLanguage} with {overrideCount} lines");
 
             if (LoadLocFromFile(__result, Config._LocFile, true, false) < 0)
                 Melon<TweaksAndFixes>.Logger.Error($"Unable to find base TAF loc file {Config._LocFile} in {Config._DataDir}");

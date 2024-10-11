@@ -11,6 +11,61 @@ using MelonLoader;
 
 namespace TweaksAndFixes
 {
+    public struct FilePath
+    {
+        public enum DirType
+        {
+            ModsDir,
+            DataDir,
+            Other,
+        }
+
+        public readonly string name;
+        public readonly string path;
+        public readonly string directory;
+        public readonly string subDir;
+        public readonly DirType dirType;
+        public readonly bool required;
+
+        public FilePath(DirType dir, string file, bool isRequired = false)
+        {
+            required = isRequired;
+            name = file;
+            directory = dir == DirType.ModsDir ? Config._BasePath : Config._DataPath;
+            dirType = dir;
+            path = Path.Combine(directory, file);
+            subDir = dirType switch
+            {
+                DirType.ModsDir => "Mods",
+                DirType.DataDir => Config._DataDir,
+                _ => "<other path>"
+            };
+        }
+
+        public FilePath(string fullPath, bool isRequired = false)
+        {
+            required = isRequired;
+            name = Path.GetFileName(fullPath);
+            path = fullPath;
+            directory = Path.GetDirectoryName(fullPath);
+            if (directory == Config._BasePath)
+                dirType = DirType.ModsDir;
+            else if (directory == Config._DataPath)
+                dirType = DirType.DataDir;
+            else
+                dirType = DirType.Other;
+            subDir = dirType switch
+            {
+                DirType.ModsDir => "Mods",
+                DirType.DataDir => Config._DataDir,
+                _ => "<other path>"
+            };
+        }
+
+        public bool Exists => Directory.Exists(directory) && File.Exists(path);
+        public bool ExistsIfRequired => !required || Exists;
+    }
+
     public class Config
     {
         [System.AttributeUsage(System.AttributeTargets.Field | System.AttributeTargets.Property, AllowMultiple = false)]
@@ -54,9 +109,29 @@ namespace TweaksAndFixes
         internal const string _SpriteFile = "sprites.csv";
         internal const string _GenArmorDataFile = "genarmordata.csv";
         internal const string _GenArmorDefaultsFile = "genArmorDefaults.csv";
+        internal static readonly FilePath _GenArmorDefaults = new FilePath(FilePath.DirType.DataDir, "genArmorDefaults.csv", true);
         internal const string _PredefinedDesignsFile = "predefinedDesigns.bin";
         internal const string _PredefinedDesignsDataFile = "predefinedDesignsData.csv";
         internal const string _LocFile = "locText.lng";
+
+        public static bool RequiredFilesExist()
+        {
+            var fields = typeof(Config).GetFields(HarmonyLib.AccessTools.all);
+            bool success = true;
+            foreach (var f in fields)
+            {
+                if (f.FieldType != typeof(FilePath))
+                    continue;
+                FilePath fp = (FilePath)f.GetValue(null);
+                if (!fp.ExistsIfRequired)
+                {
+                    success = false;
+                    Melon<TweaksAndFixes>.Logger.Error($"Missing file: {fp.name} of dir {fp.dirType} (full path {fp.path})");
+                }
+            }
+
+            return success;
+        }
 
         public enum OverrideMapOptions
         {
