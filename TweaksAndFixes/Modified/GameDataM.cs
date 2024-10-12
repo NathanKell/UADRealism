@@ -115,11 +115,23 @@ namespace TweaksAndFixes
         {
             if (UnityEngine.Input.GetKeyUp(KeyCode.F9))
             {
-                Melon<TweaksAndFixes>.Logger.Msg("Performing minimal hot-reloading of parts and randParts and randPartsRefit. Note that no items may be added or removed or this will break!");
+                Melon<TweaksAndFixes>.Logger.Msg("Performing minimal hot-reloading. Note that no items may be added or removed or this will break!");
                 var text = GameDataM.GetText("parts");
                 if (text != null)
                 {
                     Serializer.CSV.ProcessCSV<PartData>(text, false, G.GameData.parts);
+                }
+
+                text = GameDataM.GetText("components");
+                if (text != null)
+                {
+                    Serializer.CSV.ProcessCSV<ComponentData>(text, false, G.GameData.components);
+                }
+
+                text = GameDataM.GetText("technologies");
+                if (text != null)
+                {
+                    Serializer.CSV.ProcessCSV<TechnologyData>(text, false, G.GameData.technologies);
                 }
 
                 text = GameDataM.GetText("randParts");

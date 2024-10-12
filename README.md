@@ -1,7 +1,7 @@
 # Tweaks And Fixes
 A collection of tweaks, fixes, and moddability support features for Ultimate Admiral: Dreadnoughts.
 
-## Supported UAD Version: 1.6.0.7Optx4
+## Supported UAD Version: 1.6.0.7Optx4-5
 
 ## Installation
 * [Download MelonLoader 0.6.4](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.4/MelonLoader.x64.zip) and unzip it to your UAD folder.
@@ -184,6 +184,7 @@ TAF includes a serialization library for reading and writing CSV files to manage
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.15.2 - Hot-reload components as well as parts/randParts. Fix "force no predefined designs" defaulting to true. Works with Optx4 or Optx5.
 * 3.15.1 - Show error messages on launch if TAF is not compatible with this version of UAD, or if TAF was not installed correctly. Update to UAD 1.6.0.7 Optx4.
 * 3.15.0 - Include TAFData folder, which includes localization strings for the mod. These can be overridden in <Language name>.lng in the Mods folder, like usual for loc overrides. In addition, support forcing players to only be able to choose AI Design Usage: Slow when creating campaigns, allowing mods to be used with 1.6.0.7 even without predefined designs. Starting from this version, TAF must be downloaded as an archive, not just a dll (see revised installation instructions).
 * 3.14.2 - Fix too-large messageboxes (for example, the War Erupts message) by putting some text in the scrollbox
