@@ -1569,7 +1569,7 @@ namespace TweaksAndFixes
                     caliberCounts[i].Clear();
                     BatteryType b = (BatteryType)i;
                     if (!GetParamValueByYear(ship, $"calCount_{b}", out int count))
-                        count = (int)(Config.Param($"taf_shipgen_limit_calibercounts_{b}", noLimitCount) + 0.1f);
+                        count = Config.Param($"taf_shipgen_limit_calibercounts_{b}", noLimitCount);
                     maxCounts[i] = count;
                     if (count != noLimitCount)
                         isLimited = true;

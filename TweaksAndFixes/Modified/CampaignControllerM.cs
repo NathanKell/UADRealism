@@ -607,5 +607,25 @@ namespace TweaksAndFixes
             // Also completely ignore any ship improvement techs that aren't relevant to the ship.
             return _TechRelevanceCountsShip[(int)TechRelevance.Required] / (float)(_TechRelevanceCountsShip[(int)TechRelevance.Required] + _TechRelevanceCountsPlayer[(int)TechRelevance.Improvement]);
         }
+
+        public static AllianceRelation GetAllianceRelation(Player a, Player b)
+        {
+            var CD = CampaignController.Instance.CampaignData;
+            var allianceA = CD.GetPlayerAlliance(a);
+            var allianceB = CD.GetPlayerAlliance(b);
+            if (allianceA == null || allianceB == null)
+                return null;
+
+            foreach (var kvp in CD.AllianceRelations)
+            {
+                if ((kvp.Key.Key == allianceA && kvp.Key.Value == allianceB)
+                    || (kvp.Key.Key == allianceB && kvp.Key.Value == allianceA))
+                {
+                    return kvp.Value;
+                }
+            }
+
+            return null;
+        }
     }
 }

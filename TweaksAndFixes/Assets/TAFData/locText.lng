@@ -21,3 +21,4 @@ $TAF_Ui_BatchShipGenerator_HideYears;Hide Years
 $TAF_Ui_BatchShipGenerator_Nations;Nations
 $TAF_Ui_BatchShipGenerator_Types;Types
 $TAF_Ui_BatchShipGenerator_NumShips;Num Ships Per
+$TAF_Ui_War_WhitePeace;The War has been very quiet...\n{0} {1} asks you if we should ask for a white peace.

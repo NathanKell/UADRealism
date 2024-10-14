@@ -60,6 +60,14 @@ namespace TweaksAndFixes
             SpriteDatabase.Instance.OverrideResources();
         }
 
+        [HarmonyPatch(nameof(Ui.CheckForPeace))]
+        [HarmonyPrefix]
+        internal static bool Prefix_CheckForPeace(Ui __instance)
+        {
+            UiM.CheckForPeace(__instance);
+            return false;
+        }
+
         [HarmonyPatch(nameof(Ui.UpdateConstructor))]
         [HarmonyPrefix]
         internal static void Prefix_UpdateConstructor()

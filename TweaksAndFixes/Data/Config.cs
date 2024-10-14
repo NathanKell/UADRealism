@@ -237,6 +237,13 @@ namespace TweaksAndFixes
             return param;
         }
 
+        public static int Param(string name, int defValue = 0)
+        {
+            if (!Il2Cpp.G.GameData.parms.TryGetValue(name, out var param))
+                return defValue;
+            return (int)(param + 0.0001f);
+        }
+
         public static string? ParamS(string name, string? defValue = null)
         {
             if (!Il2Cpp.G.GameData.paramsRaw.TryGetValue(name, out var param))
