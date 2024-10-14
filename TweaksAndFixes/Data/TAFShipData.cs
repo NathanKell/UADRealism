@@ -165,6 +165,7 @@ namespace TweaksAndFixes
 
         public void OnClonePost(TAFShipData from)
         {
+            CopyGradeData(from);
         }
 
         public void OnRefit(Ship design)

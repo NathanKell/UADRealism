@@ -187,6 +187,7 @@ TAF includes a serialization library for reading and writing CSV files to manage
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.16.0 - Improve peace treaty generation to account for long wars with no or few VPs. Fix copied designs not getting their grades copied.
 * 3.15.2 - Hot-reload components as well as parts/randParts. Fix "force no predefined designs" defaulting to true. Works with Optx4 or Optx5.
 * 3.15.1 - Show error messages on launch if TAF is not compatible with this version of UAD, or if TAF was not installed correctly. Update to UAD 1.6.0.7 Optx4.
 * 3.15.0 - Include TAFData folder, which includes localization strings for the mod. These can be overridden in <Language name>.lng in the Mods folder, like usual for loc overrides. In addition, support forcing players to only be able to choose AI Design Usage: Slow when creating campaigns, allowing mods to be used with 1.6.0.7 even without predefined designs. Starting from this version, TAF must be downloaded as an archive, not just a dll (see revised installation instructions).
