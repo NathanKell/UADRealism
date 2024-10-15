@@ -56,6 +56,17 @@ namespace TweaksAndFixes
             }
         }
 
+        //[HarmonyPatch(nameof(Part.TryFindMount))]
+        //[HarmonyPostfix]
+        internal static void Postfix_TryFindMount(Part __instance, bool autoRotate)
+        {
+            Melon<TweaksAndFixes>.Logger.Msg($"Called TryFindMount on {__instance.name} ({__instance.data.name}) {(__instance.mount != null ? "Mounted" : string.Empty)}");
+            if (!__instance.CanPlace(out string denyReason))
+            {
+                Melon<TweaksAndFixes>.Logger.Msg($"Can't place. Deny reason {(denyReason == null ? "<null>" : denyReason)}");
+            }
+        }
+
         //[HarmonyPatch(nameof(Part.AnimateRotate))]
         //[HarmonyPrefix]
         //internal static void Prefix_AnimateRotate(Part __instance, float angle)

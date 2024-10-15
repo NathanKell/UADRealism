@@ -45,7 +45,7 @@ namespace TweaksAndFixes
                     b = rel.b;
                     vpA = rel.victoryPointsA;
                     vpB = rel.victoryPointsB;
-                    hasHuman = a.isAi;
+                    hasHuman = !a.isAi;
                 }
 
                 // Early check: If the war has gone on for too long with no VP, just call for peace
