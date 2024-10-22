@@ -89,6 +89,7 @@ namespace TweaksAndFixes
             public float _checkValue = 0;
             public bool _invertCheck = true;
             public float _exceptVal = 0;
+            public bool _log = true;
 
             public ConfigParse(string n, string p, bool useTAF = true)
             {
@@ -158,6 +159,8 @@ namespace TweaksAndFixes
 
         [ConfigParse("New Scrapping Behavior", "scrap_enable")]
         public static bool ScrappingChange = false;
+        [ConfigParse("Spread Scrapping Checks", "scrap_spread", _log = false)]
+        public static bool ScrappingSpread = true;
         [ConfigParse("Ports/Provinces Overriding", "override_map")]
         public static OverrideMapOptions OverrideMap = OverrideMapOptions.Disabled;
         [ConfigParse("Ship Autodesign Tweaks", "shipgen_tweaks")]
@@ -183,7 +186,8 @@ namespace TweaksAndFixes
                 if (attrib == null)
                     continue;
 
-                // Do this to suppress warning message
+                bool shouldLog = attrib._log;
+                // Do this to suppress warning message (rather than using .Param)
                 if (Il2Cpp.G.GameData.parms.TryGetValue(attrib._param, out var param))
                 {
                     if (f.FieldType.IsEnum)
@@ -196,7 +200,8 @@ namespace TweaksAndFixes
                             }
                             else
                             {
-                                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
+                                if (shouldLog)
+                                    Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
                             }
                             f.SetValue(null, eResult);
                         }
@@ -211,10 +216,12 @@ namespace TweaksAndFixes
                             }
                             else
                             {
-                                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
+                                if (shouldLog)
+                                    Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {eResult}");
                             }
                             f.SetValue(null, eResult);
                         }
+                        shouldLog = false;
                     }
                     else
                     {
@@ -226,7 +233,8 @@ namespace TweaksAndFixes
                         f.SetValue(null, isEnabled);
                     }
                 }
-                Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {(f.FieldType.IsEnum ? f.GetValue(null) : ((bool)(f.GetValue(null)) ? "Enabled" : "Disabled"))}");
+                if (shouldLog)
+                    Melon<TweaksAndFixes>.Logger.Msg($"{attrib._name}: {(f.FieldType.IsEnum ? f.GetValue(null) : ((bool)(f.GetValue(null)) ? "Enabled" : "Disabled"))}");
             }
         }
 
