@@ -1,7 +1,7 @@
 # Tweaks And Fixes
 A collection of tweaks, fixes, and moddability support features for Ultimate Admiral: Dreadnoughts.
 
-## Supported UAD Version: 1.6.0.7Optx4-5
+## Supported UAD Version: 1.6.0.9Optx3
 
 ## Installation
 * [Download MelonLoader 0.6.4](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.4/MelonLoader.x64.zip) and unzip it to your UAD folder.
@@ -38,7 +38,7 @@ Stock has some typos in its randParts and randPartsRefit assets, and moddders ca
 For example, the War Erupts message is too long when there are new nations added. This fix will move text into a scrollbox.
 
 ### Improved peace checks
-Stock has some minor bugs in its peace treaty offering checks. These are fixed, and in addition TAF will check for wars that last longer than `taf_war_max_months_for_low_vp_war` (default 12) months and have less than `taf_war_low_vp_threshold` (defualt 1000) VP across both parties. In these cases, the peace treaty chance event will keep getting generated so the AI does not stay locked in bloodless wars. Further, the number of months after which economic collapse is checked is now configurable via `taf_war_min_months_for_econ_collapse_peace`, where in stock it is hardcoded to 24.
+Stock has some minor bugs in its peace treaty offering checks. These are fixed, and in addition TAF will check for wars that last longer than `taf_war_max_months_for_low_vp_war` (default 12) months and have less than `taf_war_low_vp_threshold` (default 1000) VP across both parties. In these cases, the peace treaty chance event will keep getting generated so the AI does not stay locked in bloodless wars. Further, the number of months after which economic collapse is checked is now configurable via `taf_war_min_months_for_econ_collapse_peace`, where in stock it is hardcoded to 24.
 
 
 ## Modder Features
@@ -85,7 +85,7 @@ A ship hull can have ai_beamdraughtlimits() in its param column. ai_beamdraughtl
 The hardcoded values in conquest events are tunable now. `taf_conquest_event_chance_mult_starting_duration` (default 0.01) and `taf_conquest_event_chance_mult_full_duration` (default 0.5) control the displayed chance and are the values used at the start and end of the duration. When it's not a land rebellion, `taf_conquest_event_add_chance` (default 0.66) is added to the chance. (This also fixes a bug where the wrong event type checking is used.) Finally `taf_conquest_event_kill_factor` (default 1.0) is the extent to which soldier kill ratio influences conquest chance.
 
 ### Sprite overriding
-If the file sprites.csv exists in the Mods folder, TAF will override the specified sprites. For now, just component type sprites are supported. Example sprites.csv:
+If the file sprites.csv exists in the Mods folder, TAF will override the specified sprites. Component type (`Components/`) and tech group (`TechGroups/`) sprites are supported for now. Example sprites.csv:
 ```
 #resource name to override,filename,image width,image height
 # For example to override the engine icon with engine.png, make a
@@ -147,7 +147,7 @@ Set taf_alliance_changes to 1 in params to enable modified alliance mechanics: W
 Set `taf_crew_pool_colony_pop_ratio` to a nonzero number between 0 and 1. That portion of non-home population will be added to home population when calculation base crew pool and per-turn crew pool income for a nation.
 
 ### Replacement scrapping behavior
-The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships based on their scrap score, which is their age minus (a coefficient times their build time in months). Mothballed ships have a bonus to their score. The target tonnage is determined with a minimum base tonnage (`min_fleet_tonnage_for_scrap`) which is increased by a coefficient times (shipbuilding capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params, then tune using the following values:
+The AI fleet scrapping behavior is optionally completely replaced. Now the AI will scrap ships based on their scrap score, which is their age minus (a coefficient times their build time in months). Mothballed ships have a bonus to their score. The target tonnage is determined with a minimum base tonnage (`min_fleet_tonnage_for_scrap`) which is increased by a coefficient times (shipbuilding capacity raised to a specified power). Enable by setting `taf_scrap_enable` to 1 in params. This is a somewhat expensive calculation, so by default TAF only checks one nation per turn. If you want to run this on all nations each turn (like stock), set `taf_scrap_spread` to 0 in params. Revised scrapping can be tuned using the following params:
 ```
 taf_scrap_hysteresis - In order to not scrap every turn, the AI will only scrap when its fleet tonnage is greater than the scrap target _plus_ this. Once scrapping, it will scrap down to the scrap target, however.
 taf_scrap_buildTimeCoeff - the coefficient to build time
@@ -187,6 +187,7 @@ TAF includes a serialization library for reading and writing CSV files to manage
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.16.2 - Support overriding tech group sprites too. Make scrapping occur once per nation per turn, not all nations at once, for performance (controllable with param). Don't scrap during campaign generation. Update for UAD 1.6.0.9Optx3.
 * 3.16.1 - Fixed typo in peace treaty code causing the player to get prompts for AI-AI peace deals
 * 3.16.0 - Improve peace treaty generation to account for long wars with no or few VPs. Fix copied designs not getting their grades copied.
 * 3.15.2 - Hot-reload components as well as parts/randParts. Fix "force no predefined designs" defaulting to true. Works with Optx4 or Optx5.

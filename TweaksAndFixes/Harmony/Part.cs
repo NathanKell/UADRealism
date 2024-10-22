@@ -66,13 +66,12 @@ namespace TweaksAndFixes
                 Melon<TweaksAndFixes>.Logger.Msg($"Can't place. Deny reason {(denyReason == null ? "<null>" : denyReason)}");
             }
         }
-
-        //[HarmonyPatch(nameof(Part.AnimateRotate))]
-        //[HarmonyPrefix]
-        //internal static void Prefix_AnimateRotate(Part __instance, float angle)
-        //{
-        //    Melon<TweaksAndFixes>.Logger.Msg($"Rotate {__instance.name} by {angle:F0}");
-        //}
+        //[HarmonyPatch(nameof(Part.Mount))]
+        //[HarmonyPostfix]
+        internal static void Postfix_Mount(Part __instance, Mount mount)
+        {
+            Melon<TweaksAndFixes>.Logger.Msg($"Mounting part {__instance.name} to {(mount == null ? "<<nothing>>" : (mount.parentPart == null ? (mount.name + " (no parent)") : (mount.name + " on " + mount.parentPart.name)))}");
+        }
     }
 
     // We can't target ref arguments in an attribute, so
@@ -111,71 +110,6 @@ namespace TweaksAndFixes
     //        //        __result = true;
     //        //}
 
-    //    }
-    //}
-
-    //internal unsafe class Native_Part
-    //{
-    //    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    //    private delegate IntPtr CanPlaceDelegate(
-    //        IntPtr _this, // Part *
-    //        IntPtr* denyReason, // ystem_String **
-    //        IntPtr* overlapParts, // System_Collections_Generic_List_Part **
-    //        IntPtr* overlapBorders, // System_Collections_Generic_List_Collider **
-    //        IntPtr methodInfo); // const MethodInfo *
-
-    //    private static CanPlaceDelegate _patchCanPlace;
-    //    private static CanPlaceDelegate _original;
-    //    private static bool _hasPatched = false;
-
-    //    public static unsafe IntPtr CanPlace(IntPtr _this, IntPtr* denyReason, IntPtr* overlapParts, IntPtr* overlapBorders, IntPtr methodInfo)
-    //    {
-    //        IntPtr result = _original(_this, denyReason, overlapParts, overlapBorders, methodInfo);
-    //        //bool inResult = IL2CPP.PointerToValueGeneric<bool>(result, false, false);
-
-    //        //bool* ptr = (bool*) result.ToPointer();
-    //        //inResult = true;
-    //        //*ptr = inResult;
-    //        Melon<TweaksAndFixes>.Logger.Msg("CanPlace");
-
-    //        return result;
-    //    }
-
-    //    private static MethodInfo GetCanPlace()
-    //    {
-    //        var methods = AccessTools.GetDeclaredMethods(typeof(Part));
-    //        foreach (var m in methods)
-    //        {
-    //            if (m.Name != nameof(Part.CanPlace))
-    //                continue;
-
-    //            if (m.GetParameters().Length == 3)
-    //                return m;
-    //        }
-
-    //        return null;
-    //    }
-
-    //    public static unsafe void Patch()
-    //    {
-    //        if (_hasPatched)
-    //            return;
-
-    //        _hasPatched = true;
-
-    //        CanPlaceDelegate canPlacePatch = CanPlace;
-
-    //        var method = GetCanPlace();
-
-    //        var tgtPtr = *(IntPtr*)(IntPtr)typeof(Part).GetField("NativeMethodInfoPtr_CanPlace_Public_Boolean_byref_String_byref_List_1_Part_byref_List_1_Collider_0", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-
-    //        var dstPtr = canPlacePatch.Method.MethodHandle.GetFunctionPointer();
-
-    //        MelonUtils.NativeHookAttach((IntPtr)(&tgtPtr), dstPtr);
-
-    //        _original = Marshal.GetDelegateForFunctionPointer<CanPlaceDelegate>(tgtPtr);
-
-    //        MelonLogger.Msg("Patched!");
     //    }
     //}
 }

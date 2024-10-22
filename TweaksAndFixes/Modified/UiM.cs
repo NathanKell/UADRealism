@@ -31,7 +31,7 @@ namespace TweaksAndFixes
                 Player a, b;
                 float vpA, vpB;
                 bool hasHuman;
-                if (!rel.b.isAi)
+                if (rel.b == PlayerController.Instance)
                 {
                     a = rel.b;
                     b = rel.a;
@@ -45,7 +45,7 @@ namespace TweaksAndFixes
                     b = rel.b;
                     vpA = rel.victoryPointsA;
                     vpB = rel.victoryPointsB;
-                    hasHuman = !a.isAi;
+                    hasHuman = rel.a == PlayerController.Instance;
                 }
 
                 // Early check: If the war has gone on for too long with no VP, just call for peace
