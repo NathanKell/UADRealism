@@ -17,6 +17,8 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(CampaignController))]
     internal class Patch_CampaignController
     {
+        internal static CampaignController._AiManageFleet_d__195? _AiManageFleet = null;
+
         [HarmonyPatch(nameof(CampaignController.Init))]
         [HarmonyPrefix]
         internal static void Prefix_Init(ref int campaignDesignsUsage)
@@ -204,9 +206,9 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_ScrapOldAiShips(CampaignController __instance, Player player)
         {
-            if (Config.ScrappingChange)
+            if (Config.ScrappingChange && player.isMajor)
             {
-                CampaignControllerM.HandleScrapping(__instance, player);
+                CampaignControllerM.HandleScrapping(__instance, player, _AiManageFleet != null && _AiManageFleet.prewarming);
                 return false;
             }
             return true;
@@ -248,6 +250,24 @@ namespace TweaksAndFixes
                 return;
 
             PredefinedDesignsData.AddUIforBSG();
+        }
+    }
+
+    [HarmonyPatch(typeof(CampaignController._AiManageFleet_d__195))]
+    internal class Patch_AiManageFleet
+    {
+        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__195.MoveNext))]
+        [HarmonyPrefix]
+        internal static void Prefix_MoveNext(CampaignController._AiManageFleet_d__195 __instance)
+        {
+            Patch_CampaignController._AiManageFleet = __instance;
+        }
+
+        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__195.MoveNext))]
+        [HarmonyPostfix]
+        internal static void Postfix_MoveNext(CampaignController._AiManageFleet_d__195 __instance)
+        {
+            Patch_CampaignController._AiManageFleet = null;
         }
     }
 }

@@ -26,10 +26,19 @@ namespace TweaksAndFixes
             }
         }
 
-        public static void HandleScrapping(CampaignController _this, Player player)
+        public static void HandleScrapping(CampaignController _this, Player player, bool prewarming)
         {
             if (!player.isAi)
                 return;
+
+            if (prewarming)
+                return;
+
+            if (Config.ScrappingSpread)
+            {
+                if (_this.CurrentDate.turn % G.GameData.playersMajor.Count != player.data.Id % G.GameData.playersMajor.Count)
+                    return;
+            }
 
             Melon<TweaksAndFixes>.Logger.Msg($"Starting scrapping for player {player.data.name}");
             List<ShipScrapInfo> scrapCandidates = new List<ShipScrapInfo>();
@@ -57,7 +66,7 @@ namespace TweaksAndFixes
 
             if (scrapCandidates.Count == 0)
             {
-                Melon<TweaksAndFixes>.Logger.Msg($"-------->Error: no ships to scrap!");
+                Melon<TweaksAndFixes>.Logger.Msg($"-------->Error: no potential ships to scrap!");
                 return;
             }
             
