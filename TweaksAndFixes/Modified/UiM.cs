@@ -17,7 +17,7 @@ namespace TweaksAndFixes
             int monthsForEconCollapse = Config.Param("taf_war_min_months_for_econ_collapse_peace", 24);
             float lowVPThreshold = Config.Param("taf_war_low_vp_threshold", 1000f);
 
-            float peace_min_vp_difference = MonoBehaviourExt.Param("    peace_min_vp_difference", 10000f);
+            float peace_min_vp_difference = MonoBehaviourExt.Param("peace_min_vp_difference", 10000f);
             float peace_enemy_vp_ratio = MonoBehaviourExt.Param("peace_enemy_vp_ratio", 2f);
             float peace_vp_sum_prolonged_war = MonoBehaviourExt.Param("peace_vp_sum_prolonged_war", 150000f);
 
