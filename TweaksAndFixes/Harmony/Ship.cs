@@ -17,8 +17,8 @@ namespace TweaksAndFixes
         internal static bool _IsLoading = false;
         internal static Ship _ShipForLoading = null;
         internal static Ship.Store _StoreForLoading = null;
-        internal static Ship._GenerateRandomShip_d__564 _GenerateRandomShipRoutine = null;
-        internal static Ship._AddRandomPartsNew_d__582 _AddRandomPartsRoutine = null;
+        internal static Ship._GenerateRandomShip_d__573 _GenerateRandomShipRoutine = null;
+        internal static Ship._AddRandomPartsNew_d__591 _AddRandomPartsRoutine = null;
         internal static RandPart _LastRandPart = null;
         internal static bool _LastRPIsGun = false;
         internal static ShipM.BatteryType _LastBattery = ShipM.BatteryType.main;
@@ -246,7 +246,7 @@ namespace TweaksAndFixes
         // ALSO, it's code that's shared with IsComponentAvailable. But we
         // patch that by changing weight before and after the method. So there's
         // no need to do so here. So we abort if we're not in GenerateRandomShip.
-        [HarmonyPatch(nameof(Ship.__c._GetComponentsToInstall_b__565_3))]
+        [HarmonyPatch(nameof(Ship.__c._GetComponentsToInstall_b__574_3))]
         [HarmonyPrefix]
         internal static bool Prefix_GetComponentsToInstall_b__565_3(ComponentData c, ref float __result)
         {
@@ -264,12 +264,12 @@ namespace TweaksAndFixes
     // but once an RP is having parts placed, we also need to
     // knock options out whenever a caliber is picked. See
     // AddTurretArmor above.
-    [HarmonyPatch(typeof(Ship.__c__DisplayClass581_0))]
-    internal class Patch_Ship_c_AddRandomParts581_0
+    [HarmonyPatch(typeof(Ship.__c__DisplayClass590_0))]
+    internal class Patch_Ship_c_GetParts
     {
-        [HarmonyPatch(nameof(Ship.__c__DisplayClass581_0._GetParts_b__0))]
+        [HarmonyPatch(nameof(Ship.__c__DisplayClass590_0._GetParts_b__0))]
         [HarmonyPrefix]
-        internal static bool Prefix_b0(Ship.__c__DisplayClass581_0 __instance, PartData a, ref bool __result)
+        internal static bool Prefix_b0(Ship.__c__DisplayClass590_0 __instance, PartData a, ref bool __result)
         {
             // Super annoying we can't prefix GetParts itself to do the RP caching
             if (!Patch_Ship._GenGunInfo.isLimited || Patch_Ship.UpdateRPGunCacheOrSkip(__instance.randPart))
@@ -286,7 +286,7 @@ namespace TweaksAndFixes
         }
     }
 
-    [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__564))]
+    [HarmonyPatch(typeof(Ship._GenerateRandomShip_d__573))]
     internal class Patch_ShipGenRandom
     {
         //static string lastName = string.Empty;
@@ -303,9 +303,9 @@ namespace TweaksAndFixes
 
         const string bdlParamName = "ai_beamdraughtlimits";
 
-        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__564.MoveNext))]
+        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__573.MoveNext))]
         [HarmonyPrefix]
-        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__564 __instance, out GRSData __state, ref bool __result)
+        internal static bool Prefix_MoveNext(Ship._GenerateRandomShip_d__573 __instance, out GRSData __state, ref bool __result)
         {
             Patch_Ship._GenerateRandomShipRoutine = __instance;
             //if (lastName != __instance.__4__this.vesselName)
@@ -426,9 +426,9 @@ namespace TweaksAndFixes
             return true;
         }
 
-        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__564.MoveNext))]
+        [HarmonyPatch(nameof(Ship._GenerateRandomShip_d__573.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__564 __instance, GRSData __state)
+        internal static void Postfix_MoveNext(Ship._GenerateRandomShip_d__573 __instance, GRSData __state)
         {
             var ship = __instance.__4__this;
             var hd = ship.hull.data;
@@ -469,12 +469,12 @@ namespace TweaksAndFixes
     }
 
 
-    [HarmonyPatch(typeof(Ship._AddRandomPartsNew_d__582))]
+    [HarmonyPatch(typeof(Ship._AddRandomPartsNew_d__591))]
     internal class Patch_Ship_AddRandParts
     {
-        [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__582.MoveNext))]
+        [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__591.MoveNext))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(Ship._AddRandomPartsNew_d__582 __instance, out int __state)
+        internal static void Prefix_MoveNext(Ship._AddRandomPartsNew_d__591 __instance, out int __state)
         {
             Patch_Ship._AddRandomPartsRoutine = __instance;
             __state = __instance.__1__state;
@@ -507,9 +507,9 @@ namespace TweaksAndFixes
             //}
         }
 
-        [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__582.MoveNext))]
+        [HarmonyPatch(nameof(Ship._AddRandomPartsNew_d__591.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(Ship._AddRandomPartsNew_d__582 __instance, int __state)
+        internal static void Postfix_MoveNext(Ship._AddRandomPartsNew_d__591 __instance, int __state)
         {
             Patch_Ship._AddRandomPartsRoutine = null;
             //Melon<TweaksAndFixes>.Logger.Msg($"AddRandomPartsNew Iteration for state {__state} ended, new state {__instance.__1__state}");

@@ -1,7 +1,7 @@
 # Tweaks And Fixes
 A collection of tweaks, fixes, and moddability support features for Ultimate Admiral: Dreadnoughts.
 
-## Supported UAD Version: 1.6.0.9Optx3
+## Supported UAD Version: 1.6.1.1
 
 ## Installation
 * [Download MelonLoader 0.6.4](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.4/MelonLoader.x64.zip) and unzip it to your UAD folder.
@@ -38,7 +38,7 @@ Stock has some typos in its randParts and randPartsRefit assets, and moddders ca
 For example, the War Erupts message is too long when there are new nations added. This fix will move text into a scrollbox.
 
 ### Improved peace checks
-Stock has some minor bugs in its peace treaty offering checks. These are fixed, and in addition TAF will check for wars that last longer than `taf_war_max_months_for_low_vp_war` (default 12) months and have less than `taf_war_low_vp_threshold` (default 1000) VP across both parties. In these cases, the peace treaty chance event will keep getting generated so the AI does not stay locked in bloodless wars. Further, the number of months after which economic collapse is checked is now configurable via `taf_war_min_months_for_econ_collapse_peace`, where in stock it is hardcoded to 24.
+Stock has some minor bugs in its peace treaty offering checks. These are fixed, and in addition TAF will check for wars that last longer than `taf_war_max_months_for_low_vp_war` (default 12) months and have less than `taf_war_low_vp_threshold` (default 0) VP across both parties. In these cases, the peace treaty chance event will keep getting generated so the AI does not stay locked in bloodless wars. Further, the number of months after which economic collapse is checked is now configurable via `taf_war_min_months_for_econ_collapse_peace`, where in stock it is hardcoded to 24.
 
 
 ## Modder Features
@@ -187,6 +187,7 @@ TAF includes a serialization library for reading and writing CSV files to manage
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.16.3 - Fix peace VP difference param typo. Default white peace param to off. Update to UAD 1.6.1.1 Optx2
 * 3.16.2 - Support overriding tech group sprites too. Make scrapping occur once per nation per turn, not all nations at once, for performance (controllable with param). Don't scrap during campaign generation. Update for UAD 1.6.0.9Optx3.
 * 3.16.1 - Fixed typo in peace treaty code causing the player to get prompts for AI-AI peace deals
 * 3.16.0 - Improve peace treaty generation to account for long wars with no or few VPs. Fix copied designs not getting their grades copied.
