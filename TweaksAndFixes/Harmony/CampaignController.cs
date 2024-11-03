@@ -17,7 +17,7 @@ namespace TweaksAndFixes
     [HarmonyPatch(typeof(CampaignController))]
     internal class Patch_CampaignController
     {
-        internal static CampaignController._AiManageFleet_d__195? _AiManageFleet = null;
+        internal static CampaignController._AiManageFleet_d__197? _AiManageFleet = null;
 
         [HarmonyPatch(nameof(CampaignController.Init))]
         [HarmonyPrefix]
@@ -253,19 +253,19 @@ namespace TweaksAndFixes
         }
     }
 
-    [HarmonyPatch(typeof(CampaignController._AiManageFleet_d__195))]
+    [HarmonyPatch(typeof(CampaignController._AiManageFleet_d__197))]
     internal class Patch_AiManageFleet
     {
-        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__195.MoveNext))]
+        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__197.MoveNext))]
         [HarmonyPrefix]
-        internal static void Prefix_MoveNext(CampaignController._AiManageFleet_d__195 __instance)
+        internal static void Prefix_MoveNext(CampaignController._AiManageFleet_d__197 __instance)
         {
             Patch_CampaignController._AiManageFleet = __instance;
         }
 
-        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__195.MoveNext))]
+        [HarmonyPatch(nameof(CampaignController._AiManageFleet_d__197.MoveNext))]
         [HarmonyPostfix]
-        internal static void Postfix_MoveNext(CampaignController._AiManageFleet_d__195 __instance)
+        internal static void Postfix_MoveNext(CampaignController._AiManageFleet_d__197 __instance)
         {
             Patch_CampaignController._AiManageFleet = null;
         }
