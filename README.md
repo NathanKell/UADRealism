@@ -38,7 +38,7 @@ Stock has some typos in its randParts and randPartsRefit assets, and moddders ca
 For example, the War Erupts message is too long when there are new nations added. This fix will move text into a scrollbox.
 
 ### Improved peace checks
-Stock has some minor bugs in its peace treaty offering checks. These are fixed, and in addition TAF will check for wars that last longer than `taf_war_max_months_for_low_vp_war` (default 12) months and have less than `taf_war_low_vp_threshold` (default 0) VP across both parties. In these cases, the peace treaty chance event will keep getting generated so the AI does not stay locked in bloodless wars. Further, the number of months after which economic collapse is checked is now configurable via `taf_war_min_months_for_econ_collapse_peace`, where in stock it is hardcoded to 24.
+Stock has some minor bugs in its peace treaty offering checks. These are fixed, and in addition TAF will check for wars that last longer than `taf_war_max_months_for_low_vp_war` (default 12) months and have less than `taf_war_low_vp_threshold` (default 0) VP across both parties. In these cases, the peace treaty chance event will keep getting generated so the AI does not stay locked in bloodless wars. Further, the number of months after which economic collapse is checked is now configurable via `taf_war_min_months_for_econ_collapse_peace`, where in stock it is hardcoded to 24. Due to some issues, this feature defaults to disabled. Set `taf_peace_check` to 1 in params to enable the replacement peace code.
 
 
 ## Modder Features

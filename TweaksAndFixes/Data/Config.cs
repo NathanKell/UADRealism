@@ -175,6 +175,8 @@ namespace TweaksAndFixes
         public static bool DontClobberTechForPredefs = false;
         [ConfigParse("Disallow Predefined Designs in New Campaigns", "force_no_predef_designs")]
         public static bool ForceNoPredefsInNewGames = false;
+        [ConfigParse("Peace Checking Improvements", "peace_check")]
+        public static bool PeaceCheckOverride = false;
 
         public static void LoadConfig()
         {

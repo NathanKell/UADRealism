@@ -64,6 +64,9 @@ namespace TweaksAndFixes
         [HarmonyPrefix]
         internal static bool Prefix_CheckForPeace(Ui __instance)
         {
+            if (!Config.PeaceCheckOverride)
+                return true;
+
             UiM.CheckForPeace(__instance);
             return false;
         }
