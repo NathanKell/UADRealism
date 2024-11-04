@@ -1551,6 +1551,7 @@ namespace TweaksAndFixes
             public int[] maxCounts = new int[(int)BatteryType.COUNT];
             public List<int>[] caliberCounts = new List<int>[(int)BatteryType.COUNT];
             public int[] maxCalibers = new int[(int)BatteryType.COUNT];
+            public int[] minCalibers = new int[(int)BatteryType.COUNT];
             public bool isLimited = false;
 
             public GenGunInfo()
@@ -1586,6 +1587,19 @@ namespace TweaksAndFixes
                     // Make sure we can't have a main limit lower than sec (or main/sec lower than ter)
                     if (i > 0 && maxCalibers[i - 1] < maxCalibers[i])
                         maxCalibers[i] = maxCalibers[i - 1];
+
+                    if (ship.hull.data.paramx.TryGetValue($"ai_min_caliber_{b}", out lst) && lst.Count > 0 && int.TryParse(lst[0], out mc))
+                    {
+                        isLimited = true;
+                        minCalibers[i] = mc;
+                    }
+                    else
+                    {
+                        minCalibers[i] = 0;
+                    }
+
+                    if (minCalibers[i] > maxCalibers[i])
+                        minCalibers[i] = maxCalibers[i];
                 }
             }
 
@@ -1595,7 +1609,7 @@ namespace TweaksAndFixes
             public bool CaliberOK(BatteryType b, int cal)
             {
                 int idx = (int)b;
-                if (cal > maxCalibers[idx])
+                if (cal > maxCalibers[idx] || cal < minCalibers[idx])
                     return false;
 
                 if (caliberCounts[idx].Count < maxCounts[idx])
