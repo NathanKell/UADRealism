@@ -168,6 +168,11 @@ namespace TweaksAndFixes
                     }
                 }
             }
+
+            if (UnityEngine.Input.GetKeyUp(KeyCode.F10) && GameManager.IsConstructor && PlayerController.Instance != null && PlayerController.Instance.Ship != null)
+            {
+                ShipM.LogRPsForHull(G.ui.mainShip.hull.data);
+            }
         }
     }
 }

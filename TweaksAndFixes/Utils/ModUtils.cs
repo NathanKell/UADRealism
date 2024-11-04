@@ -582,6 +582,30 @@ namespace TweaksAndFixes
             return true;
         }
 
+        public static bool SetsEqual<T>(HashSet<T> a, HashSet<T> b)
+        {
+            if (a.Count != b.Count)
+                return false;
+
+            foreach (var item in a)
+                if (!b.Contains(item))
+                    return false;
+
+            return true;
+        }
+
+        public static bool OrderedListsEqual<T>(List<T> a, List<T> b)
+        {
+            int ac = a.Count;
+            if (ac != b.Count)
+                return false;
+            for (int i = ac; i-- > 0;)
+                if (!a[i].Equals(b[i]))
+                    return false;
+
+            return true;
+        }
+
         // Managed reimplementation of List.RemoveAll
         public static int RemoveAllManaged<T>(this Il2CppSystem.Collections.Generic.List<T> list, Predicate<T> match)
         {

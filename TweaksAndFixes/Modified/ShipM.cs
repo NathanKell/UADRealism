@@ -1537,6 +1537,195 @@ namespace TweaksAndFixes
             return val * GetCitadelMultFromBase(a);
         }
 
+        private static readonly char[] _OpSplitChars = new char[] { '[', ']' };
+        public enum RPOp
+        {
+            Tag,
+            Zero,
+        }
+
+        public struct RPOperation
+        {
+            public RPOp op;
+            public bool invert;
+            public string arg;
+        }
+
+        private static List<RPOperation> ParseOperations(Il2CppSystem.Collections.Generic.List<string> args)
+        {
+            var list = new List<RPOperation>();
+            foreach (var arg in args)
+            {
+                var split = arg.Split(_OpSplitChars, StringSplitOptions.RemoveEmptyEntries);
+                if (split.Length != 2)
+                    continue;
+                RPOp op = RPOp.Tag;
+                bool invert = false;
+                switch (split[0])
+                {
+                    case "tag": op = RPOp.Tag; break;
+                    case "!tag": op = RPOp.Tag; invert = true;  break;
+                    case "zero": op = RPOp.Zero; break;
+                    case "!zero": op = RPOp.Zero; invert = true;  break;
+                    default: continue;
+                }
+                list.Add(new RPOperation() { op = op, invert = invert, arg = split[1] });
+            }
+
+            return list;
+        }
+
+        private static bool CheckOperationProcess(PartData hull, Ship ship, List<RPOperation> ops, bool isOr, List<string> varsNonzero)
+        {
+            if (ops.Count == 0)
+                return true;
+
+            foreach (var op in ops)
+            {
+                bool value;
+                switch (op.op)
+                {
+                    case RPOp.Tag:
+                        value = hull.paramx.ContainsKey(op.arg);
+                        break;
+                    case RPOp.Zero:
+                        if (ship != null)
+                            value = ship.TechVar(op.arg) == 0f;
+                        else if (varsNonzero != null)
+                            value = !varsNonzero.Contains(op.arg);
+                        else
+                            value = true;
+                        break;
+                    default:
+                        continue;
+                }
+                if (op.invert)
+                    value = !value;
+
+                if (isOr)
+                {
+                    if (value)
+                        return true;
+                }
+                else
+                {
+                    if (!value)
+                        return false;
+                }
+            }
+
+            if (isOr)
+                return false;
+            else
+                return true;
+        }
+
+        public static bool CheckOperation(PartData hull, Ship ship, RandPart rp, List<string> vars)
+        {
+            if (ship != null)
+                hull = ship.hull.data;
+
+            foreach (var kvp in rp.paramx)
+            {
+                switch (kvp.Key)
+                {
+                    case "or":
+                    case "and":
+                        //var orList = ParseOperations(kvp.Value);
+                        //if (orList.Count > 0)
+                        //    orOps.Add(orList);
+                        if (!CheckOperationProcess(hull, ship, ParseOperations(kvp.Value), kvp.Key == "or", vars))
+                            return false;
+                        break;
+                }
+            }
+
+            return true;
+        }
+
+        private static void FillVars(RandPart rp, List<string> vars)
+        {
+            foreach (var kvp in rp.paramx)
+            {
+                switch (kvp.Key)
+                {
+                    case "or":
+                    case "and":
+                        var list = ParseOperations(kvp.Value);
+                        foreach (var op in list)
+                            if (op.op == RPOp.Zero && !vars.Contains(op.arg))
+                                vars.Add(op.arg);
+                        break;
+                }
+            }
+        }
+
+        public static List<KeyValuePair<List<string>, List<RandPart>>> FindApplicableRPs(PartData hull)
+        {
+            var rps = hull.shipType.randParts;
+            var result = new List<KeyValuePair<List<string>, List<RandPart>>>();
+            var techVars = new List<string>();
+            foreach (var rp in rps)
+                FillVars(rp, techVars);
+
+            List<string> tempVars = new List<string>();
+            int numCombs = 1 << techVars.Count;
+            for (int i = 0; i < numCombs; ++i)
+            {
+                for (int j = 0; j < techVars.Count; ++j)
+                {
+                    if ((j & i) != 0)
+                        tempVars.Add(techVars[j]);
+                }
+                List<RandPart> curParts = new List<RandPart>();
+                foreach (var rp in rps)
+                {
+                    if (CheckOperation(hull, null, rp, tempVars))
+                        curParts.Add(rp);
+                }
+                bool newSet = true;
+                foreach (var kvp in result)
+                {
+                    if (ModUtils.OrderedListsEqual(kvp.Value, curParts))
+                    {
+                        newSet = false;
+                        break;
+                    }
+                }
+                if (newSet)
+                {
+                    List<string> vars = new List<string>();
+                    vars.AddRange(tempVars);
+                    result.Add(new KeyValuePair<List<string>, List<RandPart>>(vars, curParts));
+                }
+                tempVars.Clear();
+            }
+
+            return result;
+        }
+
+        public static void LogRPsForHull(PartData hull)
+        {
+            var rpSet = FindApplicableRPs(hull);
+            if (rpSet.Count == 0)
+            {
+                Melon<TweaksAndFixes>.Logger.Error($"Error: something went wrong finding RandParts for hull {hull.name}");
+                return;
+            }
+            bool logTech = rpSet.Count > 1 || rpSet[0].Key.Count > 0;
+
+            string logstr = $"Finding RandParts for hull {hull.name}. Found {rpSet.Count} different set(s) of RandParts.";
+            foreach (var set in rpSet)
+            {
+                if (logTech)
+                    logstr += $"\nTech Vars set to nonzero: {set.Key.Count}. {string.Join(", ", set.Key)}";
+                foreach (var rp in set.Value)
+                    logstr += $"\n          {rp.name}";
+            }
+
+            Melon<TweaksAndFixes>.Logger.Msg(logstr);
+        }
+
         public enum BatteryType
         {
             main = 0,
