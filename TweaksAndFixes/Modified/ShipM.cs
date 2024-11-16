@@ -687,7 +687,7 @@ namespace TweaksAndFixes
             if (Config.ShipGenTweaks)
             {
                 minSpeed = GetMinSpeed(_this, limitSpeed, rnd);
-                maxSpeed = GetMaxSpeed(_this, rnd);
+                maxSpeed = GetMaxSpeed(_this, rnd, out _);
             }
             else
             {
@@ -1108,7 +1108,7 @@ namespace TweaksAndFixes
 
             _this.limiter = 699;
             float step = MonoBehaviourExt.Param("speed_step", 0.1f);
-            float maxMS = GetMaxSpeed(_this, null);
+            float maxMS = GetMaxSpeed(_this, null, out bool enforceMax);
             float minMS = _this.shipType.speedMin * KnotsToMS;
             while (underweight && _this.limiter-- > 0)
             {
@@ -1166,7 +1166,7 @@ namespace TweaksAndFixes
             // Uncapped speed increase
             _this.limiter = 699;
             maxMS = _this.shipType.speedMax * KnotsToMS;
-            while (underweight && _this.limiter-- > 0)
+            while (!enforceMax && underweight && _this.limiter-- > 0)
             {
                 float oldSpeed = _this.speedMax;
                 float newSpeed = RoundSpeedToStep(Mathf.Clamp(oldSpeed + step, minMS, maxMS));
@@ -1485,18 +1485,25 @@ namespace TweaksAndFixes
             return mult;
         }
 
-        public static float GetMaxSpeed(Ship _this, Il2CppSystem.Random rnd)
-            => Mathf.Min(_this.shipType.speedMax, _this.hull.data.speedLimiter * GetParamSpeedMultMax(_this, rnd)) * KnotsToMS;
+        public static float GetMaxSpeed(Ship _this, Il2CppSystem.Random rnd, out bool enforce)
+            => Mathf.Min(_this.shipType.speedMax, _this.hull.data.speedLimiter * GetParamSpeedMultMax(_this, rnd, out enforce)) * KnotsToMS;
 
-        public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd)
+        public static float GetParamSpeedMultMax(Ship _this, Il2CppSystem.Random rnd, out bool enforce)
         {
+            enforce = false;
             string key = $"g{_this.hull.data.Generation}";
             if (!GetParamValue(_this, "speedMultByGen_max", key, out float mult))
                 return GetMaxSpeedMult(_this, rnd);
 
+            if (mult < 0)
+            {
+                mult *= -1;
+                enforce = true;
+            }
+
             if (rnd != null && GetParamValue(_this, "speedMultByGen_rand", key, out float rMult))
                 mult *= Util.Range(1f - rMult, 1f + rMult, rnd);
-
+            
             return mult;
         }
 

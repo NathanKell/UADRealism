@@ -1,10 +1,10 @@
 # Tweaks And Fixes
 A collection of tweaks, fixes, and moddability support features for Ultimate Admiral: Dreadnoughts.
 
-## Supported UAD Version: 1.6.1.2
+## Supported UAD Version: 1.6.1.3
 
 ## Installation
-* [Download MelonLoader 0.6.4](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.4/MelonLoader.x64.zip) and unzip it to your UAD folder.
+* [Download MelonLoader 0.6.6](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.6/MelonLoader.x64.zip) and unzip it to your UAD folder.
 * Download the latest [TweaksAndFixes release](https://github.com/NathanKell/UADRealism/releases/latest) and unzip it to your UAD folder, which will create a Mods folder if it does not already exist. Overwrite all old files, if upgrading.
 * Run the game. The first launch will be slower but subsequent launches will be normal.
 
@@ -128,7 +128,9 @@ TAF supports adding the following to each shipType's param: speedMultByGen_max, 
 
 For example you could add for ca: `speedMultByGen_max(g1;1.01;g2;1.1;g3;1.02;g4;1), speedMultByGen_min(g1;0.8;g2;0.78;g3;0.82;g4;0.85), speedMultByGen_rand(0.05)` and that would, for gen2 ca hulls, have a min speed of 0.78 +/- 5% times speedLimiter and a max of 1.1 +/- 5% times speedLimiter.
 
-Note that you can also override these on a hull-by-hull basis by putting any or all of those params in the hull's param set. So if a particular ca hull had speedMultByGen_max(1.03) instead, the max speed would be speedLimiter times 1.03 +/-5%.
+Note that you can also override these on a hull-by-hull basis by putting any or all of those params in the hull's param set. So if a particular ca hull had `speedMultByGen_max(1.03)`, the max speed would be speedLimiter times 1.03 +/-5% rather than that specified in shipTypes.
+
+By default, like stock, the max is a soft maximum: if there is weight left over after everything else, additional tonnage is spent on speed. To enforce maximum speeds, make the value negative. For example `speedMultByGen_max(-1.03)` means a multiplier of 1.03 will not be exceeded, even if there remains spare tonnage.
 
 ### Limit caliber counts and size
 TAF can limit the number of calibers the autodesigner will use for a given battery (main/secondary/tertiary). Note that due to how various parts have different length multipliers, while the caliber may be kept the same, the caliber length may vary between guns. Also note that the game treats casemated guns and turreted guns differently, so a ship may have for example 6.2in secondary turrets but 6.6in casemates.
@@ -190,6 +192,7 @@ TAF supports hot-reloading for quick iteration. set `taf_hot_reload` to 1 in par
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.16.5 - Support enforcing max speed limits (set the multiplier in the shiptype or hull to negative)
 * 3.16.4 - Default peace changes to off. Add RandPart dumping for hulls in constructor. Add support for ai_min_caliber_. Update to UAD 1.6.1.2.
 * 3.16.3 - Fix peace VP difference param typo. Default white peace param to off. Update to UAD 1.6.1.1 Optx2
 * 3.16.2 - Support overriding tech group sprites too. Make scrapping occur once per nation per turn, not all nations at once, for performance (controllable with param). Don't scrap during campaign generation. Update for UAD 1.6.0.9Optx3.
