@@ -226,11 +226,75 @@ namespace TweaksAndFixes
                 Melon<TweaksAndFixes>.Logger.Error($"Failed to write original map data");
         }
 
+        private static bool VerifyProvinces(Il2CppSystem.Collections.Generic.List<Province> provinces)
+        {
+            bool success = true;
+            HashSet<string> seenProvs = new HashSet<string>();
+            HashSet<string> seenNeighbors = new HashSet<string>();
+            foreach (var p in provinces)
+            {
+                if (seenProvs.Contains(p.Id) || seenProvs.Contains(p.Name))
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Province {p.Id} {p.Name} is duplicated");
+                    success = false;
+                }
+                seenProvs.Add(p.Id);
+                seenProvs.Add(p.Name);
+                var neighbors = p.NeighbourProvincesString.Split(',');
+                seenNeighbors.Clear();
+                for (int i = neighbors.Length; i-- > 0;)
+                {
+                    var n = neighbors[i].Trim();
+                    neighbors[i] = n;
+                    if (seenNeighbors.Contains(n))
+                    {
+                        Melon<TweaksAndFixes>.Logger.Error($"Province {p.Id} has duplicate neighbor {n}");
+                        success = false;
+                    }
+                    seenNeighbors.Add(n);
+                }
+
+                if (neighbors.Contains(p.Id))
+                {
+                    Melon<TweaksAndFixes>.Logger.Error($"Province {p.Id} has self as neighbor");
+                    success = false;
+                }
+
+                foreach (var n in neighbors)
+                {
+                    bool logErr = true;
+                    foreach (var o in provinces)
+                    {
+                        if (o.Id != n)
+                            continue;
+
+                        logErr = false;
+                        var neighborsO = o.NeighbourProvincesString.Split(',');
+                        for (int i = neighborsO.Length; i-- > 0;)
+                            neighborsO[i] = neighborsO[i].Trim();
+                        if (!neighborsO.Contains(p.Id))
+                        {
+                            Melon<TweaksAndFixes>.Logger.Warning($"Province {p.Id} has neighbor {n} but that does not have {p.Id} as neighbor");
+                            //success = false;
+                        }
+                    }
+                    if (logErr)
+                    {
+                        Melon<TweaksAndFixes>.Logger.Warning($"Province {p.Id} has neighbor {n} but that province could not be found");
+                        success = false;
+                    }
+                }
+            }
+
+            return success;
+        }
+
         private static void LoadData()
         {
             bool success = true;
             success &= Load<PortElementDTO, PortElement>("ports", CampaignMap.Instance.Ports.Ports);
             success &= Load<ProvinceDTO, Province>("provinces", CampaignMap.Instance.Provinces.Provinces);
+            success &= VerifyProvinces(CampaignMap.Instance.Provinces.Provinces);
             if (success)
                 Melon<TweaksAndFixes>.Logger.Msg($"Loaded map data successfully`");
             else
