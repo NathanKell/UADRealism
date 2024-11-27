@@ -1,7 +1,7 @@
 # Tweaks And Fixes
 A collection of tweaks, fixes, and moddability support features for Ultimate Admiral: Dreadnoughts.
 
-## Supported UAD Version: 1.6.1.3
+## Supported UAD Version: 1.6.1.4
 
 ## Installation
 * [Download MelonLoader 0.6.6](https://github.com/LavaGang/MelonLoader/releases/download/v0.6.6/MelonLoader.x64.zip) and unzip it to your UAD folder.
@@ -192,6 +192,7 @@ TAF supports hot-reloading for quick iteration. set `taf_hot_reload` to 1 in par
 Realism modding for Ultimate Admiral: Dreadnoughts - coming soon, this is about TAF.
 
 ### TAF Changelog
+* 3.16.6 - Update to UAD 1.6.1.4
 * 3.16.5 - Support enforcing max speed limits (set the multiplier in the shiptype or hull to negative)
 * 3.16.4 - Default peace changes to off. Add RandPart dumping for hulls in constructor. Add support for ai_min_caliber_. Update to UAD 1.6.1.2.
 * 3.16.3 - Fix peace VP difference param typo. Default white peace param to off. Update to UAD 1.6.1.1 Optx2
